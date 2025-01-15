@@ -44,6 +44,7 @@ pub fn init(
 
     let mut damage_tracker = OutputDamageTracker::from_output(&output);
 
+    // we set `WAYLAND_DISPLAY` to our own so that spawned processes uses our compositor
     std::env::set_var("WAYLAND_DISPLAY", &state.socket_name);
 
     event_loop.handle().insert_source(winit, move |event, _, data|{
