@@ -1,3 +1,6 @@
+[workspace]
+members = ["drm_scanner"]
+
 [package]
 name = "trayle"
 version = "0.1.0"
@@ -5,6 +8,10 @@ edition = "2021"
 
 [dependencies]
 bitflags = "2.8.0"
+drm_scanner = { version = "0.1.0", path = "drm_scanner" }
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay.git"
