@@ -1,7 +1,7 @@
 pub mod backend;
 pub mod state;
 
-pub use state::State;
+pub use state::{CalloopData, State};
 
 mod input;
 mod handlers;

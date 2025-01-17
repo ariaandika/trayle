@@ -14,6 +14,7 @@ use smithay::{
     utils::{Logical, Point},
     wayland::{
         compositor::{CompositorClientState, CompositorState},
+        dmabuf::DmabufState,
         output::OutputManagerState,
         selection::data_device::DataDeviceState,
         shell::xdg::XdgShellState,
@@ -43,6 +44,7 @@ pub struct State {
     pub popups: PopupManager,
 
     pub seat: Seat<State>,
+    pub dmabuf_state: DmabufState,
 }
 
 impl State {
@@ -58,6 +60,7 @@ impl State {
         let mut seat_state = SeatState::new();
         let data_device_state = DataDeviceState::new::<Self>(&dh);
         let popups = PopupManager::default();
+        let dmabuf_state = DmabufState::new();
 
         // NOTE: A seat is a group of keyboards, pointer and touch devices.
         // A seat typically has a pointer and maintains a keyboard focus and a pointer focus.
@@ -94,6 +97,7 @@ impl State {
             data_device_state,
             popups,
             seat,
+            dmabuf_state,
         }
     }
 
@@ -142,6 +146,20 @@ impl State {
                 .surface_under(pos - location.to_f64(), WindowSurfaceType::ALL)
                 .map(|(s, p)| (s, (p + location).to_f64()))
         })
+    }
+}
+
+/// for testing purposes
+impl State {
+    pub fn open_terminal(&self) {
+        use std::process::Command;
+
+        match Command::new("alacritty").spawn() {
+            Ok(_child) => {},
+            Err(err) => {
+                eprintln!("Alacritty spawn error: {err:?}");
+            },
+        }
     }
 }
 

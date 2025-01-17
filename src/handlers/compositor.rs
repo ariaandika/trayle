@@ -1,6 +1,6 @@
 use smithay::{
-    delegate_compositor, delegate_shm,
-    backend::renderer::utils::on_commit_buffer_handler,
+    backend::{allocator::dmabuf::Dmabuf, renderer::utils::on_commit_buffer_handler},
+    delegate_compositor, delegate_dmabuf, delegate_shm,
     reexports::wayland_server::{
         protocol::{wl_buffer, wl_surface::WlSurface},
         Client,
@@ -11,6 +11,7 @@ use smithay::{
             get_parent, is_sync_subsurface, CompositorClientState, CompositorHandler,
             CompositorState,
         },
+        dmabuf::{DmabufGlobal, DmabufHandler, DmabufState, ImportNotifier},
         shm::{ShmHandler, ShmState},
     },
 };
@@ -60,4 +61,16 @@ impl ShmHandler for State {
 
 delegate_compositor!(State);
 delegate_shm!(State);
+
+impl DmabufHandler for State {
+    fn dmabuf_state(&mut self) -> &mut DmabufState {
+        &mut self.dmabuf_state
+    }
+
+    fn dmabuf_imported(&mut self, _global: &DmabufGlobal, _dmabuf: Dmabuf, _notifier: ImportNotifier) {
+        tracing::debug!("[DMABUF] dmabuf_imported");
+    }
+}
+
+delegate_dmabuf!(State);
 
