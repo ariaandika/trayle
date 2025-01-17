@@ -1,14 +1,29 @@
 use std::{ffi::OsString, sync::Arc, time::Instant};
 
 use smithay::{
-    desktop::{PopupManager, Space, Window, WindowSurfaceType}, input::{Seat, SeatState}, reexports::{
+    desktop::{PopupManager, Space, Window, WindowSurfaceType},
+    input::{Seat, SeatState},
+    reexports::{
         calloop::{generic::Generic, EventLoop, Interest, LoopSignal, Mode, PostAction},
-        wayland_server::{backend::{ClientData, ClientId, DisconnectReason}, protocol::wl_surface::WlSurface, Display, DisplayHandle}
-    }, utils::{Logical, Point}, wayland::{
-        compositor::{CompositorClientState, CompositorState}, output::OutputManagerState,
-        selection::data_device::DataDeviceState, shell::xdg::XdgShellState, shm::ShmState, socket::ListeningSocketSource,
-    }
+        wayland_server::{
+            backend::{ClientData, ClientId, DisconnectReason},
+            protocol::wl_surface::WlSurface,
+            Display, DisplayHandle,
+        },
+    },
+    utils::{Logical, Point},
+    wayland::{
+        compositor::{CompositorClientState, CompositorState},
+        output::OutputManagerState,
+        selection::data_device::DataDeviceState,
+        shell::xdg::XdgShellState,
+        shm::ShmState,
+        socket::ListeningSocketSource,
+    },
 };
+
+const KB_REPEAT_DELAY: i32 = 160;
+const KB_REPEAT_RATE: i32 = 50;
 
 pub struct State {
     pub start_time: Instant,
@@ -44,27 +59,23 @@ impl State {
         let data_device_state = DataDeviceState::new::<Self>(&dh);
         let popups = PopupManager::default();
 
-        // A seat is a group of keyboards, pointer and touch devices.
+        // NOTE: A seat is a group of keyboards, pointer and touch devices.
         // A seat typically has a pointer and maintains a keyboard focus and a pointer focus.
-        let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, "winit");
-
-        // Notify clients that we have a keyboard, we assume that keyboard is always present.
-        // You may want to track keyboard hot-plug in real compositor.
-        seat.add_keyboard(Default::default(), 200, 25).unwrap();
-
-        // Notify clients that we have a pointer (mouse)
-        // Here we assume that there is always pointer plugged in
+        // TODO: for now, assuming device is always available
+        //  the future, one may track keyboard hot-plug in
+        let mut seat: Seat<Self> = seat_state.new_wl_seat(&dh, std::env!("CARGO_CRATE_NAME"));
+        seat.add_keyboard(Default::default(), KB_REPEAT_DELAY, KB_REPEAT_RATE).unwrap();
         seat.add_pointer();
 
-        // A space represents a two-dimensional plane. Windows and Outputs can be mapped onto it.
-        //
+
+        // NOTE: A space represents a two-dimensional plane. Windows and Outputs can be mapped onto it.
         // Windows get a position and stacking order through mapping.
         // Outputs become views of a part of the Space and can be rendered via Space::render_output.
         let space = Space::default();
 
         let socket_name = Self::init_wayland_listener(display, event_loop);
 
-        // Get the loop signal, used to stop the event loop
+        // NOTE: Get the loop signal, used to stop the event loop
         let loop_signal = event_loop.get_signal();
 
         Self {
@@ -90,20 +101,16 @@ impl State {
         display: Display<State>,
         event_loop: &mut EventLoop<'_, CalloopData>,
     ) -> OsString {
-        // Creates a new listening socket, automatically choosing the next available `wayland` socket name.
-        let listening_socket = ListeningSocketSource::new_auto().unwrap();
-
-        // Get the name of the listening socket.
-        // Clients will connect to this socket.
-        let socket_name = listening_socket.socket_name().to_os_string();
+        // NOTE: Creates a new listening socket, automatically choosing the next available `wayland` socket name.
+        let wl_socket = ListeningSocketSource::new_auto().unwrap();
+        let socket_name = wl_socket.socket_name().to_os_string();
 
         let loop_handle = event_loop.handle();
 
+        // NOTE: `insert_resource` insert new **EventSource**
+        // in this case, event when client connected
         loop_handle
-            .insert_source(listening_socket, move |client_stream, _, state|{
-                // Inside the callback, you should insert the client into the display.
-                //
-                // You may also associate some data with the client when inserting the client.
+            .insert_source(wl_socket, move |client_stream, _, state|{
                 state
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))
@@ -111,7 +118,7 @@ impl State {
             })
             .expect("Failed to init wayland event source");
 
-        // You also need to add the display itself to the event loop,
+        // NOTE: add display to the event loop,
         // so that client events will be processed by wayland-server.
         loop_handle
             .insert_source(
@@ -149,6 +156,7 @@ impl CalloopData {
     }
 }
 
+/// each client state
 #[derive(Default)]
 pub struct ClientState {
     pub compositor_state: CompositorClientState,

@@ -1,16 +1,23 @@
 use smithay::{
-    backend::input::{AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent, KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent}, input::{keyboard::FilterResult, pointer::{AxisFrame, ButtonEvent, MotionEvent}}, reexports::wayland_server::protocol::wl_surface::WlSurface, utils::SERIAL_COUNTER
+    backend::input::{
+        AbsolutePositionEvent, Axis, AxisSource, ButtonState, Event, InputBackend, InputEvent,
+        KeyboardKeyEvent, PointerAxisEvent, PointerButtonEvent,
+    },
+    input::{
+        keyboard::FilterResult,
+        pointer::{AxisFrame, ButtonEvent, MotionEvent},
+    },
+    utils::SERIAL_COUNTER,
 };
 
-use crate::state::State;
+use crate::State;
 
 impl State {
-    pub fn process_input_event<I: InputBackend>(&mut self, event: InputEvent<I>) {
+    pub fn process_input_event<I>(&mut self, event: InputEvent<I>) where I: InputBackend {
         match event {
-            InputEvent::Keyboard { event, .. } => {
-                println!("[InputEvent] Keyboard");
+            InputEvent::Keyboard { event } => {
                 let serial = SERIAL_COUNTER.next_serial();
-                let time = Event::time_msec(&event);
+                let time = event.time_msec();
 
                 self.seat.get_keyboard().unwrap().input::<(), _>(
                     self,
@@ -21,7 +28,7 @@ impl State {
                     |_, _, _| FilterResult::Forward,
                 );
             }
-            InputEvent::PointerMotion { .. } => { }
+            InputEvent::PointerMotion { event: _ } => { }
             InputEvent::PointerMotionAbsolute { event } => {
                 let output = self.space.outputs().next().unwrap();
 
@@ -29,11 +36,11 @@ impl State {
 
                 let pos = event.position_transformed(output_geo.size) + output_geo.loc.to_f64();
 
+                let under = self.surface_under(pos);
+
                 let serial = SERIAL_COUNTER.next_serial();
 
                 let pointer = self.seat.get_pointer().unwrap();
-
-                let under = self.surface_under(pos);
 
                 pointer.motion(self, under, &MotionEvent {
                     location: pos,
@@ -69,7 +76,7 @@ impl State {
                             window.set_activated(false);
                             window.toplevel().unwrap().send_pending_configure();
                         });
-                        keyboard.set_focus(self, Option::<WlSurface>::None, serial);
+                        keyboard.set_focus(self, None, serial);
                     }
                 }
 
