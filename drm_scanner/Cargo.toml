@@ -1,0 +1,7 @@
+[package]
+name = "drm_scanner"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+drm = "0.14.1"
