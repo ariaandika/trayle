@@ -5,3 +5,4 @@ edition = "2021"
 
 [dependencies]
 drm = "0.14.1"
+libdisplay-info = "0.2.2"

@@ -1,4 +1,5 @@
 pub mod drm_scanner;
+pub mod display_info;
 mod crtc_mapper;
 mod connector_scanner;
 
