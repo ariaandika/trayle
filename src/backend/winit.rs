@@ -14,7 +14,21 @@ use smithay::backend::{
     winit::{self, WinitEvent},
 };
 
-use crate::state::{CalloopData, State};
+use crate::state::{BackendState, State};
+
+pub struct CalloopData {
+    pub state: State,
+}
+
+impl BackendState for CalloopData {
+    fn state(&self) -> &State {
+        &self.state
+    }
+
+    fn state_mut(&mut self) -> &mut State {
+        &mut self.state
+    }
+}
 
 const REFRESH_RATE: i32 = 60_000;
 
@@ -22,10 +36,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let mut event_loop = EventLoop::<CalloopData>::try_new()?;
     let display = Display::<State>::new()?;
 
-    let display_handle = display.handle();
-
     let state = State::new(&mut event_loop, display);
-    let mut data = CalloopData::new(state, display_handle);
+    let mut data = CalloopData { state };
 
     //
     // NOTE: final output of the compositor
@@ -37,7 +49,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
         model: "Winit".to_string(),
     });
 
-    let _global = output.create_global::<State>(&mut data.display_handle);
+    let _global = output.create_global::<State>(&mut data.state_mut().display_handle);
 
     //
     // NOTE: winit backend
@@ -66,8 +78,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     // NOTE: `insert_resource` insert new **EventSource**
     // in this case, is the winit backend
     event_loop.handle().insert_source(winit_event_source, move |event, _, data|{
-        let display = &mut data.display_handle;
-        let state = &mut data.state;
+        let state = data.state_mut();
 
         match event {
             WinitEvent::Input(event) => state.process_input_event(event),
@@ -113,7 +124,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
                 state.space.refresh();
                 state.popups.cleanup();
-                let _ = display.flush_clients();
+                let _ = state.display_handle.flush_clients();
 
                 winit_backend.window().request_redraw();
             }
