@@ -26,6 +26,11 @@ use smithay::{
 const KB_REPEAT_DELAY: i32 = 160;
 const KB_REPEAT_RATE: i32 = 50;
 
+pub trait BackendState {
+    fn state(&self) -> &State;
+    fn state_mut(&mut self) -> &mut State;
+}
+
 pub struct State {
     pub start_time: Instant,
     pub socket_name: OsString,
@@ -48,7 +53,10 @@ pub struct State {
 }
 
 impl State {
-    pub fn new(event_loop: &mut EventLoop<CalloopData>, display: Display<Self>) -> Self {
+    pub fn new<Backend>(event_loop: &mut EventLoop<Backend>, display: Display<Self>) -> Self
+    where
+        Backend: BackendState
+    {
         let start_time = Instant::now();
 
         let dh = display.handle();
@@ -101,10 +109,10 @@ impl State {
         }
     }
 
-    fn init_wayland_listener(
+    fn init_wayland_listener<Backend>(
         display: Display<State>,
-        event_loop: &mut EventLoop<'_, CalloopData>,
-    ) -> OsString {
+        event_loop: &mut EventLoop<'_, Backend>,
+    ) -> OsString where Backend: BackendState {
         // NOTE: Creates a new listening socket, automatically choosing the next available `wayland` socket name.
         let wl_socket = ListeningSocketSource::new_auto().unwrap();
         let socket_name = wl_socket.socket_name().to_os_string();
@@ -114,8 +122,9 @@ impl State {
         // NOTE: `insert_resource` insert new **EventSource**
         // in this case, event when client connected
         loop_handle
-            .insert_source(wl_socket, move |client_stream, _, state|{
-                state
+            .insert_source(wl_socket, move |client_stream, _, backend|{
+                backend
+                    .state_mut()
                     .display_handle
                     .insert_client(client_stream, Arc::new(ClientState::default()))
                     .unwrap();
@@ -127,10 +136,10 @@ impl State {
         loop_handle
             .insert_source(
                 Generic::new(display, Interest::READ, Mode::Level),
-                |_, display, state| {
+                |_, display, backend| {
                     // Safety: we dont drop display
                     unsafe {
-                        display.get_mut().dispatch_clients(&mut state.state).unwrap();
+                        display.get_mut().dispatch_clients(backend.state_mut()).unwrap();
                     }
                     Ok(PostAction::Continue)
                 }
@@ -160,17 +169,6 @@ impl State {
                 eprintln!("Alacritty spawn error: {err:?}");
             },
         }
-    }
-}
-
-pub struct CalloopData {
-    pub state: State,
-    pub display_handle: DisplayHandle
-}
-
-impl CalloopData {
-    pub fn new(state: State, display_handle: DisplayHandle) -> Self {
-        Self { state, display_handle }
     }
 }
 
