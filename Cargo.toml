@@ -7,8 +7,10 @@ version = "0.1.0"
 edition = "2021"
 
 [dependencies]
+anyhow = "1.0.95"
 bitflags = "2.8.0"
 drm_scanner = { version = "0.1.0", path = "drm_scanner" }
+libdisplay-info = "0.2.2"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
@@ -16,5 +18,5 @@ tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay.git"
 default-features = false
-features = ["backend_winit", "wayland_frontend", "desktop", "backend_session", "backend_session_libseat", "backend_udev", "backend_libinput", "backend_drm", "backend_gbm", "renderer_multi"]
+features = ["backend_winit", "wayland_frontend", "desktop", "backend_session", "backend_session_libseat", "backend_udev", "backend_libinput", "backend_drm", "backend_gbm", "renderer_multi", "wayland-backend", "use_system_lib"]
 

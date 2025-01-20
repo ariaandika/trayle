@@ -52,6 +52,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fc7eb209b1518d6bb87b283c20095f5228ecda460da70b44f0802523dea6da04"
 
 [[package]]
+name = "anyhow"
+version = "1.0.95"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34ac096ce696dc2fcabef30516bb13c0a68a11d30131d3df6f04711467681b04"
+
+[[package]]
 name = "appendlist"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -455,6 +461,8 @@ dependencies = [
  "drm-fourcc",
  "gbm-sys",
  "libc",
+ "wayland-backend",
+ "wayland-server",
 ]
 
 [[package]]
@@ -757,6 +765,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "fd3f7eed9d3848f8b98834af67102b720745c4ec028fcd0aa0239277e7de374f"
 dependencies = [
  "libc",
+]
+
+[[package]]
+name = "memoffset"
+version = "0.9.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "488016bfae457b036d996092f6cb448677611ce4449e970ceaf42695203f218a"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]
@@ -1412,6 +1429,7 @@ dependencies = [
  "thiserror 1.0.69",
  "tracing",
  "udev",
+ "wayland-backend",
  "wayland-client",
  "wayland-cursor",
  "wayland-egl",
@@ -1419,6 +1437,7 @@ dependencies = [
  "wayland-protocols-misc",
  "wayland-protocols-wlr",
  "wayland-server",
+ "wayland-sys",
  "winit",
  "xkbcommon",
 ]
@@ -1705,8 +1724,10 @@ dependencies = [
 name = "trayle"
 version = "0.1.0"
 dependencies = [
+ "anyhow",
  "bitflags 2.8.0",
  "drm_scanner",
+ "libdisplay-info",
  "smithay",
  "tracing",
  "tracing-appender",
@@ -1985,7 +2006,9 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "efa8ac0d8e8ed3e3b5c9fc92c7881406a268e11555abe36493efabe649a29e09"
 dependencies = [
  "dlib",
+ "libc",
  "log",
+ "memoffset",
  "once_cell",
  "pkg-config",
 ]
