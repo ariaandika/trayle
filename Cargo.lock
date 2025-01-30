@@ -697,22 +697,34 @@ dependencies = [
 
 [[package]]
 name = "libseat"
-version = "0.2.1"
+version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "54a0adf8d8607a73a5b74cbe4132f57cb349e4bf860103cd089461bbcbc9907e"
+checksum = "c23a245bbd5790c690791c4fe6eefafe4c75851226288a71cb657601135aa00c"
 dependencies = [
+ "cc",
  "errno",
  "libseat-sys",
  "log",
+ "pkg-config",
 ]
 
 [[package]]
 name = "libseat-sys"
-version = "0.1.7"
+version = "0.1.9"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3671cb5e03871f1d6bf0b3b5daa9275549e348fa6359e0f9adb910ca163d4c34"
+checksum = "134621e50557e8698a96ccff3eadbc6f4b449d5d12f8aa48fcef8d40b4b02725"
 dependencies = [
  "pkg-config",
+]
+
+[[package]]
+name = "libudev"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "78b324152da65df7bb95acfcaab55e3097ceaab02fb19b228a9eb74d55f135e0"
+dependencies = [
+ "libc",
+ "libudev-sys",
 ]
 
 [[package]]
@@ -1235,6 +1247,19 @@ name = "raw-window-handle"
 version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "20675572f6f24e9e76ef639bc5552774ed45f1c30e2951e1e99c59888861c539"
+
+[[package]]
+name = "raw_rendering"
+version = "0.1.0"
+dependencies = [
+ "drm",
+ "gbm",
+ "libseat",
+ "libudev",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+]
 
 [[package]]
 name = "redox_syscall"

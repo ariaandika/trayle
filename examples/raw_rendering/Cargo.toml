@@ -1,0 +1,13 @@
+[package]
+name = "raw_rendering"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+drm = "0.14.1"
+gbm = "0.18.0"
+libseat = "0.2.3"
+libudev = "0.3.0"
+tracing = "0.1.41"
+tracing-appender = "0.2.3"
+tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }

@@ -1,5 +1,5 @@
 [workspace]
-members = ["drm_scanner"]
+members = ["drm_scanner", "examples/*"]
 
 [package]
 name = "trayle"
