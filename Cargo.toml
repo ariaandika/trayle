@@ -9,14 +9,16 @@ edition = "2021"
 [dependencies]
 anyhow = "1.0.95"
 bitflags = "2.8.0"
-drm_scanner = { version = "0.1.0", path = "drm_scanner" }
 libdisplay-info = "0.2.2"
+rand = "0.9.0"
 tracing = "0.1.41"
 tracing-appender = "0.2.3"
 tracing-subscriber = { version = "0.3.19", features = ["env-filter"] }
+xcursor = "0.3.8"
+xkbcommon = "0.8.0"
 
 [dependencies.smithay]
 git = "https://github.com/Smithay/smithay.git"
 default-features = false
-features = ["backend_winit", "wayland_frontend", "desktop", "backend_session", "backend_session_libseat", "backend_udev", "backend_libinput", "backend_drm", "backend_gbm", "renderer_multi", "wayland-backend", "use_system_lib"]
+features = ["desktop", "renderer_multi", "renderer_gl", "backend_egl", "backend_drm", "backend_gbm", "backend_session", "backend_session_libseat", "backend_udev", "backend_libinput", "wayland_frontend", "wayland-backend", "use_system_lib", "xwayland"]
 

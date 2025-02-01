@@ -1,9 +1,16 @@
-pub mod backend;
 pub mod state;
-mod shell;
+pub mod backend;
 
-pub use state::State;
+mod input_handler;
 
-mod input;
 mod handlers;
-mod grabs;
+
+mod shell;
+mod render;
+mod drawing;
+mod cursor;
+
+pub mod utils;
+
+pub use state::Trayle;
+pub use state::Trayle as State;
