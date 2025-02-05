@@ -15,7 +15,7 @@ use smithay::{
         wayland_server::protocol::wl_surface::WlSurface,
     },
     utils::{IsAlive, Logical, Physical, Point, Rectangle, Scale},
-    wayland::compositor::SurfaceData as WlSurfaceData,
+    wayland::{compositor::SurfaceData as WlSurfaceData, dmabuf::DmabufFeedback, shell::xdg::ToplevelSurface},
 };
 
 use crate::shell::ssd::HEADER_BAR_HEIGHT;
@@ -85,9 +85,17 @@ impl WindowElement {
             primary_scan_out_output: P,
             select_dmabuf_feedback: F,
         ) where
-            P: FnMut(&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, &WlSurfaceData) -> Option<Output> + Copy,
-            F: Fn(&smithay::reexports::wayland_server::protocol::wl_surface::WlSurface, &WlSurfaceData) -> &'a smithay::wayland::dmabuf::DmabufFeedback + Copy, {
+            P: FnMut(&WlSurface, &WlSurfaceData) -> Option<Output> + Copy,
+            F: Fn(&WlSurface, &WlSurfaceData) -> &'a DmabufFeedback + Copy, {
         self.0.send_dmabuf_feedback(output, primary_scan_out_output, select_dmabuf_feedback)
+    }
+
+    pub fn toplevel(&self) -> Option<&ToplevelSurface> {
+        self.0.toplevel()
+    }
+
+    pub fn on_commit(&self) {
+        self.0.on_commit()
     }
 }
 

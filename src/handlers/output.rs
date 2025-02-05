@@ -1,11 +1,12 @@
 use crate::Trayle;
 use smithay::wayland::output::OutputHandler;
 
+smithay::delegate_output!(Trayle);
 
-smithay::delegate_output!(@<B: 'static> Trayle<B>);
-
-/// used by [`Output::create_global`]
+/// required for [`Output::create_global`]
 ///
-/// [`Output`]: smithay::output::Output
-impl<B> OutputHandler for Trayle<B> { }
+/// in case of tty backend, when connector connected
+///
+/// [`Output::create_global`]: smithay::output::Output::create_global
+impl OutputHandler for Trayle { }
 

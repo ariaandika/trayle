@@ -7,9 +7,9 @@ use smithay::{
     },
 };
 
-use crate::Trayle;
+use crate::{state::BackendState, Trayle};
 
-impl<B> XwmHandler for Trayle<B> {
+impl<B> XwmHandler for Trayle<B> where B: BackendState + 'static {
     fn xwm_state(&mut self, xwm: XwmId) -> &mut X11Wm {
         self.xwm.as_mut().unwrap()
     }

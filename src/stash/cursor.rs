@@ -43,32 +43,31 @@ impl Cursor {
 
     pub fn get_image(&self, scale: u32, time: Duration) -> Image {
         let size = self.size * scale;
-        frame(time.as_millis() as u32, size, &self.icons)
+        let mut millis = time.as_millis() as u32;
+        let images: &[Image] = &self.icons;
+        let total = nearest_image(size, images).fold(0, |acc,image|acc+image.delay);
+        millis %= total;
+
+        for img in nearest_image(size, images) {
+            if millis < img.delay {
+                return img.clone();
+            }
+            millis -= img.delay;
+        }
+
+        unreachable!()
     }
 }
 
 fn load_icon(theme: &CursorTheme) -> Result<Vec<Image>> {
     let icon_path = theme.load_icon("default").context("no default cursor")?;
-    let mut cursor_file = fs::File::open(icon_path)?;
+    let mut cursor_file = fs::File::open(&icon_path)?;
     let mut cursor_data = vec![];
     cursor_file.read_to_end(&mut cursor_data)?;
     let images = xcursor::parser::parse_xcursor(&cursor_data).context("failed to parse cursor file")?;
     Ok(images)
 }
 
-fn frame(mut millis: u32, size: u32, images: &[Image]) -> Image {
-    let total = nearest_image(size, images).fold(0, |acc,image|acc+image.delay);
-    millis %= total;
-
-    for img in nearest_image(size, images) {
-        if millis < img.delay {
-            return img.clone();
-        }
-        millis -= img.delay;
-    }
-
-    unreachable!()
-}
 
 fn nearest_image(size: u32, images: &[Image]) -> impl Iterator<Item = &Image> {
     let nearest_image = images

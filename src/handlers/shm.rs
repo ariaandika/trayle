@@ -1,11 +1,11 @@
 use crate::Trayle;
 use smithay::wayland::shm::{ShmHandler, ShmState};
 
-smithay::delegate_shm!(@<B: 'static> Trayle<B>);
+smithay::delegate_shm!(Trayle);
 
-impl<B> ShmHandler for Trayle<B> {
+impl ShmHandler for Trayle {
     fn shm_state(&self) -> &ShmState {
-        &self.shm_state
+        &self.frontend.shm_state
     }
 }
 

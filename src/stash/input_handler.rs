@@ -5,13 +5,10 @@ use smithay::{
 };
 use xkbcommon::xkb::Keysym;
 
-use crate::Trayle;
+use crate::{state::BackendState, Trayle};
 
 
-
-
-
-impl<B> Trayle<B> where B: 'static {
+impl<B> Trayle<B> where B: BackendState + 'static {
     fn on_keyboard(&mut self, mods: &ModifiersState, handle: KeysymHandle) -> FilterResult<()> {
         let keysym = handle.modified_sym();
         tracing::debug!(?mods, keysym = ::xkbcommon::xkb::keysym_get_name(keysym), "keysym");
