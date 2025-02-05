@@ -213,14 +213,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "drm_scanner"
-version = "0.1.0"
-dependencies = [
- "drm",
- "libdisplay-info",
-]
-
-[[package]]
 name = "encoding_rs"
 version = "0.8.35"
 source = "registry+https://github.com/rust-lang/crates.io-index"
