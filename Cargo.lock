@@ -158,6 +158,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "dilema"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libdisplay-info",
+ "smithay",
+ "thiserror 2.0.11",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "xkbcommon",
+]
+
+[[package]]
 name = "dlib"
 version = "0.5.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
