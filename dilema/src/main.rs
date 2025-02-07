@@ -1,4 +1,4 @@
-use std::thread;
+use std::{thread, time::Duration};
 
 use anyhow::Context;
 use dilema::Dilema;
@@ -8,11 +8,34 @@ fn main() -> anyhow::Result<()> {
     let _guard = setup_tracing();
     let mut event_loop = EventLoop::<Dilema>::try_new().context("failed to setup event loop")?;
     let mut dilema = Dilema::setup(&mut event_loop)?;
-    thread::spawn(||{
-        thread::sleep(std::time::Duration::from_secs(6));
-        std::process::exit(1);
-    });
-    Ok(event_loop.run(None, &mut dilema, Dilema::refresh)?)
+
+    // prevent deadlock
+    // let signal = event_loop.get_signal();
+    // thread::spawn(move||{
+    //     thread::sleep(Duration::from_secs(10));
+    //     tracing::debug!("stoping loop...");
+    //     signal.stop();
+    //     tracing::debug!("loop stoped");
+    // });
+
+    tracing::debug!("event loop running...");
+    // Ok(event_loop.run(Duration::from_secs(4), &mut dilema, Dilema::refresh)?)
+    let mut counter = 0;
+
+    while counter < 10 {
+        tracing::debug!("looped");
+        let result = event_loop.dispatch(Some(Duration::from_millis(16)), &mut dilema);
+        tracing::debug!("refresh: {result:?}");
+        dilema.refresh();
+        counter += 1;
+        std::thread::sleep(Duration::from_millis(500));
+    }
+
+    drop(event_loop);
+    drop(dilema.session);
+
+    tracing::info!("exiting");
+    Ok(())
 }
 
 fn setup_tracing() -> tracing_appender::non_blocking::WorkerGuard {

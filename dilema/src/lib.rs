@@ -27,7 +27,7 @@ use smithay::{
     },
     desktop::{utils::OutputPresentationFeedback, Space, Window},
     input::{
-        keyboard::{FilterResult, Keysym, KeysymHandle, ModifiersState},
+        keyboard::{FilterResult, Keysym, KeysymHandle, ModifiersState, XkbConfig},
         Seat, SeatHandler, SeatState,
     },
     output::{Output, PhysicalProperties},
@@ -94,7 +94,7 @@ pub struct Dilema {
 
     config: Config,
     space: Space<Window>,
-    session: LibSeatSession,
+    pub session: LibSeatSession,
     gpus: Gpu,
     libinput: Libinput,
     devices: HashMap<DrmNode,DeviceData>,
@@ -122,10 +122,6 @@ impl Dilema {
         let signal = event_loop.get_signal();
         let dh = display.handle();
 
-        let display_source = Generic::new(display, Interest::READ, calloop::Mode::Level);
-        let clock = Clock::new();
-        let mut space = Space::default();
-
         let config = Config::setup()?;
         let (mut session, session_source) = LibSeatSession::new()?;
         let seat_name = session.seat();
@@ -139,8 +135,31 @@ impl Dilema {
                 .find_map(|gpu|DrmNode::from_path(gpu).ok())
                 .context("no gpu found")?,
         };
+
+        tracing::info!("using {primary_gpu} as primary gpu");
+
         let graphics_api = GbmGlesBackend::with_context_priority(ContextPriority::High);
         let mut gpus: Gpu = GpuManager::new(graphics_api)?;
+
+        // ...
+
+        let socket_source = ListeningSocketSource::new_auto()?;
+        let socket_name = socket_source.socket_name().to_string_lossy().into_owned();
+        tracing::info!("listening on socket {socket_name:?}");
+
+        let compositor_state = CompositorState::new::<Dilema>(&dh);
+        let xdg_shell_state = XdgShellState::new::<Dilema>(&dh);
+        let mut seat_state = SeatState::<Dilema>::new();
+        let mut shm_state = ShmState::new::<Dilema>(&dh, []);
+        let dmabuf_state = DmabufState::new();
+
+        let mut seat = seat_state.new_wl_seat(&dh, &seat_name);
+        seat.add_keyboard(XkbConfig::default(), 150, 50)?;
+
+        let clock = Clock::new();
+        let mut space = Space::default();
+
+        // ...
 
         let udev = UdevBackend::new(&seat_name)?;
         let mut libinput = Libinput::new_with_udev::<LibinputSessionInterface<LibSeatSession>>(
@@ -153,19 +172,6 @@ impl Dilema {
         let mut devices = HashMap::<DrmNode,DeviceData>::new();
         device::setup(udev, &mut session, &handle, &dh, &primary_gpu, &config, &mut devices, &mut space, &mut gpus);
 
-        let compositor_state = CompositorState::new::<Dilema>(&dh);
-        let xdg_shell_state = XdgShellState::new::<Dilema>(&dh);
-        let mut seat_state = SeatState::<Dilema>::new();
-        let mut shm_state = ShmState::new::<Dilema>(&dh, []);
-        let dmabuf_state = DmabufState::new();
-
-        let socket_source = ListeningSocketSource::new_auto()?;
-        let socket_name = socket_source.socket_name().to_string_lossy().into_owned();
-        tracing::info!("listening on socket {socket_name:?}");
-
-        let mut seat = seat_state.new_wl_seat(&dh, &seat_name);
-        seat.add_keyboard(Default::default(), 150, 50).unwrap();
-
         let mut renderer = gpus.single_renderer(&primary_gpu)?;
 
         shm_state.update_formats(ImportMemWl::shm_formats(&renderer));
@@ -175,10 +181,10 @@ impl Dilema {
             Err(err) => tracing::info!("EGL hardware-acceleration disabled, {err}"),
         };
 
-        let formats = ImportDma::dmabuf_formats(&renderer);
-        let feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(),formats).build().unwrap();
+        let dmabuf_formats = ImportDma::dmabuf_formats(&renderer);
+        let default_feedback = DmabufFeedbackBuilder::new(primary_gpu.dev_id(),dmabuf_formats).build().unwrap();
         let mut dmabuf = DmabufState::new();
-        let dmabuf_global = dmabuf.create_global_with_default_feedback::<Dilema>(&dh, &feedback);
+        let dmabuf_global = dmabuf.create_global_with_default_feedback::<Dilema>(&dh, &default_feedback);
 
 
         for device in devices.values_mut() {
@@ -210,6 +216,8 @@ impl Dilema {
                 }
                 Some(DrmSyncobjState::new::<Dilema>(&dh, import_device))
             });
+
+        let display_source = Generic::new(display, Interest::READ, calloop::Mode::Level);
 
         handle.insert_source(socket_source, callbacks::socket).unwrap();
         handle.insert_source(display_source, callbacks::display).unwrap();
@@ -244,6 +252,7 @@ impl Dilema {
     }
 
     pub fn refresh(&mut self) {
+        tracing::debug!("refresh");
         self.space.refresh();
         self.dh.flush_clients().unwrap();
     }
@@ -332,7 +341,7 @@ mod config {
     impl Config {
         pub fn setup() -> Result<Config> {
             Ok(Self {
-                clear_color: Color32F::new(0.8, 0.1, 0.1, 1.0),
+                clear_color: Color32F::new(0.1, 0.1, 0.8, 1.0),
                 kb_repeat_delay: 160,
                 kb_repeat_rate: 50,
                 disable_direct_10bit: false,
@@ -419,6 +428,7 @@ mod callbacks {
     use super::*;
 
     pub fn socket(stream: UnixStream, _: &mut (), dilema: &mut Dilema) {
+        tracing::trace!("callbacks::socket");
         if let Err(err) = dilema
             .dh
             .insert_client(stream, Arc::new(ClientState::default()))
@@ -432,11 +442,13 @@ mod callbacks {
         display: &mut NoIoDrop<Display<Dilema>>,
         dilema: &mut Dilema,
     ) -> std::io::Result<calloop::PostAction> {
-        unsafe { display.get_mut().dispatch_clients(dilema).unwrap() };
+        tracing::trace!("callbacks::display");
+        unsafe { display.get_mut().dispatch_clients(dilema) }.unwrap();
         Ok(PostAction::Continue)
     }
 
     pub fn session(event: session::Event, _: &mut (), dilema: &mut Dilema) {
+        tracing::trace!("callbacks::session");
         match event {
             session::Event::PauseSession => {
                 tracing::info!("session pause");
@@ -533,6 +545,8 @@ mod device {
     }
 
     fn udev_handler(event: UdevEvent, _: &mut (), dilema: &mut Dilema) {
+        tracing::trace!("device::udev_handler");
+
         let props = DeviceProps {
             handle: &dilema.handle,
             dh: &dilema.dh,
@@ -560,6 +574,7 @@ mod device {
     }
 
     fn drm_handler(event: DrmEvent, node: DrmNode, meta: &mut Option<DrmEventMetadata>, dilema: &mut Dilema) {
+        tracing::trace!("device::drm_handler");
         match event {
             DrmEvent::VBlank(crtc) => {
                 render::frame_finish(node, crtc, meta, dilema);
@@ -1122,6 +1137,7 @@ mod render {
 
             let timer = Timer::from_duration(reschedule_timeout);
             dilema.handle.insert_source(timer, move|_,_,trayle|{
+                tracing::trace!("render::timer");
                 self::node(node, Some(crtc), next_frame_target, trayle);
                 TimeoutAction::Drop
             })
@@ -1413,6 +1429,7 @@ mod render {
             };
 
             dilema.handle.insert_source(timer, move|_,_,trayle|{
+                tracing::trace!("frame_finish::reschedule");
                 render::node(node, Some(crtc), next_frame_target, trayle);
                 TimeoutAction::Drop
             }).expect("failed to schedule frame timer");
