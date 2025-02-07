@@ -1,12 +1,8 @@
-use input::{event::{keyboard::KeyboardEventTrait, EventTrait}, Libinput, LibinputInterface};
+use input::{event::keyboard::KeyboardEventTrait, Libinput, LibinputInterface};
 use libc::{O_RDONLY, O_RDWR, O_WRONLY};
 use std::{
-    env::var,
     fs::File,
-    os::{
-        fd::AsFd,
-        unix::{fs::OpenOptionsExt, prelude::OwnedFd},
-    },
+    os::unix::{fs::OpenOptionsExt, prelude::OwnedFd},
     path::Path,
 };
 
