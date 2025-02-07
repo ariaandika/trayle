@@ -1216,6 +1216,20 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "852e951cb7832cb45cb1169900d19760cfa39b82bc0ea9c0e5a14ae88411c98b"
 
 [[package]]
+name = "vice"
+version = "0.1.0"
+dependencies = [
+ "anyhow",
+ "libdisplay-info",
+ "rand 0.9.0",
+ "smithay",
+ "tracing",
+ "tracing-appender",
+ "tracing-subscriber",
+ "xkbcommon",
+]
+
+[[package]]
 name = "wasi"
 version = "0.11.0+wasi-snapshot-preview1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
