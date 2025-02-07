@@ -6,4 +6,3 @@ edition = "2021"
 [dependencies]
 input = "0.9.1"
 libc = "0.2.169"
-libseat = "0.2.3"
