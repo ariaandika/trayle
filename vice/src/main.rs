@@ -1,13 +1,17 @@
+use anyhow::Result;
 use smithay::reexports::calloop::EventLoop;
 use vice::Vice;
 
-fn main() {
+fn main() -> Result<()> {
     let _guard = setup_tracing();
-    let mut event_loop = EventLoop::try_new().unwrap();
-    let mut vice = Vice::setup(&mut event_loop).unwrap();
+    app().inspect_err(|err|tracing::error!("{err:?}"))
+}
 
-    event_loop.run(None, &mut vice, |_|{}).unwrap();
-    println!("Hello, world!");
+fn app() -> Result<()> {
+    let mut event_loop = EventLoop::try_new()?;
+    let mut vice = Vice::setup(&mut event_loop)?;
+
+    Ok(event_loop.run(None, &mut vice, Vice::refresh)?)
 }
 
 fn setup_tracing() -> tracing_appender::non_blocking::WorkerGuard {
