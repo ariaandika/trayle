@@ -15,7 +15,7 @@ use smithay::{
         input::{Event as _, InputEvent, KeyboardKeyEvent},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
-            element as element_utils,
+            element::{self as element_utils, surface::WaylandSurfaceRenderElement},
             gles::GlesRenderer,
             multigpu::{gbm::GbmGlesBackend, GpuManager, MultiRenderer},
             utils as renderer_utils, Color32F, ImportAll, ImportEgl, ImportMem,
@@ -27,7 +27,10 @@ use smithay::{
         self, space::SpaceRenderElements, utils::OutputPresentationFeedback, PopupKind,
         PopupManager, Space, Window,
     },
-    input::{keyboard::{FilterResult, KeysymHandle, ModifiersState}, Seat, SeatHandler, SeatState},
+    input::{
+        keyboard::{FilterResult, KeysymHandle, ModifiersState},
+        Seat, SeatHandler, SeatState,
+    },
     output::{Output, PhysicalProperties},
     reexports::{
         calloop::{
@@ -176,7 +179,7 @@ impl Vice {
         lh.insert_source(display_source, handlers::display).unwrap();
         lh.insert_source(session_source, handlers::session).unwrap();
         lh.insert_source(input_source, handlers::input).unwrap();
-        // lh.insert_source(udev_source, handlers::udev).unwrap();
+        lh.insert_source(udev_source, handlers::udev).unwrap();
 
         tracing::info!("setup finish");
 
@@ -333,10 +336,12 @@ mod handlers {
     use super::*;
 
     pub fn socket(stream: UnixStream, _: &mut (), vice: &mut Vice) {
+        tracing::trace!("Event: new client");
         vice.dh.insert_client(stream, Arc::new(ClientState::default())).unwrap();
     }
 
     pub fn display(_: Readiness, display: &mut NoIoDrop<Display<Vice>>, vice: &mut Vice) -> std::io::Result<calloop::PostAction> {
+        tracing::trace!("Event: display");
         unsafe { display.get_mut() }.dispatch_clients(vice).unwrap();
         Ok(calloop::PostAction::Continue)
     }
@@ -346,21 +351,18 @@ mod handlers {
     }
 
     pub fn input(event: InputEvent<LibinputInputBackend>, _: &mut (), vice: &mut Vice) {
-        match event {
-            InputEvent::Keyboard { event } => {
-                let Some(kb) = vice.seat.get_keyboard() else {
-                    return;
-                };
-                kb.input::<(), _>(
-                    vice,
-                    event.key_code(),
-                    event.state(),
-                    SERIAL_COUNTER.next_serial(),
-                    event.time_msec(),
-                    self::keyboard_input,
-                );
-            }
-            _ => {}
+        if let InputEvent::Keyboard { event } = event {
+            let Some(kb) = vice.seat.get_keyboard() else {
+                return;
+            };
+            kb.input::<(), _>(
+                vice,
+                event.key_code(),
+                event.state(),
+                SERIAL_COUNTER.next_serial(),
+                event.time_msec(),
+                self::keyboard_input,
+            );
         }
     }
 
@@ -373,8 +375,13 @@ mod handlers {
         FilterResult::Forward
     }
 
-    #[allow(unused)]
     pub fn udev(event: udev::UdevEvent, _: &mut (), _: &mut Vice) {
+        tracing::trace!("Event: display");
+
+        if !matches!(std::env::var("VICE_UDEV_EVENT").as_deref(),Ok("1")) {
+            return;
+        }
+
         macro_rules! node {
             ($dev_id:tt) => {
                 match DrmNode::from_dev_id($dev_id) {
@@ -407,8 +414,6 @@ mod handlers {
 mod device {
     //! single device could have multiple pair of crtc and surface
 
-    use smithay::backend::renderer::element::surface::WaylandSurfaceRenderElement;
-
     use crate::render::OutputRenderElements;
 
     use super::*;
@@ -423,7 +428,7 @@ mod device {
         space: &mut Space<Window>,
     ) -> Result<Device> {
         // let node = DrmNode::from_dev_id(device_id)?;
-        let fd = session.open(&path, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK)?;
+        let fd = session.open(path, OFlags::RDWR | OFlags::CLOEXEC | OFlags::NOCTTY | OFlags::NONBLOCK)?;
         let fd = DrmDeviceFd::new(fd.into());
 
         let (device, drm_source) = DrmDevice::new(fd.clone(), true)?;
