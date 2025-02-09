@@ -12,7 +12,7 @@ use smithay::{
             DrmDevice, DrmDeviceFd, DrmNode, NodeType,
         },
         egl::{context::ContextPriority, EGLDevice, EGLDisplay},
-        input::InputEvent,
+        input::{Event as _, InputEvent, KeyboardKeyEvent},
         libinput::{LibinputInputBackend, LibinputSessionInterface},
         renderer::{
             element as element_utils,
@@ -27,7 +27,7 @@ use smithay::{
         self, space::SpaceRenderElements, utils::OutputPresentationFeedback, PopupKind,
         PopupManager, Space, Window,
     },
-    input::{SeatHandler, SeatState},
+    input::{keyboard::{FilterResult, KeysymHandle, ModifiersState}, Seat, SeatHandler, SeatState},
     output::{Output, PhysicalProperties},
     reexports::{
         calloop::{
@@ -44,7 +44,7 @@ use smithay::{
             Client, Display, DisplayHandle,
         },
     },
-    utils::{Clock, Monotonic, Serial, Time},
+    utils::{Clock, Monotonic, Serial, Time, SERIAL_COUNTER},
     wayland::{
         buffer::BufferHandler,
         compositor::{self, CompositorClientState, CompositorHandler, CompositorState},
@@ -63,7 +63,7 @@ use smithay::{
         socket::ListeningSocketSource,
     },
 };
-
+use xkbcommon::xkb::Keysym;
 
 
 type Gpus = GpuManager<GbmGlesBackend<GlesRenderer, DrmDeviceFd>>;
@@ -86,6 +86,7 @@ pub struct Vice {
     socket_name: String,
     primary_gpu: DrmNode,
 
+    seat: Seat<Vice>,
     gpus: Gpus,
     devices: HashMap<DrmNode, Device>,
 
@@ -188,6 +189,7 @@ impl Vice {
             socket_name,
             primary_gpu,
 
+            seat,
             gpus,
             devices,
 
@@ -345,11 +347,28 @@ mod handlers {
     pub fn input(event: InputEvent<LibinputInputBackend>, _: &mut (), vice: &mut Vice) {
         match event {
             InputEvent::Keyboard { event } => {
-                tracing::debug!(?event);
-                vice.signal.stop();
+                let Some(kb) = vice.seat.get_keyboard() else {
+                    return;
+                };
+                kb.input::<(), _>(
+                    vice,
+                    event.key_code(),
+                    event.state(),
+                    SERIAL_COUNTER.next_serial(),
+                    event.time_msec(),
+                    self::keyboard_input,
+                );
             }
             _ => {}
         }
+    }
+
+    fn keyboard_input(vice: &mut Vice, _: &ModifiersState, key: KeysymHandle) -> FilterResult<()> {
+        if matches!(key.modified_sym(),Keysym::Escape) {
+            vice.signal.stop();
+            return FilterResult::Intercept(());
+        }
+        FilterResult::Forward
     }
 
     #[allow(unused)]
