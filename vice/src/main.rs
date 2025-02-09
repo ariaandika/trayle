@@ -10,8 +10,24 @@ fn main() -> Result<()> {
 fn app() -> Result<()> {
     let mut event_loop = EventLoop::try_new()?;
     let mut vice = Vice::setup(&mut event_loop)?;
-
+    open_client(vice.socket_name().to_string());
     Ok(event_loop.run(None, &mut vice, Vice::refresh)?)
+}
+
+fn open_client(socket_name: String) {
+    std::thread::spawn(move||{
+        match std::process::Command::new("cargo")
+            .args(["run","-p","visor"])
+            .env("WAYLAND_DISPLAY", socket_name)
+            .output()
+        {
+            Ok(output) => {
+                std::fs::write(".stdout", &output.stdout).unwrap();
+                std::fs::write(".stderr", &output.stderr).unwrap();
+            }
+            Err(err) => tracing::error!("failed to spawn alacritty: {err}"),
+        }
+    });
 }
 
 fn setup_tracing() -> tracing_appender::non_blocking::WorkerGuard {

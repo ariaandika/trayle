@@ -168,6 +168,7 @@ impl Vice {
 
         let socket_source = ListeningSocketSource::new_auto()?;
         let socket_name = socket_source.socket_name().to_string_lossy().into_owned();
+        tracing::info!("listening in {socket_name:?}");
 
         let display_source = Generic::new(display, Interest::READ, calloop::Mode::Level);
 
@@ -365,6 +366,7 @@ mod handlers {
 
     fn keyboard_input(vice: &mut Vice, _: &ModifiersState, key: KeysymHandle) -> FilterResult<()> {
         if matches!(key.modified_sym(),Keysym::Escape) {
+            tracing::info!("exiting");
             vice.signal.stop();
             return FilterResult::Intercept(());
         }

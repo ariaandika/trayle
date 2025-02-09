@@ -94,6 +94,14 @@ fn app() -> Result<()> {
 
     tracing::info!("setup finished");
 
+    let signal = event_loop.get_signal();
+
+    std::thread::spawn(move||{
+        std::thread::sleep(Duration::from_secs(2));
+        tracing::info!("exiting");
+        signal.stop();
+    });
+
     loop {
         event_loop.dispatch(Duration::from_millis(16), &mut app)?;
 
@@ -130,6 +138,7 @@ impl App {
     }
 
     fn draw(&mut self, _conn: &Connection, qh: &QueueHandle<App>) {
+        tracing::debug!("draw");
         let width = self.width;
         let height = self.height;
         let stride = self.width as i32 * 4;
@@ -171,6 +180,7 @@ impl App {
         self.window.wl_surface().frame(qh, self.window.wl_surface().clone());
         buffer.attach_to(self.window.wl_surface()).unwrap();
         self.window.wl_surface().commit();
+        tracing::debug!("draw complete");
     }
 }
 
