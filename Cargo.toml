@@ -1,5 +1,5 @@
 [workspace]
-members = [ "dilema","examples/*", "vice"]
+members = [ "dilema","examples/*", "vice", "visor"]
 
 [package]
 name = "trayle"
