@@ -136,8 +136,11 @@ impl Vice {
         let udev_source = UdevBackend::new(&seat_name)?;
         for (device_id, path) in udev_source.device_list() {
             let node = DrmNode::from_dev_id(device_id)?;
-            let device = device::gpus_add_node(node, path, &dh, &lh, &mut session, &mut gpus, &mut space)?;
-            devices.insert(node, device);
+            let result = device::gpus_add_node(node, path, &dh, &lh, &mut session, &mut gpus, &mut space);
+            match result {
+                Ok(device) => { devices.insert(node, device); },
+                Err(err) => tracing::error!("skipping device {path:?}: {err}"),
+            }
         }
 
         let mut renderer = gpus.single_renderer(&primary_gpu)?;
