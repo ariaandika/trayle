@@ -9,7 +9,7 @@ use smithay::{
         drm::{
             compositor::FrameFlags,
             output::{DrmOutput, DrmOutputManager, DrmOutputRenderElements},
-            DrmDevice, DrmDeviceFd, DrmNode, NodeType,
+            DrmDevice, DrmDeviceFd, DrmEvent, DrmEventMetadata, DrmNode, NodeType,
         },
         egl::{context::ContextPriority, EGLDevice, EGLDisplay},
         input::{Event as _, InputEvent, KeyboardKeyEvent},
@@ -409,6 +409,21 @@ mod handlers {
             }
         }
     }
+
+    pub fn drm(event: DrmEvent, node: DrmNode, meta: &mut Option<DrmEventMetadata>, vice: &mut Vice) {
+        tracing::trace!("Event: DrmDevice");
+
+        match event {
+            DrmEvent::VBlank(crtc) => {
+                if let Err(err) = render::frame_finish(node, crtc, meta, vice) {
+                    tracing::error!("vblank event error, {err}")
+                };
+            }
+            DrmEvent::Error(err) => {
+                tracing::error!("{err}");
+            }
+        }
+    }
 }
 
 mod device {
@@ -445,9 +460,7 @@ mod device {
         };
 
         // NOTE: #2 setup VBlank event listener
-        let device_token = lh.insert_source(drm_source, |_,_,_|{
-            tracing::trace!("VBlank event");
-        }).unwrap();
+        let device_token = lh.insert_source(drm_source, move|e,m,v|handlers::drm(e,node,m,v)).unwrap();
 
         let mut renderer = gpus.single_renderer(&render_node)?;
 
@@ -605,6 +618,10 @@ mod device {
 }
 
 mod render {
+    use std::time::Duration;
+
+    use smithay::{backend::{drm::{DrmAccessError, DrmError}, SwapBuffersError}, reexports::{calloop::timer::{TimeoutAction, Timer}, wayland_protocols::wp::presentation_time::server::wp_presentation_feedback}, wayland::presentation::Refresh};
+
     use super::*;
 
     smithay::render_elements! {
@@ -624,6 +641,44 @@ mod render {
     // smithay::render_elements! {
     //     pub WindowRenderElements<R> where R: ImportAll + ImportMem;
     // }
+
+    // render single or all crtcs
+    fn node(
+        node: DrmNode,
+        crtc: Option<crtc::Handle>,
+        frame_target: Time<Monotonic>,
+        vice: &mut Vice,
+    ) -> Result<()> {
+        let device = vice.devices.get_mut(&node).context("render node invalid node for device")?;
+
+        match crtc {
+            Some(crtc) => render::surface(
+                node,
+                crtc,
+                frame_target,
+                vice.primary_gpu,
+                &mut vice.space,
+                &mut vice.devices,
+                &mut vice.gpus,
+            )?,
+            None => {
+                let crtcs = device.surfaces.keys().copied().collect::<Vec<_>>();
+                for crtc in crtcs {
+                    render::surface(
+                        node,
+                        crtc,
+                        frame_target,
+                        vice.primary_gpu,
+                        &mut vice.space,
+                        &mut vice.devices,
+                        &mut vice.gpus,
+                    )?;
+                }
+            },
+        }
+
+        Ok(())
+    }
 
     /// render for single crtc and surface
     pub fn surface(
@@ -740,6 +795,133 @@ mod render {
         }
 
         Ok((rendered,render_states))
+    }
+
+    pub fn frame_finish(
+        node: DrmNode,
+        crtc: crtc::Handle,
+        meta: &mut Option<DrmEventMetadata>,
+        vice: &mut Vice,
+    ) -> Result<()> {
+        let Some(device) = vice.devices.get_mut(&node) else {
+            anyhow::bail!("frame_finish invalid device drm node");
+        };
+
+        let Some(surface) = device.surfaces.get_mut(&crtc) else {
+            anyhow::bail!("frame_finish invalid surface crtc");
+        };
+
+        let output = vice.space.outputs()
+            .find(|o|{
+                o.user_data().get::<UdevOutputId>()==Some(&UdevOutputId{node,crtc})
+            })
+            .cloned()
+            .context("no output matching provided node and crtc")?;
+
+        let tp = meta.as_ref().and_then(|meta|match meta.time {
+            smithay::backend::drm::DrmEventTime::Monotonic(tp) => Some(tp),
+            smithay::backend::drm::DrmEventTime::Realtime(_) => None,
+        });
+
+        let seq = meta.as_ref().map(|meta|meta.sequence).unwrap_or(0);
+
+        let (clock, flags) = match tp {
+            Some(tp) => (
+                tp.into(),
+                wp_presentation_feedback::Kind::Vsync
+                | wp_presentation_feedback::Kind::HwClock
+                | wp_presentation_feedback::Kind::HwCompletion
+            ),
+            None => (vice.clock.now(), wp_presentation_feedback::Kind::Vsync),
+        };
+
+        let submit_result = surface.drm_output.frame_submitted().map_err(Into::<SwapBuffersError>::into);
+
+        let mode = output.current_mode().context("no mode advertised for output")?;
+        let frame_duration = Duration::from_secs_f64(1_000f64 / mode.refresh as f64);
+
+        let schedule_render = match submit_result {
+            Ok(user_data) => {
+                if let Some(mut feedback) = user_data.flatten() {
+                    feedback.presented(clock, Refresh::Fixed(frame_duration), seq as u64, flags);
+                }
+                true
+            }
+            Err(err) => {
+                tracing::error!("frame finish error: {err}");
+                match err {
+                    SwapBuffersError::AlreadySwapped => true,
+                    SwapBuffersError::TemporaryFailure(err) if matches! {
+                        // handled by session active event
+                        err.downcast_ref::<DrmError>(), Some(&DrmError::DeviceInactive)
+                    } => false,
+                    SwapBuffersError::TemporaryFailure(err) => matches! {
+                        err.downcast_ref::<DrmError>(),
+                        Some(DrmError::Access(DrmAccessError {
+                            source, ..
+                        })) if source.kind() == std::io::ErrorKind::PermissionDenied
+                    },
+                    SwapBuffersError::ContextLost(err) => panic!("rendering loop lost: {err}"),
+                }
+            }
+        };
+
+        if schedule_render {
+            let next_frame_target = clock + frame_duration;
+
+            // What are we trying to solve by introducing a delay here:
+            //
+            // Basically it is all about latency of client provided buffers.
+            // A client driven by frame callbacks will wait for a frame callback
+            // to repaint and submit a new buffer. As we send frame callbacks
+            // as part of the repaint in the compositor the latency would always
+            // be approx. 2 frames. By introducing a delay before we repaint in
+            // the compositor we can reduce the latency to approx. 1 frame + the
+            // remaining duration from the repaint to the next VBlank.
+            //
+            // With the delay it is also possible to further reduce latency if
+            // the client is driven by presentation feedback. As the presentation
+            // feedback is directly sent after a VBlank the client can submit a
+            // new buffer during the repaint delay that can hit the very next
+            // VBlank, thus reducing the potential latency to below one frame.
+            //
+            // Choosing a good delay is a topic on its own so we just implement
+            // a simple strategy here. We just split the duration between two
+            // VBlanks into two steps, one for the client repaint and one for the
+            // compositor repaint. Theoretically the repaint in the compositor should
+            // be faster so we give the client a bit more time to repaint. On a typical
+            // modern system the repaint in the compositor should not take more than 2ms
+            // so this should be safe for refresh rates up to at least 120 Hz. For 120 Hz
+            // this results in approx. 3.33ms time for repainting in the compositor.
+            // A too big delay could result in missing the next VBlank in the compositor.
+            //
+            // A more complete solution could work on a sliding window analyzing past repaints
+            // and do some prediction for the next repaint.
+            let repaint_delay = Duration::from_secs_f64(frame_duration.as_secs_f64() * 0.6f64);
+            let timer = if vice.primary_gpu != surface.render_node {
+                // However, if we need to do a copy, that might not be enough.
+                // (And without actual comparision to previous frames we cannot really know.)
+                // So lets ignore that in those cases to avoid thrashing performance.
+                tracing::trace!("scheduling repaint timer immediately on {:?}", crtc);
+                Timer::immediate()
+            } else {
+                tracing::trace!(
+                    "scheduling repaint timer with delay {:?} on {:?}",
+                    repaint_delay,
+                    crtc
+                );
+                Timer::from_duration(repaint_delay)
+            };
+
+            vice.lh.insert_source(timer, move|_,_,vice|{
+                if let Err(err) = render::node(node, Some(crtc), next_frame_target, vice) {
+                    tracing::error!("scheduled render error: {err}");
+                };
+                TimeoutAction::Drop
+            }).unwrap();
+        }
+
+        Ok(())
     }
 }
 
