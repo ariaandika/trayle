@@ -78,15 +78,31 @@ impl WaylandSocket {
         if self.read_buffer.len() < len {
             return Poll::Pending;
         }
-        let message = self.read_buffer.split_to(len);
+        let mut message = self.read_buffer.split_to(len);
+        let body = message.split_off(8);
 
         println!("[OID:{object_id}] opcode: {opcode}, len: {len}");
-        println!("[OID:{object_id}] message: {message:?}");
+
+        if opcode == 0 {
+            let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
+            let i_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
+            let i_str = &body[8..8 + i_len as usize];
+            let version = u32::from_ne_bytes(*body[8 + i_len as usize..].first_chunk::<4>().unwrap());
+            println!(
+                "[OID:{object_id}] name: {name}, interface: {}, version: {version}",
+                tcio::fmt::lossy(&i_str)
+            );
+        } else {
+            println!("[OID:{object_id}] body: {body:?}");
+        }
 
         Poll::Ready(Ok(()))
     }
 
     fn read_io(&mut self) -> anyhow::Result<usize> {
+        if self.read_buffer.spare_capacity_mut().is_empty() {
+            self.read_buffer.try_reclaim_full();
+        }
         let spare = self.read_buffer.spare_capacity_mut();
         let spare = unsafe {
             std::slice::from_raw_parts_mut(spare.as_mut_ptr().cast::<u8>(), spare.len())
