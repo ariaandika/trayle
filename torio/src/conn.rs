@@ -87,7 +87,7 @@ impl WaylandSocket {
             let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
             let i_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
             let i_str = &body[8..8 + i_len as usize];
-            let version = u32::from_ne_bytes(*body[8 + i_len as usize..].first_chunk::<4>().unwrap());
+            let version = u32::from_ne_bytes(*body[roundup_4!(8usize + i_len as usize)..].first_chunk::<4>().unwrap());
             println!(
                 "[OID:{object_id}] name: {name}, interface: {}, version: {version}",
                 tcio::fmt::lossy(&i_str)
@@ -124,4 +124,10 @@ macro_rules! ready {
     };
 }
 
-use {ready};
+macro_rules! roundup_4 {
+    ($n:expr) => {
+        ((($n) + 3usize) & (usize::MAX << 2))
+    };
+}
+
+use {ready, roundup_4};
