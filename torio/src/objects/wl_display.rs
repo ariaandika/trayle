@@ -5,6 +5,7 @@ use super::Request;
 const WL_DISPLAY_OBJECT_ID: u32 = 1;
 const GET_REGISTRY_OPCODE: u16 = 1;
 
+#[derive(Debug)]
 pub struct GetRegistry {
     wl_registry_id: u32,
 }
