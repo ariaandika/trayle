@@ -2,6 +2,7 @@ use tcio::bytes::BytesMut;
 
 mod id;
 pub mod wl_display;
+pub mod wl_registry;
 
 pub use id::GlobalId;
 

@@ -1,12 +1,15 @@
 use torio::conn::WaylandSocket;
-use torio::objects::wl_display::GetRegistry;
+use torio::objects::wl_display::Display;
+use torio::objects::wl_registry::Registry;
 use torio::objects::roundup_4;
 
 fn main() -> anyhow::Result<()> {
     let mut socket = WaylandSocket::connect_default()?;
-    let get_registry = GetRegistry::new();
-    dbg!(&get_registry);
-    socket.send_request(get_registry)?;
+
+    let display = Display::new();
+    let registry = Registry::new();
+
+    socket.send_request(display.get_registry(&registry))?;
     socket.flush()?;
 
     while let Some(message) = socket.poll_message()? {

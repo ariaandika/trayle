@@ -1,37 +1,52 @@
 use tcio::bytes::BytesMut;
 
 use super::Request;
+use super::wl_registry::Registry;
 
-const WL_DISPLAY_OBJECT_ID: u32 = 1;
+// `wl_display` properties
+const OBJECT_ID: u32 = 1;
 const GET_REGISTRY_OPCODE: u16 = 1;
 
+// ===== wl_display =====
+
+/// `wl_display` object.
 #[derive(Debug)]
-pub struct GetRegistry {
-    wl_registry_id: u32,
+pub struct Display {
+
 }
 
-impl GetRegistry {
+impl Display {
     pub fn new() -> Self {
-        Self {
-            wl_registry_id: super::GlobalId::next(),
-        }
+        Self {  }
+    }
+
+    pub fn get_registry<'a>(&self, registry: &'a Registry) -> GetRegistry<'a> {
+        GetRegistry { registry }
     }
 }
 
-impl Request for GetRegistry {
-    const OP_CODE: u16 = GET_REGISTRY_OPCODE;
-
-    fn object_id(&self) -> u32 {
-        WL_DISPLAY_OBJECT_ID
-    }
-
-    fn write_body(&self, buffer: &mut BytesMut) {
-        buffer.extend_from_slice(&self.wl_registry_id.to_ne_bytes());
-    }
-}
-
-impl Default for GetRegistry {
+impl Default for Display {
     fn default() -> Self {
         Self::new()
     }
 }
+
+// ===== wl_display::get_registry =====
+
+#[derive(Debug)]
+pub struct GetRegistry<'a> {
+    registry: &'a Registry,
+}
+
+impl Request for GetRegistry<'_> {
+    const OP_CODE: u16 = GET_REGISTRY_OPCODE;
+
+    fn object_id(&self) -> u32 {
+        OBJECT_ID
+    }
+
+    fn write_body(&self, buffer: &mut BytesMut) {
+        buffer.extend_from_slice(&self.registry.object_id().to_ne_bytes());
+    }
+}
+
