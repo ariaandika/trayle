@@ -71,19 +71,28 @@ impl WaylandSocket {
     }
 
     fn poll_message_inner(&mut self) -> Poll<anyhow::Result<()>> {
-        let object_id = u32::from_ne_bytes(*ready!(self.read_buffer.first_chunk::<4>()));
-        let opcode = u16::from_ne_bytes(*ready!(self.read_buffer[4..].first_chunk::<2>()));
-        let len = u16::from_ne_bytes(*ready!(self.read_buffer[6..].first_chunk::<2>())) as usize;
+        use crate::objects::{Header};
 
-        if self.read_buffer.len() < len {
+        let Some(header) = self.read_buffer.first_chunk::<8>() else {
+            return Poll::Pending;
+        };
+
+        let header = Header::new(*header);
+
+        if self.read_buffer.len() < header.len() {
             return Poll::Pending;
         }
-        let mut message = self.read_buffer.split_to(len);
+
+        let mut message = self.read_buffer.split_to(header.len());
+
+        // let message = Message::new(message);
+        // dbg!(message);
+
         let body = message.split_off(8);
+        let object_id = header.object_id();
+        // println!("[OID:{object_id}] opcode: {opcode}, len: {len}");
 
-        println!("[OID:{object_id}] opcode: {opcode}, len: {len}");
-
-        if opcode == 0 {
+        if header.opcode() == 0 {
             let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
             let i_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
             let i_str = &body[8..8 + i_len as usize];
@@ -100,8 +109,8 @@ impl WaylandSocket {
     }
 
     fn read_io(&mut self) -> anyhow::Result<usize> {
-        if self.read_buffer.spare_capacity_mut().is_empty() {
-            self.read_buffer.try_reclaim_full();
+        if self.read_buffer.capacity() == self.read_buffer.len() {
+            self.read_buffer.reserve(64);
         }
         let spare = self.read_buffer.spare_capacity_mut();
         let spare = unsafe {
@@ -115,19 +124,10 @@ impl WaylandSocket {
     }
 }
 
-macro_rules! ready {
-    ($buf:expr) => {
-        match $buf {
-            Some(ok) => ok,
-            None => return Poll::Pending
-        }
-    };
-}
-
 macro_rules! roundup_4 {
     ($n:expr) => {
         ((($n) + 3usize) & (usize::MAX << 2))
     };
 }
 
-use {ready, roundup_4};
+use {roundup_4};
