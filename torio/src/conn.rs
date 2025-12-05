@@ -4,7 +4,7 @@ use std::task::Poll;
 use std::{env, io};
 use tcio::bytes::BytesMut;
 
-use super::objects::Request;
+use super::objects::{Request, Header, Message};
 
 #[derive(Debug)]
 pub struct WaylandSocket {
@@ -50,7 +50,7 @@ impl WaylandSocket {
         Ok(())
     }
 
-    pub fn poll_message_debug(&mut self) -> anyhow::Result<Option<()>> {
+    pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
         if self.read_buffer.is_empty() {
             let read = self.read_io()?;
             if read == 0 {
@@ -59,53 +59,29 @@ impl WaylandSocket {
         }
 
         match self.poll_message_inner() {
-            Poll::Ready(result) => result.map(Some),
+            Poll::Ready(message) => Ok(Some(message)),
             Poll::Pending => {
                 let read = self.read_io()?;
                 if read == 0 {
                     return Ok(None);
                 }
-                self.poll_message_debug()
+                self.poll_message()
             }
         }
     }
 
-    fn poll_message_inner(&mut self) -> Poll<anyhow::Result<()>> {
-        use crate::objects::{Header};
-
+    fn poll_message_inner(&mut self) -> Poll<Message> {
         let Some(header) = self.read_buffer.first_chunk::<8>() else {
             return Poll::Pending;
         };
 
-        let header = Header::new(*header);
+        let len = Header::len_of(header);
 
-        if self.read_buffer.len() < header.len() {
+        if self.read_buffer.len() < len {
             return Poll::Pending;
         }
 
-        let mut message = self.read_buffer.split_to(header.len());
-
-        // let message = Message::new(message);
-        // dbg!(message);
-
-        let body = message.split_off(8);
-        let object_id = header.object_id();
-        // println!("[OID:{object_id}] opcode: {opcode}, len: {len}");
-
-        if header.opcode() == 0 {
-            let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
-            let i_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
-            let i_str = &body[8..8 + i_len as usize];
-            let version = u32::from_ne_bytes(*body[roundup_4!(8usize + i_len as usize)..].first_chunk::<4>().unwrap());
-            println!(
-                "[OID:{object_id}] name: {name}, interface: {}, version: {version}",
-                tcio::fmt::lossy(&i_str)
-            );
-        } else {
-            println!("[OID:{object_id}] body: {body:?}");
-        }
-
-        Poll::Ready(Ok(()))
+        Poll::Ready(Message::new(self.read_buffer.split_to(len)))
     }
 
     fn read_io(&mut self) -> anyhow::Result<usize> {
@@ -124,10 +100,3 @@ impl WaylandSocket {
     }
 }
 
-macro_rules! roundup_4 {
-    ($n:expr) => {
-        ((($n) + 3usize) & (usize::MAX << 2))
-    };
-}
-
-use {roundup_4};

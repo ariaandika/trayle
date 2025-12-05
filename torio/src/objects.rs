@@ -27,6 +27,10 @@ impl Header {
         Self { bytes }
     }
 
+    pub fn len_of(bytes: &[u8; 8]) -> usize {
+        unsafe { *bytes.as_ptr().add(6).cast::<u16>() as usize }
+    }
+
     pub fn object_id(&self) -> u32 {
         unsafe { *self.bytes.as_ptr().cast::<u32>() }
     }
@@ -90,3 +94,13 @@ impl std::fmt::Debug for Message {
     }
 }
 
+// ===== Utils =====
+
+#[macro_export]
+macro_rules! roundup_4 {
+    ($n:expr) => {
+        ((($n) + 3usize) & (usize::MAX << 2))
+    };
+}
+
+pub use {roundup_4};
