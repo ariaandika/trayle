@@ -1,5 +1,7 @@
 use crate::objects::{Object, ObjectKind, ObjectManager};
 
+pub const EVENT_GLOBAL_CODE: u16 = 0;
+
 #[derive(Debug)]
 pub struct Registry {
     object_id: u32,

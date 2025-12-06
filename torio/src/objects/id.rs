@@ -1,6 +1,10 @@
 use std::sync::atomic::{AtomicU32, Ordering};
 
-use crate::objects::ObjectKind;
+use crate::objects;
+use crate::objects::{Message, ObjectKind};
+
+// defined by protocol
+const MAX_CLIENT_ID: u32 = 0xfeffffff;
 
 // ===== GlobalId =====
 
@@ -8,8 +12,6 @@ use crate::objects::ObjectKind;
 pub struct GlobalId {
     id: AtomicU32,
 }
-
-const MAX_CLIENT_ID: u32 = 0xfeffffff;
 
 static GLOBAL_ID: GlobalId = GlobalId {
     id: AtomicU32::new(2),
@@ -52,6 +54,17 @@ impl ObjectManager {
         assert!(self.objects[index].replace(kind).is_none());
         self.id += 1;
         id
+    }
+
+    pub fn event_kind(&self, message: &Message) -> Option<ObjectKind> {
+        match message.object_id() {
+            0 => None,
+            objects::wl_display::OBJECT_ID => Some(ObjectKind::Display),
+            index => match self.objects.get(index.wrapping_sub(2) as usize) {
+                Some(Some(kind)) => Some(*kind),
+                Some(None) | None => None,
+            },
+        }
     }
 }
 

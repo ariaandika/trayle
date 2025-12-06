@@ -4,7 +4,7 @@ use super::Request;
 use super::wl_registry::Registry;
 
 // `wl_display` properties
-const OBJECT_ID: u32 = 1;
+pub const OBJECT_ID: u32 = 1;
 const GET_REGISTRY_OPCODE: u16 = 1;
 
 // ===== wl_display =====
