@@ -4,7 +4,6 @@ use torio::objects::wl_registry;
 use torio::objects::wl_registry::Registry;
 use torio::objects::ObjectKind;
 use torio::objects::ObjectManager;
-use torio::objects::roundup_4;
 
 fn main() -> anyhow::Result<()> {
     let mut socket = WaylandSocket::connect_default()?;
@@ -27,15 +26,11 @@ fn main() -> anyhow::Result<()> {
                 // TODO: error event
             }
             ObjectKind::Registry => {
-                if message.opcode() == wl_registry::EVENT_GLOBAL_CODE {
-                    let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
-                    let i_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
-                    let i_str = &body[8..8 + i_len as usize];
-                    let version = u32::from_ne_bytes(*body[roundup_4!(8usize + i_len as usize)..].first_chunk::<4>().unwrap());
-                    println!(
-                        "[OID:{object_id}] name: {name}, interface: {}, version: {version}",
-                        tcio::fmt::lossy(&i_str)
-                    );
+                match wl_registry::Event::from_message(message).unwrap() {
+                    wl_registry::Event::GlobalRemove => {}
+                    wl_registry::Event::Global(event) => {
+                        println!("[OID:{object_id}] {event:?}");
+                    }
                 }
             }
             _ => {

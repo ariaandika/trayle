@@ -1,4 +1,4 @@
-use tcio::bytes::BytesMut;
+use tcio::bytes::{Buf, BytesMut};
 
 mod id;
 pub mod wl_display;
@@ -85,6 +85,11 @@ impl Message {
 
     pub fn body(&self) -> &[u8] {
         unsafe { std::slice::from_raw_parts(self.bytes.as_ptr().add(8), self.len() - 8) }
+    }
+
+    pub fn into_body(mut self) -> BytesMut {
+        self.bytes.advance(8);
+        self.bytes
     }
 }
 
