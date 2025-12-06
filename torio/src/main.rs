@@ -1,13 +1,15 @@
 use torio::conn::WaylandSocket;
 use torio::objects::wl_display::Display;
 use torio::objects::wl_registry::Registry;
+use torio::objects::ObjectManager;
 use torio::objects::roundup_4;
 
 fn main() -> anyhow::Result<()> {
     let mut socket = WaylandSocket::connect_default()?;
 
+    let mut manager = ObjectManager::new();
     let display = Display::new();
-    let registry = Registry::new();
+    let registry = Registry::with_manager(&mut manager);
 
     socket.send_request(display.get_registry(&registry))?;
     socket.flush()?;

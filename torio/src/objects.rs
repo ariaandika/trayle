@@ -4,7 +4,7 @@ mod id;
 pub mod wl_display;
 pub mod wl_registry;
 
-pub use id::GlobalId;
+pub use id::{GlobalId, ObjectManager};
 
 pub trait Request {
     const OP_CODE: u16;
@@ -17,7 +17,21 @@ pub trait Request {
     fn write_body(&self, buffer: &mut BytesMut);
 }
 
+/// Wayland object.
+pub trait Object {
+    const KIND: ObjectKind;
+}
+
 // ===== Generic Message =====
+
+#[derive(Debug, Clone, Copy)]
+#[non_exhaustive]
+pub enum ObjectKind {
+    /// `wl_display`
+    Display,
+    /// `wl_registry`
+    Registry,
+}
 
 pub struct Header {
     bytes: [u8; 8],
