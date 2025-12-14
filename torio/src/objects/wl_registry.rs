@@ -62,8 +62,11 @@ impl Request for Bind<'_> {
 
     fn write_body(&self, buffer: &mut tcio::bytes::BytesMut) {
         buffer.extend_from_slice(&self.name.to_ne_bytes());
-        buffer.extend_from_slice(&roundup_4!(self.interface.len()).to_ne_bytes());
+
+        buffer.extend_from_slice(&roundup_4!(self.interface.len() + 1).to_ne_bytes());
         buffer.extend_from_slice(self.interface.as_bytes());
+        buffer.extend_from_slice(b"\0");
+
         buffer.extend_from_slice(&self.version.to_ne_bytes());
         buffer.extend_from_slice(&self.id.to_ne_bytes());
     }
