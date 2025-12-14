@@ -1,8 +1,9 @@
 use tcio::bytes::Buf;
 use tcio::ByteStr;
 
-use crate::objects::{Object, ObjectKind, ObjectManager};
+use crate::objects::{Object, ObjectKind, ObjectManager, Request};
 use crate::objects::Message;
+use crate::roundup_4;
 
 pub const EVENT_GLOBAL_CODE: u16 = 0;
 
@@ -29,15 +30,48 @@ impl Registry {
     pub const fn object_id(&self) -> u32 {
         self.object_id
     }
+
+    /// Binds a new, client-created object to the server using the specified name as the
+    /// identifier.
+    pub fn bind<'a>(&'a self, name: u32, interface: &'a str, version: u32, id: u32) -> Bind<'a> {
+        Bind { registry: self, name, interface, version, id }
+    }
 }
 
 impl Object for Registry {
     const KIND: ObjectKind = ObjectKind::Registry;
 }
 
+// ===== Bind =====
+
+#[derive(Debug)]
+pub struct Bind<'a> {
+    registry: &'a Registry,
+    name: u32,
+    id: u32,
+    interface: &'a str,
+    version: u32,
+}
+
+impl Request for Bind<'_> {
+    const OP_CODE: u16 = 0;
+
+    fn object_id(&self) -> u32 {
+        self.registry.object_id()
+    }
+
+    fn write_body(&self, buffer: &mut tcio::bytes::BytesMut) {
+        buffer.extend_from_slice(&self.name.to_ne_bytes());
+        buffer.extend_from_slice(&roundup_4!(self.interface.len()).to_ne_bytes());
+        buffer.extend_from_slice(self.interface.as_bytes());
+        buffer.extend_from_slice(&self.version.to_ne_bytes());
+        buffer.extend_from_slice(&self.id.to_ne_bytes());
+    }
+}
 
 // ===== Event =====
 
+#[derive(Debug)]
 pub enum Event {
     Global(GlobalEvent),
     GlobalRemove,

@@ -27,10 +27,12 @@ pub trait Object {
 #[derive(Debug, Clone, Copy)]
 #[non_exhaustive]
 pub enum ObjectKind {
-    /// `wl_display`
+    /// `wl_display` (core)
     Display,
-    /// `wl_registry`
+    /// `wl_registry` (core)
     Registry,
+    /// `wl_shm` (core)
+    Shm,
 }
 
 pub struct Header {
