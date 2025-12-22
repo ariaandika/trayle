@@ -67,15 +67,22 @@ fn interface<O: Write>(parser: &mut Parser, mut output: O) {
 
     // ===== operations =====
 
+    let mut reqcode = 0;
+    let mut evcode = 0;
+
     loop {
         let (name, _) = parser.peek_tag();
         match name.as_slice() {
             b"request" => {
-                print_request(parser, &mut output);
+                let code = reqcode;
+                reqcode += 1;
+                print_request(parser, &mut output, code);
                 output.write_all(b"\n").unwrap();
             }
             b"event" => {
-                print_event(parser, &mut output);
+                let code = evcode;
+                evcode += 1;
+                print_event(parser, &mut output, code);
                 output.write_all(b"\n").unwrap();
             }
             b"enum" => {
@@ -87,7 +94,7 @@ fn interface<O: Write>(parser: &mut Parser, mut output: O) {
         }
     }
 
-    output.write_all(b"}").unwrap();
+    output.write_all(b"}\n\n").unwrap();
 
     let mut tag = parser.next_tag();
     let (name, is_close) = tag.name();
@@ -95,15 +102,15 @@ fn interface<O: Write>(parser: &mut Parser, mut output: O) {
     assert!(is_close);
 }
 
-fn print_request<O: Write>(parser: &mut Parser, output: O) {
-    print_operation("request", parser, output);
+fn print_request<O: Write>(parser: &mut Parser, output: O, opcode: usize) {
+    print_operation("request", opcode, parser, output);
 }
 
-fn print_event<O: Write>(parser: &mut Parser, output: O) {
-    print_operation("event", parser, output);
+fn print_event<O: Write>(parser: &mut Parser, output: O, opcode: usize) {
+    print_operation("event", opcode, parser, output);
 }
 
-fn print_operation<O: Write>(op: &str, parser: &mut Parser, mut output: O) {
+fn print_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, mut output: O) {
     let mut tag = parser.next_tag();
     let (name, is_close) = tag.name();
     assert_eq!(name.as_slice(), op.as_bytes());
@@ -122,6 +129,18 @@ fn print_operation<O: Write>(op: &str, parser: &mut Parser, mut output: O) {
     output.write_all(b"        pub mod ").unwrap();
     output.write_all(&name).unwrap();
     output.write_all(b" {\n").unwrap();
+
+    // ===== kind =====
+    let mut cop = op.as_bytes().to_vec();
+    cop[0].make_ascii_uppercase();
+    output.write_all(b"pub const KIND: Kind = Kind::").unwrap();
+    output.write_all(&cop).unwrap();
+    output.write_all(b";\n").unwrap();
+
+    // ===== opcode =====
+    output.write_all(b"pub const OPCODE: u32 = ").unwrap();
+    output.write_fmt(format_args!("{opcode}")).unwrap();
+    output.write_all(b";\n\n").unwrap();
 
     // ===== write =====
     output.write_all(b"            pub fn write(").unwrap();
