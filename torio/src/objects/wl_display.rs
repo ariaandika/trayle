@@ -11,6 +11,7 @@ const GET_REGISTRY_OPCODE: u16 = 1;
 
 /// `wl_display` object.
 #[derive(Debug)]
+#[non_exhaustive]
 pub struct Display {
 
 }
