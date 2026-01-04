@@ -1,10 +1,46 @@
 use std::io::{Read, Write};
 use std::os::unix::net::UnixStream;
+use std::os::unix::prelude::AsFd;
 use std::task::Poll;
 use std::{env, io};
 use tcio::bytes::BytesMut;
 
-use super::objects::{Request, Header, Message};
+use crate::objects::{Buffer, Fixed, Header, Message, Request};
+use crate::roundup_4;
+
+impl Buffer for BytesMut {
+    fn put_int(&mut self, int: i32) {
+        self.extend_from_slice(&int.to_ne_bytes());
+    }
+
+    fn put_uint(&mut self, uint: u32) {
+        self.extend_from_slice(&uint.to_ne_bytes());
+    }
+
+    fn put_fixed(&mut self, _fixed: Fixed) {
+        todo!()
+    }
+
+    fn put_string(&mut self, string: &str) {
+        self.extend_from_slice(&roundup_4!(string.len() + 1).to_ne_bytes());
+        self.extend_from_slice(string.as_bytes());
+        self.extend_from_slice(b"\0");
+    }
+
+    fn put_new_id(&mut self, interface: &str, version: u32, new_id: u32) {
+        self.put_string(interface);
+        self.put_uint(version);
+        self.put_uint(new_id);
+    }
+
+    fn put_array<T>(&mut self, _array: &[T]) {
+        todo!()
+    }
+
+    fn put_fd<Fd: AsFd>(&mut self, _fd: Fd) {
+        todo!()
+    }
+}
 
 #[derive(Debug)]
 pub struct WaylandSocket {
@@ -99,4 +135,3 @@ impl WaylandSocket {
         Ok(read)
     }
 }
-

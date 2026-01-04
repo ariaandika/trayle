@@ -1,9 +1,8 @@
-use tcio::bytes::Buf;
 use tcio::ByteStr;
+use tcio::bytes::Buf;
 
-use crate::objects::{Object, ObjectKind, ObjectManager, Request};
 use crate::objects::Message;
-use crate::roundup_4;
+use crate::objects::{Buffer, Object, ObjectKind, ObjectManager, Request};
 
 pub const EVENT_GLOBAL_CODE: u16 = 0;
 
@@ -60,15 +59,9 @@ impl Request for Bind<'_> {
         self.registry.object_id()
     }
 
-    fn write_body(&self, buffer: &mut tcio::bytes::BytesMut) {
-        buffer.extend_from_slice(&self.name.to_ne_bytes());
-
-        buffer.extend_from_slice(&roundup_4!(self.interface.len() + 1).to_ne_bytes());
-        buffer.extend_from_slice(self.interface.as_bytes());
-        buffer.extend_from_slice(b"\0");
-
-        buffer.extend_from_slice(&self.version.to_ne_bytes());
-        buffer.extend_from_slice(&self.id.to_ne_bytes());
+    fn write_body(&self, buffer: &mut impl Buffer) {
+        buffer.put_uint(self.name);
+        buffer.put_new_id(self.interface, self.version, self.id);
     }
 }
 

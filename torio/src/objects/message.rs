@@ -17,6 +17,21 @@ pub struct Header {
     bytes: [u8; 8],
 }
 
+pub struct Message {
+    bytes: BytesMut,
+}
+
+#[derive(Clone, Copy, Debug)]
+pub struct Fixed {
+    _raw: [u8; 4],
+}
+
+impl Fixed {
+    pub fn from_f32(_float: f32) -> Self {
+        todo!()
+    }
+}
+
 impl Header {
     pub fn new(bytes: [u8; 8]) -> Self {
         Self { bytes }
@@ -38,10 +53,6 @@ impl Header {
     pub fn len(&self) -> usize {
         unsafe { *self.bytes.as_ptr().add(6).cast::<u16>() as usize }
     }
-}
-
-pub struct Message {
-    bytes: BytesMut,
 }
 
 impl Message {

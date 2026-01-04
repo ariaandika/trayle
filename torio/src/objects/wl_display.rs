@@ -1,7 +1,5 @@
-use tcio::bytes::BytesMut;
-
-use super::Request;
-use super::wl_registry::Registry;
+use crate::objects::wl_registry::Registry;
+use crate::objects::{Buffer, Request};
 
 // `wl_display` properties
 pub const OBJECT_ID: u32 = 1;
@@ -46,8 +44,8 @@ impl Request for GetRegistry<'_> {
         OBJECT_ID
     }
 
-    fn write_body(&self, buffer: &mut BytesMut) {
-        buffer.extend_from_slice(&self.registry.object_id().to_ne_bytes());
+    fn write_body(&self, buffer: &mut impl Buffer) {
+        buffer.put_uint(self.registry.object_id());
     }
 }
 
