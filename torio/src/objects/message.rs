@@ -22,13 +22,23 @@ pub struct Message {
 }
 
 #[derive(Clone, Copy, Debug)]
-pub struct Fixed {
-    _raw: [u8; 4],
-}
+pub struct Fixed(i32);
 
 impl Fixed {
-    pub fn from_f32(_float: f32) -> Self {
-        todo!()
+    pub fn from_f32(f: f32) -> Self {
+        Self((f * 256.0).round() as i32)
+    }
+
+    pub fn from_int(i: i32) -> Self {
+        Self(i << 8)
+    }
+
+    pub fn to_float(self) -> f32 {
+        self.0 as f32 / 256.0
+    }
+
+    pub fn to_raw(self) -> i32 {
+        self.0
     }
 }
 

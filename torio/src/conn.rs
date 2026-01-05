@@ -26,8 +26,8 @@ impl Buffer for (&mut Vec<u8>, &mut Vec<RawFd>) {
         self.0.extend_from_slice(&uint.to_ne_bytes());
     }
 
-    fn put_fixed(&mut self, _fixed: Fixed) {
-        todo!()
+    fn put_fixed(&mut self, fixed: Fixed) {
+        self.put_int(fixed.to_raw());
     }
 
     fn put_string(&mut self, string: &str) {
