@@ -1,8 +1,7 @@
 use tcio::ByteStr;
-use tcio::bytes::Buf;
 
-use crate::objects::Message;
-use crate::objects::{Buffer, Object, ObjectKind, ObjectManager, Request};
+use crate::objects::{Message, ReadBuffer};
+use crate::objects::{Object, ObjectKind, ObjectManager, Request, WriteBuffer};
 
 pub const EVENT_GLOBAL_CODE: u16 = 0;
 
@@ -59,7 +58,7 @@ impl Request for Bind<'_> {
         self.registry.object_id()
     }
 
-    fn write_body(&self, buffer: &mut impl Buffer) {
+    fn write_body(&self, buffer: &mut impl WriteBuffer) {
         buffer.put_uint(self.name);
         buffer.put_new_id(self.interface, self.version, self.id);
     }
@@ -93,25 +92,10 @@ pub struct GlobalEvent {
 impl GlobalEvent {
     fn from_message(message: Message) -> anyhow::Result<Self> {
         let mut body = message.into_body();
-
-        // TODO: may panic if server sends invalid body len
-
-        let name = u32::from_ne_bytes(*body.first_chunk::<4>().unwrap());
-        let str_len = u32::from_ne_bytes(*body[4..].first_chunk::<4>().unwrap());
-        let version = u32::from_ne_bytes(
-            *body[super::roundup_4!(8usize + str_len as usize)..]
-                .first_chunk::<4>()
-                .unwrap(),
-        );
-
-        body.advance(8);
-        body.truncate(str_len.strict_sub(1/*nulterm*/) as usize);
-        let interface = ByteStr::from_utf8(body.freeze())?;
-
         Ok(Self {
-            name,
-            interface,
-            version,
+            name: body.get_uint(),
+            interface: ByteStr::from(body.get_string()),
+            version: body.get_uint(),
         })
     }
 }

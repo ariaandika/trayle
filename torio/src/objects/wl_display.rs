@@ -1,5 +1,5 @@
 use crate::objects::wl_registry::Registry;
-use crate::objects::{Buffer, Request};
+use crate::objects::{WriteBuffer, Request};
 
 // `wl_display` properties
 pub const OBJECT_ID: u32 = 1;
@@ -44,7 +44,7 @@ impl Request for GetRegistry<'_> {
         OBJECT_ID
     }
 
-    fn write_body(&self, buffer: &mut impl Buffer) {
+    fn write_body(&self, buffer: &mut impl WriteBuffer) {
         buffer.put_uint(self.registry.object_id());
     }
 }

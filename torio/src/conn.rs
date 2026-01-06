@@ -1,11 +1,12 @@
+use std::collections::VecDeque;
 use std::io::Read;
 use std::os::fd::{AsFd, AsRawFd, RawFd};
 use std::os::unix::net::UnixStream;
 use std::task::Poll;
 use std::{env, io, ptr};
-use tcio::bytes::BytesMut;
+use tcio::bytes::{Buf, BytesMut};
 
-use crate::objects::{Buffer, Fixed, Header, Message, Request};
+use crate::objects::{Fixed, Header, Message, ReadBuffer, Request, WriteBuffer};
 use crate::roundup_4;
 
 #[derive(Debug)]
@@ -14,16 +15,17 @@ pub struct WaylandSocket {
     read_buffer: BytesMut,
     write_buffer: Vec<u8>,
     sendmsg_buffer: Vec<u8>,
-    fds: Vec<RawFd>,
+    send_fds: Vec<RawFd>,
+    recv_fds: VecDeque<RawFd>,
 }
 
-impl Buffer for (&mut Vec<u8>, &mut Vec<RawFd>) {
+impl WriteBuffer for WaylandSocket {
     fn put_int(&mut self, int: i32) {
-        self.0.extend_from_slice(&int.to_ne_bytes());
+        self.write_buffer.extend_from_slice(&int.to_ne_bytes());
     }
 
     fn put_uint(&mut self, uint: u32) {
-        self.0.extend_from_slice(&uint.to_ne_bytes());
+        self.write_buffer.extend_from_slice(&uint.to_ne_bytes());
     }
 
     fn put_fixed(&mut self, fixed: Fixed) {
@@ -31,9 +33,10 @@ impl Buffer for (&mut Vec<u8>, &mut Vec<RawFd>) {
     }
 
     fn put_string(&mut self, string: &str) {
-        self.0.extend_from_slice(&roundup_4!(string.len() + 1).to_ne_bytes());
-        self.0.extend_from_slice(string.as_bytes());
-        self.0.extend_from_slice(b"\0");
+        self.write_buffer.reserve(string.len() + 5);
+        self.write_buffer.extend_from_slice(&roundup_4!(string.len() + 1).to_ne_bytes());
+        self.write_buffer.extend_from_slice(string.as_bytes());
+        self.write_buffer.extend_from_slice(b"\0");
     }
 
     fn put_new_id(&mut self, interface: &str, version: u32, new_id: u32) {
@@ -47,7 +50,47 @@ impl Buffer for (&mut Vec<u8>, &mut Vec<RawFd>) {
     }
 
     fn put_fd<Fd: AsFd>(&mut self, fd: Fd) {
-        self.1.push(fd.as_fd().as_raw_fd());
+        self.send_fds.push(fd.as_fd().as_raw_fd());
+    }
+}
+
+impl ReadBuffer for WaylandSocket {
+    fn get_int(&mut self) -> i32 {
+        let b = *self.read_buffer.first_chunk::<4>().unwrap();
+        self.read_buffer.advance(4);
+        i32::from_ne_bytes(b)
+    }
+
+    fn get_uint(&mut self) -> u32 {
+        let b = *self.read_buffer.first_chunk::<4>().unwrap();
+        self.read_buffer.advance(4);
+        u32::from_ne_bytes(b)
+    }
+
+    fn get_fixed(&mut self) -> Fixed {
+        let b = *self.read_buffer.first_chunk::<4>().unwrap();
+        self.read_buffer.advance(4);
+        Fixed::from_int(i32::from_ne_bytes(b))
+    }
+
+    fn get_string(&mut self) -> String {
+        let b = &mut self.read_buffer;
+        let len = u32::from_ne_bytes(*b.first_chunk::<4>().unwrap()) as usize;
+        let string = String::from_utf8(b[4..4 + len - 1].to_vec()).unwrap();
+        b.advance(4 + len);
+        string
+    }
+
+    fn get_new_id(&mut self) -> (String, u32, u32) {
+        (self.get_string(), self.get_uint(), self.get_uint())
+    }
+
+    fn get_array<T>(&mut self) -> Vec<T> {
+        todo!()
+    }
+
+    fn get_fd(&mut self) -> RawFd {
+        self.recv_fds.pop_front().unwrap()
     }
 }
 
@@ -64,7 +107,8 @@ impl WaylandSocket {
             read_buffer: BytesMut::with_capacity(1024),
             write_buffer: Vec::with_capacity(1024),
             sendmsg_buffer: Vec::with_capacity(512),
-            fds: vec![],
+            send_fds: vec![],
+            recv_fds: VecDeque::new(),
         })
     }
 
@@ -77,7 +121,7 @@ impl WaylandSocket {
         // spare 2 bytes for later write
         self.write_buffer.extend_from_slice(&0u16.to_ne_bytes());
 
-        request.write_body(&mut (&mut self.write_buffer, &mut self.fds));
+        request.write_body(self);
         let len = u16::try_from(self.write_buffer.len()).unwrap().strict_sub(offset);
         self.write_buffer[6..8].copy_from_slice(&len.to_ne_bytes());
 
@@ -90,12 +134,12 @@ impl WaylandSocket {
             self.io.as_raw_fd(),
             &mut self.sendmsg_buffer,
             &self.write_buffer,
-            &self.fds,
+            &self.send_fds,
         )?;
 
         self.sendmsg_buffer.clear();
         self.write_buffer.clear();
-        self.fds.clear();
+        self.send_fds.clear();
         Ok(())
     }
 
