@@ -21,7 +21,7 @@ checksum = "2874a2af47a2325c2001a6e6fad9b16a53b802102b528163885171cf92b15976"
 [[package]]
 name = "tcio"
 version = "0.1.4"
-source = "git+https://github.com/ariaandika/tcio#da0357588e2582fbe7a66281298cd76da8a3acb9"
+source = "git+https://github.com/ariaandika/tcio#679732ac2d8438b1a077f684ed2b66ef2e50e4e7"
 
 [[package]]
 name = "torio"

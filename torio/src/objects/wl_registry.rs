@@ -1,4 +1,4 @@
-use tcio::ByteStr;
+use tcio::bytes::ByteStr;
 
 use crate::objects::{Message, ReadBuffer};
 use crate::objects::{Object, ObjectKind, ObjectManager, Request, WriteBuffer};
