@@ -13,7 +13,6 @@ fn main() {
 
     let mut parser = Parser::new(File::open(path).unwrap());
 
-    parser.assert_prolog();
     let mut proto = parser.next_tag();
     assert!(proto.name().0.eq(b"protocol"));
 

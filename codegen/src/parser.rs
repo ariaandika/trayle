@@ -1,4 +1,4 @@
-use std::mem::transmute;
+use std::mem;
 use std::ptr::copy_nonoverlapping;
 
 macro_rules! position {
@@ -30,16 +30,11 @@ macro_rules! position_opt {
     };
 }
 
+// ===== Tag =====
+
 pub struct Tag {
     read: usize,
     buffer: Vec<u8>,
-}
-
-/// Pull based parser.
-pub struct Parser {
-    read: usize,
-    buffer: Vec<u8>,
-    io: Box<dyn std::io::Read>,
 }
 
 impl Tag {
@@ -109,14 +104,24 @@ impl Tag {
     }
 }
 
+// ===== Parser =====
+
+/// Pull based parser.
+pub struct Parser {
+    read: usize,
+    buffer: Vec<u8>,
+    io: Box<dyn std::io::Read>,
+}
+
 impl Parser {
     pub fn new<IO: std::io::Read + 'static>(io: IO) -> Self {
-        Self { read: 0, buffer: Vec::new(), io: Box::new(io) }
-    }
-
-    pub fn assert_prolog(&mut self) {
-        let tag = self.next_tag_buf();
-        assert_eq!(tag, b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
+        let mut me = Self {
+            read: 0,
+            buffer: Vec::with_capacity(1024),
+            io: Box::new(io),
+        };
+        me.assert_prolog();
+        me
     }
 
     pub fn is_tag(&self) -> bool {
@@ -172,8 +177,11 @@ impl Parser {
         plain
     }
 
-    // ===== private =====
+}
 
+// ===== Ref =====
+
+impl Parser {
     fn buf(&self) -> &[u8] {
         &self.buffer[self.read..]
     }
@@ -182,6 +190,25 @@ impl Parser {
         let read = self.read;
         self.read += at;
         self.buffer[read..read + at].to_vec()
+    }
+}
+
+// ===== Mut =====
+
+impl Parser {
+    fn assert_prolog(&mut self) {
+        const PROLOG: &[u8; 38] = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
+        let prolog = loop {
+            match self.buf().first_chunk::<{ PROLOG.len() }>() {
+                Some(prolog) => break prolog,
+                None => {
+                    self.read();
+                    continue;
+                }
+            }
+        };
+        assert_eq!(prolog, PROLOG);
+        self.read += PROLOG.len();
     }
 
     fn next_tag_buf(&mut self) -> Vec<u8> {
@@ -217,16 +244,20 @@ impl Parser {
             if b.is_ascii_whitespace() {
                 self.read += 1;
             } else {
-                break
+                break;
             }
         }
     }
+}
 
+// ===== Allocation =====
+
+impl Parser {
     fn read(&mut self) {
         self.reserve();
 
         unsafe {
-            let spare: &mut [u8] = transmute(self.buffer.spare_capacity_mut());
+            let spare: &mut [u8] = mem::transmute(self.buffer.spare_capacity_mut());
 
             assert_ne!(spare.len(), 0);
 
@@ -236,39 +267,28 @@ impl Parser {
             }
 
             self.buffer.set_len(self.buffer.len() + read);
-        };
-
-        self.skip_wh();
+        }
     }
 
     fn reserve(&mut self) {
         let len = self.buf().len();
 
         if self.read > self.buffer.capacity() / 2 {
+            // if the remaining data can be copied backward without overlapping, skip allocating
             unsafe {
-                copy_nonoverlapping(
-                    self.buffer.as_ptr().add(self.read),
-                    self.buffer.as_mut_ptr(),
-                    len
-                );
-                self.buffer.set_len(len);
+                let ptr = self.buffer.as_mut_ptr();
+                copy_nonoverlapping(ptr.add(self.read), ptr, len);
             }
         } else {
-            assert!(len <= 8 * 1024);
-            let mut vec = Vec::with_capacity(8 * 1024);
+            let mut vec = Vec::with_capacity(self.buffer.capacity() << 1);
             unsafe {
-                let spare: &mut [u8] = transmute(vec.spare_capacity_mut());
-                copy_nonoverlapping(
-                    self.buffer.as_ptr().add(self.read),
-                    spare.as_mut_ptr(),
-                    len
-                );
-                vec.set_len(len);
+                let spare: &mut [u8] = mem::transmute(vec.spare_capacity_mut());
+                copy_nonoverlapping(self.buffer.as_ptr().add(self.read), spare.as_mut_ptr(), len);
             }
             self.buffer = vec;
         }
 
-
+        unsafe { self.buffer.set_len(len) };
         self.read = 0;
     }
 }
