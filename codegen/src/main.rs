@@ -127,17 +127,17 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
     let tag = parser.next_tag_assert("interface");
 
     let mut attrs = tag.attrs();
-    let name = attrs.next_assert("name").to_vec();
-    let version = attrs.next_assert("version").to_vec();
+    let name = Name::new(attrs.next_assert("name"));
+    let version = atou(attrs.next_assert("version"));
 
     // ===== description? =====
 
     writeln!(output);
     process_description(parser, output, "");
 
-    writeln!(output, "pub mod {} {{", f(&name));
-    writeln!(output, "    /// {} version", f(&name));
-    writeln!(output, "    pub const VERSION: u32 = {};", f(&version));
+    writeln!(output, "pub mod {name} {{");
+    writeln!(output, "    /// {name} version");
+    writeln!(output, "    pub const VERSION: u32 = {version};");
 
     // ===== (request|event|enum)+ =====
 
@@ -152,11 +152,11 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
         writeln!(output);
         match tag.name() {
             b"request" => {
-                process_operation("request", reqcode, parser, output);
+                process_operation(OpKind::Request, reqcode, parser, output);
                 reqcode += 1;
             }
             b"event" => {
-                process_operation("event", evcode, parser, output);
+                process_operation(OpKind::Event, evcode, parser, output);
                 evcode += 1;
             }
             b"enum" => {
@@ -203,7 +203,7 @@ fn process_description<O: Write>(parser: &mut Parser, output: &mut O, pad: &str)
     parser.next_closing_tag_assert("description");
 }
 
-fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, output: &mut O) {
+fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, output: &mut O) {
     // <!ELEMENT request (description?,arg*)>
     //   <!ATTLIST request name CDATA #REQUIRED>
     //   <!ATTLIST request type CDATA #IMPLIED>
@@ -215,49 +215,46 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, out
     //   <!ATTLIST event since CDATA #IMPLIED>
     //   <!ATTLIST event deprecated-since CDATA #IMPLIED>
 
-    let tag = parser.next_tag_assert(op);
+    let tag = parser.next_tag_assert(op.as_str());
     let mut attrs = tag.attrs();
     let name = attrs.next_assert("name");
     let name = if name == b"move" {
         // some request is a rust keyword
-        b"r#move".to_vec()
+        Name::new(b"r#move")
     } else {
-        name.to_vec()
+        Name::new(name)
     };
-    let mut is_type_destructor = false;
 
-    // need to be buffered because `description` needed before all the attributes, but appear after
-    let buf_output = {
-        let mut output = Vec::with_capacity(256);
-        while let Some(attr) = attrs.try_next() {
-            let atr_name = attr.name();
-            match atr_name {
-                b"type" => {
-                    // `type` can only contains literal `destructor`
-                    assert_eq!(attr.value(), b"destructor");
-                    is_type_destructor = true;
-                }
-                b"since" | b"deprecated-since" => {
-                    writeln!(output, "    ///");
-                    writeln!(output, "    /// {}: {}", f(atr_name), f(attr.value()));
-                }
-                _ => unreachable!()
+    let mut is_type_destructor = false;
+    let mut since = None;
+    let mut dep_since = None;
+
+    while let Some(attr) = attrs.try_next() {
+        match attr.name() {
+            b"type" => {
+                // `type` can only contains literal `destructor`
+                assert_eq!(attr.value(), b"destructor");
+                is_type_destructor = true;
             }
+            b"since" => since = Some(atou(attr.value())),
+            b"deprecated-since" => dep_since = Some(atou(attr.value())),
+            _ => unreachable!()
         }
-        output
-    };
+    }
 
     process_description(parser, output, "    ");
-    write!(output, "{}", f(&buf_output));
-
-    let mut cop = op.as_bytes().to_vec();
-    cop[0].make_ascii_uppercase();
-
+    if let Some(since) = since {
+        writeln!(output, "    ///");
+        writeln!(output, "    /// since: {since}");
+    }
+    if let Some(dep_since) = dep_since {
+        writeln!(output, "    ///");
+        writeln!(output, "    /// deprecated-since: {dep_since}");
+    }
     writeln!(output, "    pub mod {} {{", f(&name));
-    writeln!(output, "        pub const KIND: Kind = Kind::{};", f(&cop));
+    writeln!(output, "        pub const KIND: Kind = Kind::{op:?};");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
     writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
-
     write!(output, "        pub fn write(");
     if parser.peek_tag().name() == b"arg" {
         process_arg(parser, output);
@@ -271,7 +268,7 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, out
     writeln!(output, "        }}");
     writeln!(output, "    }}");
 
-    parser.next_closing_tag_assert(op);
+    parser.next_closing_tag_assert(op.as_str());
 }
 
 /// TODO: argument `summary`, `allow-null`, and `enum` currently ignored
@@ -316,31 +313,42 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
 
     let tag = parser.next_tag_assert("enum");
     let mut attrs = tag.attrs();
-    let name = attrs.next_assert("name");
+    let name = Name::new(attrs.next_assert("name"));
 
-    // need to be buffered because `description` needed before all the attributes, but appear after
-    let buf_output = {
-        let mut output = Vec::with_capacity(256);
-        while let Some(attr) = attrs.try_next() {
-            let atr_name = attr.name();
-            assert_atr!(atr_name, b"since" | b"bitfield");
-            writeln!(output, "    ///");
-            writeln!(output, "    /// {}: {}", f(atr_name), f(attr.value()));
+    let mut since = None;
+    let mut is_bitfield = false;
+
+    while let Some(attr) = attrs.try_next() {
+        let atr_name = attr.name();
+        match atr_name {
+            b"since" => since = Some(atou(attr.value())),
+            b"bitfield" => 
+                is_bitfield = match attr.value() {
+                    b"true" => true,
+                    b"false" => false,
+                    _ => unreachable!()
+            },
+            _ => unreachable!(),
         }
-        writeln!(output, "    #[derive(Debug)]");
-        writeln!(output, "    pub enum {} {{", f(name));
-        output
-    };
+    }
 
     // some enum does not have description
     process_description(parser, output, "    ");
-    write!(output, "{}", f(&buf_output));
-
+    if let Some(since) = since {
+        writeln!(output, "    ///");
+        writeln!(output, "    /// since: {since}");
+    }
+    writeln!(output, "    ///");
+    writeln!(output, "    /// bitfield: {is_bitfield}");
+    writeln!(output, "    #[derive(Debug)]");
+    writeln!(output, "    pub enum {name} {{");
     while parser.peek_tag().name() == b"entry" {
         process_entry(parser, output);
     }
-
-    // close enum
+    writeln!(output, "    }}");
+    writeln!(output);
+    writeln!(output, "    impl {name} {{");
+    writeln!(output, "        pub const IS_BITFIELD: bool = {is_bitfield};");
     writeln!(output, "    }}");
 
     parser.next_closing_tag_assert("enum");
@@ -396,8 +404,61 @@ fn f(bytes: &[u8]) -> &str {
     unsafe { str::from_utf8_unchecked(bytes) }
 }
 
+fn atou(bytes: &[u8]) -> u16 {
+    bytes
+        .iter()
+        .fold(0u16, |acc, next| match next.wrapping_sub(b'0') {
+            b @ 0..=9 => acc.wrapping_mul(10).wrapping_add(b as _),
+            _ => panic!("non integer"),
+        })
+}
+
 fn unknown_attribute(name: &[u8]) -> ! {
     panic!("unknown attribute: {:?}", str::from_utf8(name))
+}
+
+#[derive(Debug)]
+enum OpKind {
+    Request,
+    Event,
+}
+
+impl OpKind {
+    fn as_str(&self) -> &'static str {
+        match self {
+            OpKind::Request => "request",
+            OpKind::Event => "event",
+        }
+    }
+}
+
+struct Name([u8; 32]);
+
+impl Name {
+    /// Panics if name is too long.
+    fn new(name: &[u8]) -> Self {
+        let mut buf = [0u8; _];
+        buf[0] = name.len() as u8;
+        let Some(b) = buf.get_mut(1..1 + name.len()) else {
+            panic!("name too long: {}", f(name));
+        };
+        b.copy_from_slice(name);
+        Self(buf)
+    }
+}
+
+impl std::ops::Deref for Name {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0[1..1 + self.0[0] as usize]
+    }
+}
+
+impl std::fmt::Display for Name {
+    fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f(self).fmt(fmt)
+    }
 }
 
 trait Write {
