@@ -179,8 +179,10 @@ fn process_description<O: Write>(parser: &mut Parser, output: &mut O, pad: &str)
     let mut attrs = tag.attrs();
     let summary = attrs.next_assert("summary").trim_ascii();
 
-    writeln!(output, "{pad}/// {}", f(summary));
-    writeln!(output, "{pad}///");
+    if !summary.is_empty() {
+        writeln!(output, "{pad}/// {}", f(summary));
+        writeln!(output, "{pad}///");
+    }
 
     let desc = parser.next_plain().trim_ascii();
     for line in std::io::BufRead::lines(desc).map(Result::unwrap) {
