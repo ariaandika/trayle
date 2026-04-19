@@ -234,8 +234,6 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, out
         output
     };
 
-    // ===== description? =====
-
     process_description(parser, output, "    ");
     write!(output, "{}", f(&buf_output));
 
@@ -254,6 +252,7 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, out
     writeln!(output, ") {{");
     writeln!(output, "            todo!()");
     writeln!(output, "        }}");
+    writeln!(output, "    }}");
 
     parser.next_closing_tag_assert(op);
 }
