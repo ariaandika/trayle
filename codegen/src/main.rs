@@ -96,8 +96,6 @@ fn main() {
         parser.next_closing_tag_assert("description");
     }
 
-    writeln!(output);
-
     loop {
         let tag = parser.peek_tag();
         let tag_name = tag.name();
@@ -122,12 +120,12 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
 
     // ===== description? =====
 
+    writeln!(output);
     process_description(parser, output, "");
 
     writeln!(output, "pub mod {} {{", f(&name));
     writeln!(output, "    /// {} version", f(&name));
     writeln!(output, "    pub const VERSION: u32 = {};", f(&version));
-    writeln!(output);
 
     // ===== (request|event|enum)+ =====
 
@@ -135,6 +133,11 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
     let mut evcode = 0;
     loop {
         let tag = parser.peek_tag();
+        let name = tag.name();
+        if name == b"interface" {
+            break;
+        }
+        writeln!(output);
         match tag.name() {
             b"request" => {
                 process_operation("request", reqcode, parser, output);
@@ -147,15 +150,12 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
             b"enum" => {
                 process_enum(parser, output);
             }
-            b"interface" => break,
             _ => unreachable!(),
         }
-        writeln!(output);
     }
 
     // close interface mod
     writeln!(output, "}}");
-    writeln!(output);
 
     parser.next_closing_tag_assert("interface");
 }
@@ -179,7 +179,8 @@ fn process_description<O: Write>(parser: &mut Parser, output: &mut O, pad: &str)
     let desc = parser.next_plain().trim_ascii();
     for line in std::io::BufRead::lines(desc).map(Result::unwrap) {
         let line = line.as_bytes().trim_ascii();
-        writeln!(output, "{pad}/// {}", f(line));
+        let sp = if line.is_empty() { "" } else { " " };
+        writeln!(output, "{pad}///{sp}{}", f(line));
     }
 
     // there is self closed description
@@ -246,7 +247,11 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, out
     writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
 
     write!(output, "        pub fn write(");
+    if parser.peek_tag().name() == b"arg" {
+        process_arg(parser, output);
+    }
     while parser.peek_tag().name() == b"arg" {
+        write!(output, ", ");
         process_arg(parser, output);
     }
     writeln!(output, ") {{");
@@ -289,8 +294,6 @@ fn process_arg<O: Write>(parser: &mut Parser, output: &mut O) {
             name => unknown_attribute(name),
         }
     }
-
-    write!(output, ",");
 }
 
 fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
@@ -364,32 +367,20 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
         let atr_name = attr.name();
         assert_atr!(atr_name, b"summary" | b"since" | b"deprecated-since");
 
-        write!(output, "{PAD}/// ");
+        write!(output, "{PAD}///");
         if atr_name != b"summary" {
-            write!(output, "\n{PAD}/// {}: ", f(atr_name));
+            write!(output, "\n{PAD}/// {}:", f(atr_name));
         }
-        writeln!(output, "{}", f(attr.value()));
+        writeln!(output, " {}", f(attr.value()));
     }
     writeln!(output, "{PAD}{} = {},", f(&name), f(value));
 }
 
 // ===== Util =====
 
-fn f(bytes: &[u8]) -> impl std::fmt::Display {
-    std::fmt::from_fn(move |f| {
-        for &b in bytes {
-            if b == b'\r' {
-                write!(f, "\\r")?;
-            } else if b == b'\n' {
-                write!(f, "\\n")?;
-            } else if b.is_ascii_graphic() || b.is_ascii_whitespace() {
-                write!(f, "{}", b as char)?;
-            } else {
-                write!(f, "\\x{b:x}")?;
-            }
-        }
-        Ok(())
-    })
+fn f(bytes: &[u8]) -> &str {
+    // SAFETY: the parser guarantee that prolog is `encoding="UTF-8"`
+    unsafe { str::from_utf8_unchecked(bytes) }
 }
 
 fn unknown_attribute(name: &[u8]) -> ! {
