@@ -1,109 +1,6 @@
 use std::mem;
 use std::ptr::copy_nonoverlapping;
 
-macro_rules! position {
-    ($buf:expr, whs | $b:pat) => {
-        $buf.iter()
-            .position(|e| e.is_ascii_whitespace() || matches!(e, $b))
-            .unwrap()
-    };
-    ($buf:expr, $b:pat) => {
-        $buf.iter()
-            .position(|e| matches!(e, $b))
-            .unwrap()
-    };
-    ($buf:expr, $b:pat, $expect:expr) => {
-        $buf.iter()
-            .position(|e| matches!(e, $b))
-            .expect($expect)
-    };
-}
-
-macro_rules! position_opt {
-    ($buf:expr, whs | $b:pat) => {
-        $buf.iter()
-            .position(|e| e.is_ascii_whitespace() || matches!(e, $b))
-    };
-    ($buf:expr, $b:pat) => {
-        $buf.iter()
-            .position(|e| matches!(e, $b))
-    };
-}
-
-// ===== Tag =====
-
-pub struct Tag {
-    read: usize,
-    buffer: Vec<u8>,
-}
-
-impl Tag {
-    /// Returns `(name, is_closing)`.
-    pub fn name(&mut self) -> (Vec<u8>, bool) {
-        assert_eq!(self.buf()[0], b'<');
-        let is_closing = self.buf()[1] == b'/';
-        self.read += 1 + is_closing as usize;
-
-        let len = position!(self.buf(), whs | b'>' | b'/');
-        let name = self.split_at(len);
-        self.skip_wh();
-
-        (name, is_closing)
-    }
-
-    pub fn next_attr(&mut self) -> Option<(Vec<u8>, Vec<u8>)> {
-        if matches!(self.buf()[0], b'/' | b'>') {
-            return None;
-        }
-
-        assert!(self.buf()[0].is_ascii_alphabetic());
-        let len = position!(self.buf(), b'=');
-        let name = self.split_at(len);
-
-        assert_eq!(self.buf()[1], b'"');
-        self.read += 2; // ="
-
-        let len = position!(self.buf(), b'"');
-        let mut value = self.split_at(len + 1);
-        value.pop();
-        self.skip_wh();
-
-        Some((name, value))
-    }
-
-    pub fn is_self_close(&mut self) -> bool {
-        loop {
-            match self.buf()[0] {
-                b'/' => return true,
-                b'>' => return false,
-                _ => {
-                    self.next_attr();
-                },
-            }
-        }
-    }
-
-    fn buf(&self) -> &[u8] {
-        &self.buffer[self.read..]
-    }
-
-    fn split_at(&mut self, at: usize) -> Vec<u8> {
-        let read = self.read;
-        self.read += at;
-        self.buffer[read..read + at].to_vec()
-    }
-
-    fn skip_wh(&mut self) {
-        while let Some(&b) = self.buf().first() {
-            if b.is_ascii_whitespace() {
-                self.read += 1;
-            } else {
-                break
-            }
-        }
-    }
-}
-
 // ===== Parser =====
 
 /// Pull based parser.
@@ -120,132 +17,102 @@ impl Parser {
             buffer: Vec::with_capacity(1024),
             io: Box::new(io),
         };
-        me.assert_prolog();
+        let prolog = me.next_tag();
+        assert_eq!(prolog.buf, b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
         me
     }
 
-    pub fn is_tag(&self) -> bool {
-        self.buf()[0] == b'<'
-    }
-
-    pub fn next_tag(&mut self) -> Tag {
-        Tag { read: 0, buffer: self.next_tag_buf() }
-    }
-
-    pub fn peek_tag(&mut self) -> (Vec<u8>, bool) {
-        assert!(self.is_tag(), "{}",str::from_utf8(self.buf()).unwrap());
-
-        let is_closing = self.buf()[1] == b'/';
-        let len = if is_closing {
-            // position!(self.buf(), whs | b'>')
-            let Some(len) = position_opt!(self.buf(), whs | b'>') else {
-                self.read();
-                return self.peek_tag()
-            };
-            len
-        } else {
-            // position!(self.buf(), whs | b'>' | b'/')
-            let Some(len) = position_opt!(self.buf(), whs | b'>' | b'/') else {
-                self.read();
-                return self.peek_tag()
-            };
-            len
-        };
-
-        let name = &self.buf()[1 + is_closing as usize..len];
-
-        if name != b"!--" {
-            (name.to_vec(), is_closing)
-        } else {
-            let Some(len) = position_opt!(self.buf(), b'>') else {
-                self.read();
-                return self.peek_tag()
-            };
-            let _ = self.split_at(len + 1);
-            self.skip_wh();
-            self.peek_tag()
+    #[cfg(test)]
+    fn new_test<IO: std::io::Read + 'static>(io: IO) -> Self {
+        Self {
+            read: 0,
+            buffer: Vec::with_capacity(1024),
+            io: Box::new(io),
         }
     }
-
-    pub fn next_plain(&mut self) -> Vec<u8> {
-        let Some(len) = position_opt!(self.buf(), b'<') else {
-            self.read();
-            return self.next_plain()
-        };
-        let mut plain = self.split_at(len);
-        plain.truncate(plain.trim_ascii_end().len());
-        plain
-    }
-
 }
-
-// ===== Ref =====
 
 impl Parser {
     fn buf(&self) -> &[u8] {
         &self.buffer[self.read..]
     }
 
-    fn split_at(&mut self, at: usize) -> Vec<u8> {
-        let read = self.read;
-        self.read += at;
-        self.buffer[read..read + at].to_vec()
+    pub fn next_tag(&mut self) -> Tag<'_> {
+        let len = self.peek_tag_inner();
+        let buf = &self.buffer[self.read..self.read + len];
+        self.read += len;
+        Tag { buf }
     }
-}
 
-// ===== Mut =====
+    pub fn peek_tag(&mut self) -> Tag<'_> {
+        let len = self.peek_tag_inner();
+        let buf = &self.buffer[self.read..self.read + len];
+        Tag { buf }
+    }
 
-impl Parser {
-    fn assert_prolog(&mut self) {
-        const PROLOG: &[u8; 38] = b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>";
-        let prolog = loop {
-            match self.buf().first_chunk::<{ PROLOG.len() }>() {
-                Some(prolog) => break prolog,
+    fn peek_tag_inner(&mut self) -> usize {
+        // find `<`
+        if self.buf().first() != Some(&b'<') {
+            loop {
+                let Some(start) = self.buf().iter().position(|e|*e == b'<') else {
+                    self.read();
+                    continue;
+                };
+                let Some(delim) = self.buf().get(start + 1) else {
+                    self.read();
+                    continue;
+                };
+
+                if *delim == b'!' {
+                    // skip comment
+                    match self.buf()[start..].iter().position(|e|*e == b'>') {
+                        Some(len) => self.read += start + len,
+                        None => self.read(),
+                    }
+                    continue;
+                }
+
+                self.read += start;
+                break;
+            }
+        }
+
+        // find `>`
+        loop {
+            match self.buf().iter().position(|e|*e == b'>') {
+                Some(close) => break close + 1,
                 None => {
                     self.read();
                     continue;
+                },
+            }
+        }
+    }
+
+    pub fn next_plain(&mut self) -> &[u8] {
+        // find `<`
+        loop {
+            let Some(end) = self.buf().iter().position(|e|*e == b'<') else {
+                self.read();
+                continue;
+            };
+            let Some(delim) = self.buf().get(end + 1) else {
+                self.read();
+                continue;
+            };
+
+            if *delim == b'!' {
+                // skip comment
+                match self.buf()[end..].iter().position(|e|*e == b'>') {
+                    Some(len) => self.read += end + len,
+                    None => self.read(),
                 }
+                continue;
             }
-        };
-        assert_eq!(prolog, PROLOG);
-        self.read += PROLOG.len();
-    }
 
-    fn next_tag_buf(&mut self) -> Vec<u8> {
-        if self.buf().is_empty() {
-            self.read();
-        }
-
-        assert_eq!(
-            self.buf()[0],
-            b'<',
-            "expected tag, but not in open bracket {:?}",
-            str::from_utf8(self.buf()).unwrap()
-        );
-
-        let Some(len) = position_opt!(self.buf(), b'>') else {
-            self.read();
-            return self.next_tag_buf();
-        };
-        let lead = self.split_at(len + 1);
-        self.skip_wh();
-
-        if lead[1] != b'!' {
-            lead.to_vec()
-        } else {
-            assert_eq!(&lead[2..4], b"--");
-            assert_eq!(&lead[lead.len() - 3..], b"-->");
-            self.next_tag_buf()
-        }
-    }
-
-    fn skip_wh(&mut self) {
-        while let Some(&b) = self.buf().first() {
-            if b.is_ascii_whitespace() {
-                self.read += 1;
-            } else {
-                break;
-            }
+            let buf = &self.buffer[self.read..self.read + end];
+            self.read += end;
+            return buf;
         }
     }
 }
@@ -291,4 +158,140 @@ impl Parser {
         unsafe { self.buffer.set_len(len) };
         self.read = 0;
     }
+}
+
+// ===== Tag =====
+
+pub struct Tag<'a> {
+    buf: &'a [u8],
+}
+
+impl<'a> Tag<'a> {
+    pub fn is_closing(&self) -> bool {
+        self.buf[1] == b'/'
+    }
+
+    pub fn is_self_close(&self) -> bool {
+        self.buf[self.buf.len() - 2] == b'/'
+    }
+
+    pub fn name(&self) -> &'a [u8] {
+        let len = self
+            .buf
+            .iter()
+            .position(|e| *e == b'>' || e.is_ascii_whitespace())
+            .expect("unclosed tag");
+        let end_delim = (self.buf[1] == b'/') as usize;
+        &self.buf[1 + end_delim..len]
+    }
+
+    pub fn attrs(&self) -> Attrs<'a> {
+        let len = self
+            .buf
+            .iter()
+            .position(|e| *e == b'>' || e.is_ascii_whitespace())
+            .expect("unclosed tag");
+        assert_ne!(self.buf[len], b'>', "no attribute");
+        let end_delim = (self.buf[1] == b'/') as usize;
+        Attrs {
+            buf: &self.buf[1 + end_delim + len..self.buf.len() - 1],
+        }
+    }
+}
+
+// ===== Attributes =====
+
+pub struct Attrs<'a> {
+    buf: &'a [u8],
+}
+
+impl<'a> Attrs<'a> {
+    pub fn next(&mut self) -> Attr<'a> {
+        let len = self.peek_inner().expect("no attribute remaining");
+        let (buf, rest) = std::mem::take(&mut self.buf).split_at(len);
+        let whs = rest
+            .iter()
+            .position(|e| e.is_ascii_whitespace())
+            .map(|e|e + 1)
+            .unwrap_or(rest.len());
+        self.buf = &rest[whs..];
+        Attr { buf }
+    }
+
+    pub fn peek(&mut self) -> Option<Attr<'a>> {
+        let len = self.peek_inner()?;
+        Some(Attr {
+            buf: &self.buf[..len],
+        })
+    }
+
+    fn peek_inner(&mut self) -> Option<usize> {
+        if self.buf.is_empty() {
+            return None;
+        }
+        let name_len = self
+            .buf
+            .iter()
+            .position(|e| *e == b'=')?;
+        assert_eq!(self.buf[name_len + 1], b'"', "unquoted attribute");
+        let len = self.buf[name_len + 2..]
+            .iter()
+            .position(|e| *e == b'"')
+            .expect("unclosed attr quote");
+        Some(name_len + 2 + len + 1)
+    }
+}
+
+pub struct Attr<'a> {
+    buf: &'a [u8],
+}
+
+impl<'a> Attr<'a> {
+    pub fn name(&self) -> &'a [u8] {
+        let len = self
+            .buf
+            .iter()
+            .position(|e| *e == b'=')
+            .expect("no value attribute");
+        &self.buf[..len]
+    }
+
+    pub fn value(&self) -> &'a [u8] {
+        let off = self
+            .buf
+            .iter()
+            .position(|e| *e == b'=')
+            .expect("no value attribute");
+        &self.buf[off + 2..self.buf.len() - 1]
+    }
+}
+
+#[test]
+fn test_parser() {
+    const BUF: &[u8] = b"Nice <!-- lmao --><tag control>";
+
+    let mut parser = Parser::new_test(BUF);
+    assert_eq!(parser.peek_tag().buf, b"<tag control>");
+
+    let tag = parser.next_tag();
+    assert_eq!(tag.buf, b"<tag control>");
+    assert_eq!(tag.name(), b"tag");
+    assert_eq!(parser.buf(), b"");
+
+    // ===== Attr =====
+
+    const BUF2: &[u8] = b"<description summary=\"foo bar baz\" then=\"baz bar foo\">";
+
+    let mut parser = Parser::new_test(BUF2);
+    let tag = parser.next_tag();
+
+    let mut attrs = tag.attrs();
+
+    let attr = attrs.next();
+    assert_eq!(attr.name(), b"summary");
+    assert_eq!(attr.value(), b"foo bar baz");
+
+    let attr = attrs.next();
+    assert_eq!(attr.name(), b"then");
+    assert_eq!(attr.value(), b"baz bar foo");
 }
