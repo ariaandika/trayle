@@ -57,12 +57,6 @@ mod parser;
 // attribute are NOT in order, in `enum dnd_action`, `bitfield` appear before `since`
 // #IMPLIED is optional
 
-macro_rules! assert_atr {
-    ($name:expr, $($tt:tt)*) => {
-        assert!(matches!($name, $($tt)*), "unknown attribute: {}", f($name))
-    };
-}
-
 fn main() {
     let Some(path) = args().nth(1) else {
         eprintln!("error: protocol file path is required");
@@ -127,7 +121,7 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
     let tag = parser.next_tag_assert("interface");
 
     let mut attrs = tag.attrs();
-    let name = Name::new(attrs.next_assert("name"));
+    let name = SmallBuf::new(attrs.next_assert("name"));
     let version = atou(attrs.next_assert("version"));
 
     // ===== description? =====
@@ -220,9 +214,9 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     let name = attrs.next_assert("name");
     let name = if name == b"move" {
         // some request is a rust keyword
-        Name::new(b"r#move")
+        SmallBuf::new(b"r#move")
     } else {
-        Name::new(name)
+        SmallBuf::new(name)
     };
 
     let mut is_type_destructor = false;
@@ -313,7 +307,7 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
 
     let tag = parser.next_tag_assert("enum");
     let mut attrs = tag.attrs();
-    let name = Name::new(attrs.next_assert("name"));
+    let name = SmallBuf::new(attrs.next_assert("name"));
 
     let mut since = None;
     let mut is_bitfield = false;
@@ -364,37 +358,44 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
     const PAD: &str = "        ";
 
     let tag = parser.next_tag_assert("entry");
+    let is_self_close = tag.is_self_close();
 
     let mut attrs = tag.attrs();
-    let name = {
-        let mut name = attrs.next_assert("name").to_vec();
-        // some variant is a rust keyword
-        name[0].make_ascii_uppercase();
-        // some variant only contains digit
-        if name.iter().all(|e| e.is_ascii_digit()) {
-            name.insert(0, b'D');
-        }
-        name
-    };
-    let value = attrs.next_assert("value");
+    let name = SmallBuf::new_fixed(attrs.next_assert("name"));
+    let value = SmallBuf::new(attrs.next_assert("value"));
 
-    assert!(
-        tag.is_self_close(),
-        "enum entry with description is not yet implemented: {}",
-        f(&name)
-    );
+    let mut since = None;
+    let mut dep_since = None;
 
     while let Some(attr) = attrs.try_next() {
-        let atr_name = attr.name();
-        assert_atr!(atr_name, b"summary" | b"since" | b"deprecated-since");
-
-        write!(output, "{PAD}///");
-        if atr_name != b"summary" {
-            write!(output, "\n{PAD}/// {}:", f(atr_name));
+        let value = attr.value();
+        match attr.name() {
+            b"summary" => {
+                writeln!(output, "{PAD}/// {}", f(value));
+            }
+            b"since" => since = Some(atou(value)),
+            b"deprecated-since" => dep_since = Some(atou(value)),
+            _ => unreachable!(),
         }
-        writeln!(output, " {}", f(attr.value()));
     }
-    writeln!(output, "{PAD}{} = {},", f(&name), f(value));
+
+    if parser.peek_tag().name() == b"description" {
+        writeln!(output, "{PAD}///");
+        process_description(parser, output, PAD);
+    }
+    if let Some(since) = since {
+        writeln!(output, "{PAD}///");
+        writeln!(output, "{PAD}/// since: {since}");
+    }
+    if let Some(dep_since) = dep_since {
+        writeln!(output, "{PAD}///");
+        writeln!(output, "{PAD}/// deprecated-since: {dep_since}");
+    }
+    writeln!(output, "{PAD}{} = {value},", f(&name));
+
+    if !is_self_close {
+        parser.next_closing_tag_assert("entry");
+    }
 }
 
 // ===== Util =====
@@ -432,9 +433,9 @@ impl OpKind {
     }
 }
 
-struct Name([u8; 32]);
+struct SmallBuf([u8; 32]);
 
-impl Name {
+impl SmallBuf {
     /// Panics if name is too long.
     fn new(name: &[u8]) -> Self {
         let mut buf = [0u8; _];
@@ -445,9 +446,34 @@ impl Name {
         b.copy_from_slice(name);
         Self(buf)
     }
+
+    /// Fix rust keyword or digit only identifier.
+    ///
+    /// Panics if name is too long.
+    fn new_fixed(name: &[u8]) -> Self {
+        let mut buf = [0u8; _];
+        buf[0] = name.len() as u8;
+
+        // some identifier only contains digit
+        let off = if name.iter().all(|e| e.is_ascii_digit()) {
+            buf[1] = b'D';
+            2
+        } else {
+            1
+        };
+
+        let Some(b) = buf.get_mut(off..off + name.len()) else {
+            panic!("name too long: `{}`", f(name));
+        };
+        b.copy_from_slice(name);
+
+        // some identifier is a rust keyword
+        buf[1].make_ascii_uppercase();
+        Self(buf)
+    }
 }
 
-impl std::ops::Deref for Name {
+impl std::ops::Deref for SmallBuf {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -455,7 +481,7 @@ impl std::ops::Deref for Name {
     }
 }
 
-impl std::fmt::Display for Name {
+impl std::fmt::Display for SmallBuf {
     fn fmt(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f(self).fmt(fmt)
     }
