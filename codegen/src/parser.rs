@@ -207,7 +207,11 @@ pub struct Attrs<'a> {
 
 impl<'a> Attrs<'a> {
     pub fn next(&mut self) -> Attr<'a> {
-        let len = self.peek_inner().expect("no attribute remaining");
+        self.try_next().expect("no attribute remaining")
+    }
+
+    pub fn try_next(&mut self) -> Option<Attr<'a>> {
+        let len = self.peek_inner()?;
         let (buf, rest) = std::mem::take(&mut self.buf).split_at(len);
         let whs = rest
             .iter()
@@ -215,14 +219,7 @@ impl<'a> Attrs<'a> {
             .map(|e|e + 1)
             .unwrap_or(rest.len());
         self.buf = &rest[whs..];
-        Attr { buf }
-    }
-
-    pub fn peek(&mut self) -> Option<Attr<'a>> {
-        let len = self.peek_inner()?;
-        Some(Attr {
-            buf: &self.buf[..len],
-        })
+        Some(Attr { buf })
     }
 
     fn peek_inner(&mut self) -> Option<usize> {

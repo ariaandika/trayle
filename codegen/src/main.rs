@@ -1,6 +1,5 @@
 use std::env::args;
 use std::fs::File;
-use std::io::Write;
 
 use crate::parser::Parser;
 
@@ -58,6 +57,12 @@ mod parser;
 // attribute are NOT in order, in `enum dnd_action`, `bitfield` appear before `since`
 // #IMPLIED is optional
 
+macro_rules! assert_atr {
+    ($name:expr, $($tt:tt)*) => {
+        assert!(matches!($name, $($tt)*), "unknown attribute: {}", f($name))
+    };
+}
+
 fn main() {
     let Some(path) = args().nth(1) else {
         panic!("path arguments is required");
@@ -93,7 +98,7 @@ fn main() {
     }
 }
 
-fn interface<O: Write>(parser: &mut Parser, mut output: O) {
+fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
     // <!ELEMENT interface (description?,(request|event|enum)+)>
     //   <!ATTLIST interface name CDATA #REQUIRED>
     //   <!ATTLIST interface version CDATA #REQUIRED>
@@ -106,49 +111,45 @@ fn interface<O: Write>(parser: &mut Parser, mut output: O) {
 
     // ===== description? =====
 
-    process_description(parser, &mut output, "");
+    process_description(parser, output, "");
 
-    output.write_all(b"pub mod ").unwrap();
-    output.write_all(&name).unwrap();
-    output.write_all(b" {\n").unwrap();
-    output.write_all(b"    /// ").unwrap();
-    output.write_all(&name).unwrap();
-    output.write_all(b" version\n    pub const VERSION: u32 = ").unwrap();
-    output.write_all(&version).unwrap();
-    output.write_all(b";\n\n").unwrap();
+    writeln!(output, "pub mod {} {{", f(&name));
+    writeln!(output, "    /// {} version", f(&name));
+    writeln!(output, "    pub const VERSION: u32 = {};", f(&version));
+    writeln!(output);
 
     // ===== (request|event|enum)+ =====
 
     let mut reqcode = 0;
     let mut evcode = 0;
-
     loop {
         let tag = parser.peek_tag();
         match tag.name() {
             b"request" => {
-                process_operation("request", reqcode, parser, &mut output);
+                process_operation("request", reqcode, parser, output);
                 reqcode += 1;
             }
             b"event" => {
-                process_operation("event", evcode, parser, &mut output);
+                process_operation("event", evcode, parser, output);
                 evcode += 1;
             }
             b"enum" => {
-                process_enum(parser, &mut output);
+                process_enum(parser, output);
             }
             b"interface" => break,
-            name => panic!("unknown interface property: {}", str::from_utf8(name).unwrap()),
+            _ => unreachable!(),
         }
-        output.write_all(b"\n").unwrap();
+        writeln!(output);
     }
 
-    parser.next_closing_tag_assert("interface");
-
     // close interface mod
-    output.write_all(b"}\n\n").unwrap();
+    writeln!(output, "}}");
+    writeln!(output);
+
+    parser.next_closing_tag_assert("interface");
 }
 
-fn process_description<O: Write>(parser: &mut Parser, mut output: O, pad: &str) {
+fn process_description<O: Write>(parser: &mut Parser, output: &mut O, pad: &str) {
     // <!ELEMENT description (#PCDATA)>
     //   <!ATTLIST description summary CDATA #REQUIRED>
 
@@ -161,22 +162,13 @@ fn process_description<O: Write>(parser: &mut Parser, mut output: O, pad: &str) 
     let mut attrs = tag.attrs();
     let summary = attrs.next_assert("summary").trim_ascii();
 
-    output.write_all(pad.as_bytes()).unwrap();
-    output.write_all(b"/// ").unwrap();
-    output.write_all(summary).unwrap();
-    output.write_all(b"\n").unwrap();
-    output.write_all(pad.as_bytes()).unwrap();
-    output.write_all(b"///\n").unwrap();
+    writeln!(output, "{pad}/// {}", f(summary));
+    writeln!(output, "{pad}///");
 
     let desc = parser.next_plain().trim_ascii();
-
-    for line in std::io::BufRead::lines(desc) {
-        let line = line.unwrap();
+    for line in std::io::BufRead::lines(desc).map(Result::unwrap) {
         let line = line.as_bytes().trim_ascii();
-        output.write_all(pad.as_bytes()).unwrap();
-        output.write_all(b"/// ").unwrap();
-        output.write_all(line).unwrap();
-        output.write_all(b"\n").unwrap();
+        writeln!(output, "{pad}/// {}", f(line));
     }
 
     // there is self closed description
@@ -187,7 +179,7 @@ fn process_description<O: Write>(parser: &mut Parser, mut output: O, pad: &str) 
     parser.next_closing_tag_assert("description");
 }
 
-fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, mut output: O) {
+fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, output: &mut O) {
     // <!ELEMENT request (description?,arg*)>
     //   <!ATTLIST request name CDATA #REQUIRED>
     //   <!ATTLIST request type CDATA #IMPLIED>
@@ -200,7 +192,6 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, mut
     //   <!ATTLIST event deprecated-since CDATA #IMPLIED>
 
     let tag = parser.next_tag_assert(op);
-
     let mut attrs = tag.attrs();
     let name = attrs.next_assert("name");
     let name = if name == b"move" {
@@ -209,51 +200,55 @@ fn process_operation<O: Write>(op: &str, opcode: usize, parser: &mut Parser, mut
     } else {
         name.to_vec()
     };
+    let mut is_type_destructor = false;
+
+    // need to be buffered because `description` needed before all the attributes, but appear after
+    let buf_output = {
+        let mut output = Vec::with_capacity(256);
+        while let Some(attr) = attrs.try_next() {
+            let atr_name = attr.name();
+            match atr_name {
+                b"type" => {
+                    // `type` can only contains literal `destructor`
+                    assert_eq!(attr.value(), b"destructor");
+                    is_type_destructor = true;
+                }
+                b"since" | b"deprecated-since" => {
+                    writeln!(output, "    ///");
+                    writeln!(output, "    /// {}: {}", f(atr_name), f(attr.value()));
+                }
+                _ => unreachable!()
+            }
+        }
+        output
+    };
 
     // ===== description? =====
 
-    process_description(parser, &mut output, "    ");
-
-    output.write_all(b"    pub mod ").unwrap();
-    output.write_all(&name).unwrap();
-    output.write_all(b" {\n").unwrap();
-
-    // ===== kind =====
+    process_description(parser, output, "    ");
+    write!(output, "{}", f(&buf_output));
 
     let mut cop = op.as_bytes().to_vec();
     cop[0].make_ascii_uppercase();
-    output.write_all(b"        pub const KIND: Kind = Kind::").unwrap();
-    output.write_all(&cop).unwrap();
-    output.write_all(b";\n").unwrap();
 
-    // ===== opcode =====
+    writeln!(output, "    pub mod {} {{", f(&name));
+    writeln!(output, "        pub const KIND: Kind = Kind::{};", f(&cop));
+    writeln!(output, "        pub const OPCODE: u32 = {opcode};");
+    writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
 
-    output.write_all(b"        pub const OPCODE: u32 = ").unwrap();
-    output.write_fmt(format_args!("{opcode}")).unwrap();
-    output.write_all(b";\n").unwrap();
-
-    // ===== arguments =====
-
-    output.write_all(b"        pub fn write(").unwrap();
-
-    loop {
-        if parser.peek_tag().name() != b"arg" {
-            break;
-        }
-        process_arg(parser, &mut output);
+    write!(output, "        pub fn write(");
+    while parser.peek_tag().name() == b"arg" {
+        process_arg(parser, output);
     }
+    writeln!(output, ") {{");
+    writeln!(output, "            todo!()");
+    writeln!(output, "        }}");
 
-    let tag = parser.next_tag();
-    assert_eq!(tag.name(), op.as_bytes());
-    assert!(tag.is_closing());
-
-    output.write_all(b") { todo!() }\n").unwrap();
-
-    // ===== close mod =====
-    output.write_all(b"    }\n").unwrap();
+    parser.next_closing_tag_assert(op);
 }
 
-fn process_arg<O: Write>(parser: &mut Parser, mut output: O) {
+/// TODO: argument `summary`, `allow-null`, and `enum` currently ignored
+fn process_arg<O: Write>(parser: &mut Parser, output: &mut O) {
     // <!ELEMENT arg (description?)>
     //   <!ATTLIST arg name CDATA #REQUIRED>
     //   <!ATTLIST arg type CDATA #REQUIRED>
@@ -262,141 +257,144 @@ fn process_arg<O: Write>(parser: &mut Parser, mut output: O) {
     //   <!ATTLIST arg allow-null CDATA #IMPLIED>
     //   <!ATTLIST arg enum CDATA #IMPLIED>
 
-    let tag = parser.next_tag();
-    assert_eq!(tag.name(), b"arg");
+    let tag = parser.next_tag_assert("arg");
+    assert!(
+        tag.is_self_close(),
+        "argument with description is not yet implemented: {}",
+        f(tag.name())
+    );
 
     let mut attrs = tag.attrs();
-    let attr = attrs.next();
-    assert_eq!(attr.name(), b"name");
+    let name = attrs.next_assert("name");
+    let ty = attrs.next_assert("type");
 
-    output.write_all(attr.value()).unwrap();
-    output.write_all(b": ").unwrap();
+    write!(output, "{}: {}", f(name), f(ty));
 
-    let attr = attrs.next();
-    assert_eq!(attr.name(), b"type");
-
-    output.write_all(attr.value()).unwrap();
-
-    let attr = attrs.peek();
-    if attr.filter(|e|e.name() == b"summary").is_some() {
-        // TODO:
-        attrs.next();
+    while let Some(attr) = attrs.try_next() {
+        match attr.name() {
+            b"summary" => {}
+            b"interface" => {}
+            b"allow-null" => {}
+            b"enum" => {}
+            name => unknown_attribute(name),
+        }
     }
 
-    let attr = attrs.peek();
-    if attr.filter(|e|e.name() == b"interface").is_some() {
-        let attr = attrs.next();
-        output.write_all(b"<").unwrap();
-        output.write_all(attr.value()).unwrap();
-        output.write_all(b">").unwrap();
-    }
-
-    output.write_all(b",").unwrap();
-
-    let attr = attrs.peek();
-    if attr.filter(|e|e.name() == b"allow-null").is_some() {
-        // TODO:
-        attrs.next();
-    }
+    write!(output, ",");
 }
 
-fn process_enum<O: Write>(parser: &mut Parser, mut output: O) {
+fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
     // <!ELEMENT enum (description?,entry*)>
     //   <!ATTLIST enum name CDATA #REQUIRED>
     //   <!ATTLIST enum since CDATA #IMPLIED>
     //   <!ATTLIST enum bitfield CDATA #IMPLIED>
 
     let tag = parser.next_tag_assert("enum");
-
     let mut attrs = tag.attrs();
+    let name = attrs.next_assert("name");
 
-    let name = attrs.next_assert("name").to_vec();
-    let since = attrs.next_if("since").map(<[u8]>::to_vec);
-    let bitfield = attrs.next_if("bitfield").map(<[u8]>::to_vec);
+    // need to be buffered because `description` needed before all the attributes, but appear after
+    let buf_output = {
+        let mut output = Vec::with_capacity(256);
+        while let Some(attr) = attrs.try_next() {
+            let atr_name = attr.name();
+            assert_atr!(atr_name, b"since" | b"bitfield");
+            writeln!(output, "    ///");
+            writeln!(output, "    /// {}: {}", f(atr_name), f(attr.value()));
+        }
+        writeln!(output, "    #[derive(Debug)]");
+        writeln!(output, "    pub enum {} {{", f(name));
+        output
+    };
 
     // some enum does not have description
-    process_description(parser, &mut output, "    ");
+    process_description(parser, output, "    ");
+    write!(output, "{}", f(&buf_output));
 
-    if let Some(since) = since {
-        output.write_all(b"    ///\n    /// since: ").unwrap();
-        output.write_all(&since).unwrap();
-        output.write_all(b"\n").unwrap();
+    while parser.peek_tag().name() == b"entry" {
+        process_entry(parser, output);
     }
 
-    if let Some(bitfield) = bitfield {
-        output.write_all(b"    ///\n    /// bitfield: ").unwrap();
-        output.write_all(&bitfield).unwrap();
-        output.write_all(b"\n").unwrap();
-    }
+    // close enum
+    writeln!(output, "    }}");
 
-    output.write_all(b"    #[derive(Debug)]\n    pub enum ").unwrap();
-    output.write_all(&name).unwrap();
-    output.write_all(b" {\n").unwrap();
-
-    loop {
-        if parser.peek_tag().name() != b"entry" {
-            break;
-        }
-        process_entry(parser, &mut output);
-    }
-
-    let tag = parser.next_tag();
-    assert_eq!(tag.name(), b"enum");
-    assert!(tag.is_closing());
-
-    output.write_all(b"    }\n").unwrap();
+    parser.next_closing_tag_assert("enum");
 }
 
-fn process_entry<O: Write>(parser: &mut Parser, mut output: O) {
+fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
     // <!ELEMENT entry (description?)>
     //   <!ATTLIST entry name CDATA #REQUIRED>
     //   <!ATTLIST entry value CDATA #REQUIRED>
     //   <!ATTLIST entry summary CDATA #IMPLIED>
     //   <!ATTLIST entry since CDATA #IMPLIED>
     //   <!ATTLIST entry deprecated-since CDATA #IMPLIED>
+    const PAD: &str = "        ";
 
     let tag = parser.next_tag_assert("entry");
+    assert!(
+        tag.is_self_close(),
+        "enum entry with description is not yet implemented: {}",
+        f(tag.name())
+    );
 
     let mut attrs = tag.attrs();
-
     let name = {
         let mut name = attrs.next_assert("name").to_vec();
         // some variant is a rust keyword
         name[0].make_ascii_uppercase();
         // some variant only contains digit
-        if name.iter().all(|e|e.is_ascii_digit()) {
-            name.insert(0, b'd');
+        if name.iter().all(|e| e.is_ascii_digit()) {
+            name.insert(0, b'D');
         }
         name
     };
     let value = attrs.next_assert("value");
 
-    if let Some(summary) = attrs.next_if("summary") {
-        output.write_all(b"        /// ").unwrap();
-        output.write_all(summary).unwrap();
-        output.write_all(b"\n").unwrap();
-    }
+    while let Some(attr) = attrs.try_next() {
+        let atr_name = attr.name();
+        assert_atr!(atr_name, b"summary" | b"since" | b"deprecated-since");
 
-    if let Some(since) = attrs.next_if("since") {
-        output.write_all(b"        ///\n        /// since: ").unwrap();
-        output.write_all(since).unwrap();
-        output.write_all(b"\n").unwrap();
+        write!(output, "{PAD}/// ");
+        if atr_name != b"summary" {
+            write!(output, "\n{PAD}/// {}: ", f(atr_name));
+        }
+        writeln!(output, "{}", f(attr.value()));
     }
-
-    if let Some(dep_since) = attrs.next_if("deprecated-since") {
-        output.write_all(b"\n        /// deprecated-since: ").unwrap();
-        output.write_all(dep_since).unwrap();
-        output.write_all(b"\n").unwrap();
-    }
-
-    output.write_all(b"        ").unwrap();
-    output.write_all(&name).unwrap();
-    output.write_all(b" = ").unwrap();
-    output.write_all(value).unwrap();
-    output.write_all(b",\n").unwrap();
+    writeln!(output, "{PAD}{} = {},", f(&name), f(value));
 }
 
 // ===== Util =====
+
+fn f(bytes: &[u8]) -> impl std::fmt::Display {
+    std::fmt::from_fn(move |f| {
+        for &b in bytes {
+            if b == b'\r' {
+                write!(f, "\\r")?;
+            } else if b == b'\n' {
+                write!(f, "\\n")?;
+            } else if b.is_ascii_graphic() || b.is_ascii_whitespace() {
+                write!(f, "{}", b as char)?;
+            } else {
+                write!(f, "\\x{b:x}")?;
+            }
+        }
+        Ok(())
+    })
+}
+
+fn unknown_attribute(name: &[u8]) -> ! {
+    panic!("unknown attribute: {:?}", str::from_utf8(name))
+}
+
+trait Write {
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>);
+}
+
+impl<W: std::io::Write> Write for W {
+    fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) {
+        std::io::Write::write_fmt(self, args).unwrap();
+    }
+}
 
 trait ParserAssert {
     fn next_tag_assert(&mut self, name: &str) -> parser::Tag<'_>;
@@ -431,8 +429,6 @@ impl ParserAssert for Parser {
 
 trait AttrAssert<'a> {
     fn next_assert(&mut self, name: &str) -> &'a [u8];
-
-    fn next_if(&mut self, name: &str) -> Option<&'a [u8]>;
 }
 
 impl<'a> AttrAssert<'a> for parser::Attrs<'a> {
@@ -440,12 +436,6 @@ impl<'a> AttrAssert<'a> for parser::Attrs<'a> {
         let attr = self.next();
         assert_eq!(attr.name(), name.as_bytes());
         attr.value()
-    }
-
-    fn next_if(&mut self, name: &str) -> Option<&'a [u8]> {
-        self.peek()
-            .filter(|e| e.name() == name.as_bytes())
-            .map(|_| self.next().value())
     }
 }
 
