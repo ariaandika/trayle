@@ -307,7 +307,7 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
 
     let tag = parser.next_tag_assert("enum");
     let mut attrs = tag.attrs();
-    let name = SmallBuf::new(attrs.next_assert("name"));
+    let name = SmallBuf::new_camel_case(attrs.next_assert("name"));
 
     let mut since = None;
     let mut is_bitfield = false;
@@ -316,12 +316,13 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
         let atr_name = attr.name();
         match atr_name {
             b"since" => since = Some(atou(attr.value())),
-            b"bitfield" => 
+            b"bitfield" => {
                 is_bitfield = match attr.value() {
                     b"true" => true,
                     b"false" => false,
-                    _ => unreachable!()
-            },
+                    _ => unreachable!(),
+                }
+            }
             _ => unreachable!(),
         }
     }
@@ -332,8 +333,6 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
         writeln!(output, "    ///");
         writeln!(output, "    /// since: {since}");
     }
-    writeln!(output, "    ///");
-    writeln!(output, "    /// bitfield: {is_bitfield}");
     writeln!(output, "    #[derive(Debug)]");
     writeln!(output, "    pub enum {name} {{");
     while parser.peek_tag().name() == b"entry" {
@@ -342,7 +341,10 @@ fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
     writeln!(output, "    }}");
     writeln!(output);
     writeln!(output, "    impl {name} {{");
-    writeln!(output, "        pub const IS_BITFIELD: bool = {is_bitfield};");
+    writeln!(
+        output,
+        "        pub const IS_BITFIELD: bool = {is_bitfield};"
+    );
     writeln!(output, "    }}");
 
     parser.next_closing_tag_assert("enum");
@@ -361,9 +363,10 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
     let is_self_close = tag.is_self_close();
 
     let mut attrs = tag.attrs();
-    let name = SmallBuf::new_fixed(attrs.next_assert("name"));
+    let name = SmallBuf::new_camel_case(attrs.next_assert("name"));
     let value = SmallBuf::new(attrs.next_assert("value"));
 
+    let mut entry_summary = false;
     let mut since = None;
     let mut dep_since = None;
 
@@ -371,6 +374,7 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
         let value = attr.value();
         match attr.name() {
             b"summary" => {
+                entry_summary = true;
                 write!(output, "{PAD}///");
                 // there is summary that wrapped to a new line
                 for line in f(value).split('\n') {
@@ -385,7 +389,9 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
     }
 
     if parser.peek_tag().name() == b"description" {
-        writeln!(output, "{PAD}///");
+        if entry_summary {
+            writeln!(output, "{PAD}///");
+        }
         process_description(parser, output, PAD);
     }
     if let Some(since) = since {
@@ -452,28 +458,38 @@ impl SmallBuf {
         Self(buf)
     }
 
-    /// Fix rust keyword or digit only identifier.
+    /// Change identifier to camel case.
+    ///
+    /// This fix identifier that is rust keyword or digit only.
     ///
     /// Panics if name is too long.
-    fn new_fixed(name: &[u8]) -> Self {
+    fn new_camel_case(name: &[u8]) -> Self {
         let mut buf = [0u8; _];
-        buf[0] = name.len() as u8;
+        let (len, b) = buf.split_first_mut().unwrap();
 
-        // some identifier only contains digit
-        let off = if name.iter().all(|e| e.is_ascii_digit()) {
-            buf[1] = b'D';
-            2
+        let prefix = name.first().expect("empty identifier");
+        let mut name_iter = name.iter();
+
+        if prefix.is_ascii_digit() {
+            b[0] = b'D';
         } else {
-            1
+            name_iter.next();
+            b[0] = prefix.to_ascii_uppercase();
         };
+        *len += 1;
 
-        let Some(b) = buf.get_mut(off..off + name.len()) else {
-            panic!("name too long: `{}`", f(name));
-        };
-        b.copy_from_slice(name);
+        while let Some(byte) = name_iter.next() {
+            if *byte == b'_' {
+                let Some(next) = name_iter.next() else {
+                    break;
+                };
+                b[*len as usize] = next.to_ascii_uppercase();
+            } else {
+                b[*len as usize] = *byte;
+            }
+            *len += 1;
+        }
 
-        // some identifier is a rust keyword
-        buf[1].make_ascii_uppercase();
         Self(buf)
     }
 }
