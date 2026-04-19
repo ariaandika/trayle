@@ -65,7 +65,19 @@ macro_rules! assert_atr {
 
 fn main() {
     let Some(path) = args().nth(1) else {
-        panic!("path arguments is required");
+        eprintln!("error: protocol file path is required");
+        eprintln!();
+        eprintln!("available files:");
+
+        const WAYLAND: &str = "/usr/share/wayland/wayland.xml";
+        if std::path::Path::new(WAYLAND).exists() {
+            eprintln!("{WAYLAND}");
+        }
+
+        let _ = std::process::Command::new("find")
+            .args(["/usr/share/wayland-protocols/stable", "-type", "f"])
+            .status();
+        std::process::exit(1);
     };
 
     let mut parser = Parser::new(File::open(path).unwrap());
@@ -344,11 +356,6 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
     const PAD: &str = "        ";
 
     let tag = parser.next_tag_assert("entry");
-    assert!(
-        tag.is_self_close(),
-        "enum entry with description is not yet implemented: {}",
-        f(tag.name())
-    );
 
     let mut attrs = tag.attrs();
     let name = {
@@ -362,6 +369,12 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
         name
     };
     let value = attrs.next_assert("value");
+
+    assert!(
+        tag.is_self_close(),
+        "enum entry with description is not yet implemented: {}",
+        f(&name)
+    );
 
     while let Some(attr) = attrs.try_next() {
         let atr_name = attr.name();
