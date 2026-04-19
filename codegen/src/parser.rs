@@ -245,12 +245,19 @@ pub struct Attr<'a> {
 
 impl<'a> Attr<'a> {
     pub fn name(&self) -> &'a [u8] {
-        let len = self
-            .buf
+        let mut buf = self.buf;
+        while let Some((b, rest)) = buf.split_first() {
+            if b.is_ascii_whitespace() {
+                buf = rest;
+            } else {
+                break;
+            }
+        }
+        let len = buf
             .iter()
             .position(|e| *e == b'=')
             .expect("no value attribute");
-        &self.buf[..len]
+        &buf[..len]
     }
 
     pub fn value(&self) -> &'a [u8] {
