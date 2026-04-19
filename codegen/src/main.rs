@@ -69,9 +69,12 @@ fn main() {
     };
 
     let mut parser = Parser::new(File::open(path).unwrap());
+    let mut output = std::io::stdout().lock();
 
     // <!ELEMENT protocol (copyright?, description?, interface+)>
-    parser.next_tag_assert("protocol");
+    let tag = parser.next_tag_assert("protocol");
+    let name = tag.attrs().next_assert("name");
+    writeln!(output, "//! {}", f(name));
 
     // copyright?
     if parser.next_tag_if("copyright").is_some() {
@@ -80,13 +83,21 @@ fn main() {
     }
 
     // description?
-    if parser.next_tag_if("description").is_some() {
+    if let Some(tag) = parser.next_tag_if("description") {
         // <!ELEMENT description (#PCDATA)>
         //   <!ATTLIST description summary CDATA #REQUIRED>
+        let mut attrs = tag.attrs();
+        let summary = attrs.next_assert("summary");
+        writeln!(output, "//!");
+        writeln!(output, "//! {}", f(summary));
+        let description = parser.next_plain();
+        writeln!(output, "//!");
+        writeln!(output, "//! {}", f(description));
         parser.next_closing_tag_assert("description");
     }
 
-    let mut stdout = std::io::stdout().lock();
+    writeln!(output);
+
     loop {
         let tag = parser.peek_tag();
         let tag_name = tag.name();
@@ -94,7 +105,7 @@ fn main() {
             break;
         }
         assert_eq!(tag_name, b"interface");
-        interface(&mut parser, &mut stdout);
+        interface(&mut parser, &mut output);
     }
 }
 
