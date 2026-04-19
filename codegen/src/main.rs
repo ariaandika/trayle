@@ -371,7 +371,12 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
         let value = attr.value();
         match attr.name() {
             b"summary" => {
-                writeln!(output, "{PAD}/// {}", f(value));
+                write!(output, "{PAD}///");
+                // there is summary that wrapped to a new line
+                for line in f(value).split('\n') {
+                    write!(output, " {line}");
+                }
+                writeln!(output);
             }
             b"since" => since = Some(atou(value)),
             b"deprecated-since" => dep_since = Some(atou(value)),
