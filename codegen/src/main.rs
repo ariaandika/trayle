@@ -81,10 +81,9 @@ fn main() {
     let tag = parser.next_tag_assert("protocol");
     let name = tag.attrs().next_assert("name");
     writeln!(output, "//! {}", f(name));
-    writeln!(output, "#[allow(unused)]");
-    writeln!(output, "use super::{{Array, Type}};");
-    writeln!(output, "use std::os::fd::RawFd;");
-    writeln!(output, "use std::num::NonZeroU32;");
+    writeln!(output, "pub use super::{{Array, Type, Encode}};");
+    writeln!(output, "pub use std::os::fd::RawFd;");
+    writeln!(output, "pub use std::num::NonZeroU32;");
 
     // copyright?
     if parser.next_tag_if("copyright").is_some() {
@@ -267,8 +266,13 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     const PA4: &str = "                    ";
 
     let mut args = Vec::with_capacity(8);
+    let mut lifetime = "";
     while parser.peek_tag().name() == b"arg" {
-        args.push(Arg::parse(parser));
+        let arg = Arg::parse(parser);
+        if matches!(arg.ty, Type::String | Type::Array) {
+            lifetime = "<'a>";
+        }
+        args.push(arg);
     }
 
     fn ty_name(arg: &Arg) -> &'static str {
@@ -286,7 +290,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
 
     // ===== struct Encoded =====
     writeln!(output);
-    writeln!(output, "{PAD}pub struct Encoded {{");
+    writeln!(output, "{PAD}pub struct Encoded{lifetime} {{");
     for arg in &args {
         // name type $(summary interface allow-null enum)?
         if let Some(sum) = arg.summary.as_ref() {
@@ -303,7 +307,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
 
     // ===== impl Encoded =====
     writeln!(output);
-    writeln!(output, "{PAD}impl Encoded {{");
+    writeln!(output, "{PAD}impl{lifetime} Encoded{lifetime} {{");
 
     // ===== fn size() =====
     writeln!(output, "{PA2}pub fn size(&self) -> usize {{");
@@ -324,18 +328,18 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     writeln!(output);
     writeln!(output, "{PA2}pub fn encode(&self, buf: &mut [u8]) {{");
     if let [arg] = args.as_slice() {
-        writeln!(output, "{PA3}if buf.len() < Type::size(&self.{}) {{", f(&arg.name));
+        writeln!(output, "{PA3}if buf.len() != Type::size(&self.{}) {{", f(&arg.name));
         writeln!(output, "{PA3}    panic!(\"encoding failed, buffer is too small\");");
         writeln!(output, "{PA3}}}");
-        writeln!(output, "{PA3}unsafe {{ encode_to_unchecked(&self.{}, buf) }};", f(&arg.name));
+        writeln!(output, "{PA3}unsafe {{ Encode::encode_unchecked(&self.{}, buf) }};", f(&arg.name));
     } else {
-        writeln!(output, "{PA3}if buf.len() < self.size() {{");
+        writeln!(output, "{PA3}if buf.len() != self.size() {{");
         writeln!(output, "{PA3}    panic!(\"encoding failed, buffer is too small\");");
         writeln!(output, "{PA3}}}");
         writeln!(output, "{PA3}unsafe {{");
         for arg in &args {
             writeln!(output, "{PA4}let (write, buf) = buf.split_at_mut_unchecked(Type::size(&self.{}));", f(&arg.name));
-            writeln!(output, "{PA4}encode_to_unchecked(&self.{}, write);", f(&arg.name));
+            writeln!(output, "{PA4}Encode::encode_unchecked(&self.{}, write);", f(&arg.name));
         }
         writeln!(output, "{PA4}let _ = buf;");
         writeln!(output, "{PA3}}}");
