@@ -258,36 +258,24 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         args.push(Arg::parse(parser));
     }
 
+    write!(output, "        pub fn write(");
+    let mut first = true;
     for arg in &args {
-        write!(output, "        pub fn write(");
-        if parser.peek_tag().name() == b"arg" {
-            process_arg(arg, output);
-        }
-        while parser.peek_tag().name() == b"arg" {
+        if first {
+            first = false;
+        } else {
             write!(output, ", ");
-            process_arg(arg, output);
         }
-        writeln!(output, ") {{");
-        writeln!(output, "            todo!()");
-        writeln!(output, "        }}");
+        // TODO: argument `summary`, `allow-null`, and `enum` currently ignored
+        write!(output, "{}: {}", f(&arg.name), arg.as_type_name());
     }
+    writeln!(output, ") {{");
+    writeln!(output, "            todo!()");
+    writeln!(output, "        }}");
 
     writeln!(output, "    }}");
 
     parser.next_closing_tag_assert(op.as_str());
-}
-
-/// TODO: argument `summary`, `allow-null`, and `enum` currently ignored
-fn process_arg<O: Write>(arg: &Arg, output: &mut O) {
-    // <!ELEMENT arg (description?)>
-    //   <!ATTLIST arg name CDATA #REQUIRED>
-    //   <!ATTLIST arg type CDATA #REQUIRED>
-    //   <!ATTLIST arg summary CDATA #IMPLIED>
-    //   <!ATTLIST arg interface CDATA #IMPLIED>
-    //   <!ATTLIST arg allow-null CDATA #IMPLIED>
-    //   <!ATTLIST arg enum CDATA #IMPLIED>
-
-    write!(output, "{}: {}", f(&arg.name), arg.as_type_name());
 }
 
 fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
