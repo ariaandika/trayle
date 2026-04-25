@@ -82,8 +82,9 @@ fn main() {
     let name = tag.attrs().next_assert("name");
     writeln!(output, "//! {}", f(name));
     writeln!(output, "#[allow(unused)]");
-    writeln!(output, "use super::{{Id, NewId, NewIdOf}};");
+    writeln!(output, "use super::{{Array, Type}};");
     writeln!(output, "use std::os::fd::RawFd;");
+    writeln!(output, "use std::num::NonZeroU32;");
 
     // copyright?
     if parser.next_tag_if("copyright").is_some() {
@@ -251,6 +252,8 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         writeln!(output, "    ///");
         writeln!(output, "    /// deprecated-since: {dep_since}");
     }
+
+    // ===== mod =====
     writeln!(output, "    pub mod {} {{", f(&name));
     writeln!(output, "        use super::*;");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
@@ -258,48 +261,91 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     writeln!(output, "        pub const IS_EVENT: bool = {};", op.is_event());
     writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
 
+    const PAD: &str = "        ";
+    const PA2: &str = "            ";
+    const PA3: &str = "                ";
+    const PA4: &str = "                    ";
+
     let mut args = Vec::with_capacity(8);
     while parser.peek_tag().name() == b"arg" {
         args.push(Arg::parse(parser));
     }
 
-    write!(output, "        pub fn write(");
-    let mut first = true;
-    for arg in &args {
-        if first {
-            first = false;
-        } else {
-            write!(output, ", ");
-        }
-        // TODO: argument `summary` and `enum` currently ignored
-        let ty_name = match arg.ty {
+    fn ty_name(arg: &Arg) -> &'static str {
+        match arg.ty {
             Type::Int => "i32",
             Type::Uint => "u32",
             Type::Fixed => "f32",
             Type::String => "&'a str",
-            Type::Array => "Array<'a>",
+            Type::Array => "&'a Array",
             Type::Fd => "RawFd",
-            Type::NewId => "NewId",
-            Type::Object => "ObjectIdOf",
-        };
-        let ty_name = if arg.allow_null {
-            format_args!("Option<{}>", ty_name)
-        } else {
-            format_args!("{}", ty_name)
-        };
-        write!(output, "{}: {}", f(&arg.name), ty_name);
-        if let Some(iface) = arg.interface.as_ref() {
-            match arg.ty {
-                Type::Object => write!(output, "<{}>", f(iface)),
-                Type::NewId => write!(output, "Of<{}>", f(iface)),
-                _ => unreachable!("type of this argument must be either `object` or `new_id`."),
-            }
+            Type::NewId => "NonZeroU32",
+            Type::Object => "NonZeroU32",
         }
     }
-    writeln!(output, ") {{");
-    writeln!(output, "            todo!()");
-    writeln!(output, "        }}");
 
+    // ===== struct Encoded =====
+    writeln!(output);
+    writeln!(output, "{PAD}pub struct Encoded {{");
+    for arg in &args {
+        // name type $(summary interface allow-null enum)?
+        if let Some(sum) = arg.summary.as_ref() {
+            writeln!(output, "{PA2}/// {}", f(sum));
+        }
+        let ty_name = if arg.allow_null {
+            format_args!("Option<{}>", ty_name(arg))
+        } else {
+            format_args!("{}", ty_name(arg))
+        };
+        writeln!(output, "{PA2}pub {}: {},", f(&arg.name), ty_name);
+    }
+    writeln!(output, "{PAD}}}");
+
+    // ===== impl Encoded =====
+    writeln!(output);
+    writeln!(output, "{PAD}impl Encoded {{");
+
+    // ===== fn size() =====
+    writeln!(output, "{PA2}pub fn size(&self) -> usize {{");
+    write!(output, "{PA3}");
+    let mut is_first = true;
+    for arg in &args {
+        if is_first {
+            is_first = false;
+        } else {
+            write!(output, " + ");
+        }
+        write!(output, "Type::size(&self.{})", f(&arg.name));
+    }
+    writeln!(output);
+    writeln!(output, "{PA2}}}");
+
+    // ===== fn encode() =====
+    writeln!(output);
+    writeln!(output, "{PA2}pub fn encode(&self, buf: &mut [u8]) {{");
+    if let [arg] = args.as_slice() {
+        writeln!(output, "{PA3}if buf.len() < Type::size(&self.{}) {{", f(&arg.name));
+        writeln!(output, "{PA3}    panic!(\"encoding failed, buffer is too small\");");
+        writeln!(output, "{PA3}}}");
+        writeln!(output, "{PA3}unsafe {{ encode_to_unchecked(&self.{}, buf) }};", f(&arg.name));
+    } else {
+        writeln!(output, "{PA3}if buf.len() < self.size() {{");
+        writeln!(output, "{PA3}    panic!(\"encoding failed, buffer is too small\");");
+        writeln!(output, "{PA3}}}");
+        writeln!(output, "{PA3}unsafe {{");
+        for arg in &args {
+            writeln!(output, "{PA4}let (write, buf) = buf.split_at_mut_unchecked(Type::size(&self.{}));", f(&arg.name));
+            writeln!(output, "{PA4}encode_to_unchecked(&self.{}, write);", f(&arg.name));
+        }
+        writeln!(output, "{PA4}let _ = buf;");
+        writeln!(output, "{PA3}}}");
+    }
+    writeln!(output, "{PA2}}}");
+
+    // ===== end impl Encoded =====
+    writeln!(output, "{PAD}}}");
+
+    // ===== end mod =====
     writeln!(output, "    }}");
 
     parser.next_closing_tag_assert(op.as_str());
@@ -420,8 +466,7 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
 struct Arg {
     name: Vec<u8>,
     ty: Type,
-    // /// Where would it be generated ?
-    // summary: String
+    summary: Option<Vec<u8>>,
     /// If given, iface must be the name of some interface, and type of this argument must be either
     /// "object" or "new_id". This indicates that the existing or new object must have the interface
     /// iface. Use for other argument types is forbidden.
@@ -465,6 +510,7 @@ impl Arg {
         let mut attrs = tag.attrs();
         let name = attrs.next_assert("name").to_vec();
         let ty = Type::from_bytes(attrs.next_assert("type"));
+        let mut summary = None;
         let mut interface = None;
         let mut allow_null = false;
         let mut enum_ = None;
@@ -472,7 +518,7 @@ impl Arg {
         while let Some(attr) = attrs.try_next() {
             let val = attr.value();
             match attr.name() {
-                b"summary" => {}
+                b"summary" => summary = Some(val.to_vec()),
                 b"interface" => interface = Some(val.to_vec()),
                 b"allow-null" => allow_null = match val {
                     b"true" => true,
@@ -487,22 +533,10 @@ impl Arg {
         Self {
             name,
             ty,
+            summary,
             interface,
             allow_null,
             enum_,
-        }
-    }
-
-    fn as_type_name(&self) -> std::borrow::Cow<'static, str> {
-        match self.ty {
-            Type::Int => "i32".into(),
-            Type::Uint => "u32".into(),
-            Type::Fixed => "f32".into(),
-            Type::String => "&'a str".into(),
-            Type::Array => "&'a [u8]".into(),
-            Type::Fd => "RawFd".into(),
-            Type::NewId => "NewId".into(),
-            Type::Object => "Object".into(),
         }
     }
 }
