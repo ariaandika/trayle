@@ -251,24 +251,33 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     writeln!(output, "        pub const KIND: Kind = Kind::{op:?};");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
     writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
-    write!(output, "        pub fn write(");
-    if parser.peek_tag().name() == b"arg" {
-        process_arg(parser, output);
-    }
+
+    let mut args = Vec::with_capacity(8);
     while parser.peek_tag().name() == b"arg" {
-        write!(output, ", ");
-        process_arg(parser, output);
+        args.push(Arg::parse(parser));
     }
-    writeln!(output, ") {{");
-    writeln!(output, "            todo!()");
-    writeln!(output, "        }}");
+
+    for arg in &args {
+        write!(output, "        pub fn write(");
+        if parser.peek_tag().name() == b"arg" {
+            process_arg(arg, output);
+        }
+        while parser.peek_tag().name() == b"arg" {
+            write!(output, ", ");
+            process_arg(arg, output);
+        }
+        writeln!(output, ") {{");
+        writeln!(output, "            todo!()");
+        writeln!(output, "        }}");
+    }
+
     writeln!(output, "    }}");
 
     parser.next_closing_tag_assert(op.as_str());
 }
 
 /// TODO: argument `summary`, `allow-null`, and `enum` currently ignored
-fn process_arg<O: Write>(parser: &mut Parser, output: &mut O) {
+fn process_arg<O: Write>(arg: &Arg, output: &mut O) {
     // <!ELEMENT arg (description?)>
     //   <!ATTLIST arg name CDATA #REQUIRED>
     //   <!ATTLIST arg type CDATA #REQUIRED>
@@ -277,28 +286,7 @@ fn process_arg<O: Write>(parser: &mut Parser, output: &mut O) {
     //   <!ATTLIST arg allow-null CDATA #IMPLIED>
     //   <!ATTLIST arg enum CDATA #IMPLIED>
 
-    let tag = parser.next_tag_assert("arg");
-    assert!(
-        tag.is_self_close(),
-        "argument with description is not yet implemented: {}",
-        f(tag.name())
-    );
-
-    let mut attrs = tag.attrs();
-    let name = attrs.next_assert("name");
-    let ty = attrs.next_assert("type");
-
-    write!(output, "{}: {}", f(name), f(ty));
-
-    while let Some(attr) = attrs.try_next() {
-        match attr.name() {
-            b"summary" => {}
-            b"interface" => {}
-            b"allow-null" => {}
-            b"enum" => {}
-            name => unknown_attribute(name),
-        }
-    }
+    write!(output, "{}: {}", f(&arg.name), arg.as_type_name());
 }
 
 fn process_enum<O: Write>(parser: &mut Parser, output: &mut O) {
@@ -408,6 +396,145 @@ fn process_entry<O: Write>(parser: &mut Parser, output: &mut O) {
 
     if !is_self_close {
         parser.next_closing_tag_assert("entry");
+    }
+}
+
+// ===== Arg =====
+
+struct Arg {
+    name: Vec<u8>,
+    ty: Type,
+    // /// Where would it be generated ?
+    // summary: String
+    /// If given, iface must be the name of some interface, and type of this argument must be either
+    /// "object" or "new_id". This indicates that the existing or new object must have the interface
+    /// iface. Use for other argument types is forbidden.
+    ///
+    /// If an interface from another protocol is used, then this creates a dependency between the
+    /// protocols. If an application generates code for one protocol, then it must also generate
+    /// code for all dependencies. Therefore this would not be a backwards compatible change.
+    interface: Option<Vec<u8>>,
+    /// Whether the argument value can be null on send. Defaults to "false", meaning it is illegal
+    /// to send a null value. Can be used only when type is "string" or "object".
+    allow_null: bool,
+    /// If specified, indicates that the argument value should come from the enum named
+    /// enum-cname-suffix. If the enumeration is a bitfield, then type must be "uint". Otherwise
+    /// type must be either "uint" or "int".
+    ///
+    /// The name enum-cname-suffix refers to an enum in the same interface by default. If it is
+    /// necessary to refer to an enumeration from another interface, the interface name can be given
+    /// with a period:
+    ///
+    /// `enum`="`iface`.`enum-cname-suffix`"
+    enum_: Option<Vec<u8>>,
+}
+
+impl Arg {
+    fn parse(parser: &mut Parser) -> Self {
+        // <!ELEMENT arg (description?)>
+        //   <!ATTLIST arg name CDATA #REQUIRED>
+        //   <!ATTLIST arg type CDATA #REQUIRED>
+        //   <!ATTLIST arg summary CDATA #IMPLIED>
+        //   <!ATTLIST arg interface CDATA #IMPLIED>
+        //   <!ATTLIST arg allow-null CDATA #IMPLIED>
+        //   <!ATTLIST arg enum CDATA #IMPLIED>
+
+        let tag = parser.next_tag_assert("arg");
+        assert!(
+            tag.is_self_close(),
+            "argument with description is not yet implemented: {}",
+            f(tag.name())
+        );
+
+        let mut attrs = tag.attrs();
+        let name = attrs.next_assert("name").to_vec();
+        let ty = Type::from_bytes(attrs.next_assert("type"));
+        let mut interface = None;
+        let mut allow_null = false;
+        let mut enum_ = None;
+
+        while let Some(attr) = attrs.try_next() {
+            let val = attr.value();
+            match attr.name() {
+                b"summary" => {}
+                b"interface" => interface = Some(val.to_vec()),
+                b"allow-null" => allow_null = match val {
+                    b"true" => true,
+                    b"false" => false,
+                    _ => unreachable!("unknown allow-null value: {}", f(val)),
+                },
+                b"enum" => enum_ = Some(val.to_vec()),
+                name => unknown_attribute(name),
+            }
+        }
+
+        Self {
+            name,
+            ty,
+            interface,
+            allow_null,
+            enum_,
+        }
+    }
+
+    fn as_type_name(&self) -> std::borrow::Cow<'static, str> {
+        match self.ty {
+            Type::Int => "i32".into(),
+            Type::Uint => "u32".into(),
+            Type::Fixed => "f32".into(),
+            Type::String => "&'a str".into(),
+            Type::Array => "&'a [u8]".into(),
+            Type::Fd => "RawFd".into(),
+            Type::NewId => "NewId".into(),
+            Type::Object => "Object".into(),
+        }
+    }
+}
+
+enum Type {
+    /// 32-bit signed integer.
+    Int,
+    /// 32-bit unsigned integer.
+    Uint,
+    /// Signed 24.8-bit fixed-point value.
+    Fixed,
+    /// UTF-8 encoded string value, NUL byte terminated. Interior NUL bytes are not allowed.
+    String,
+    /// A byte array of arbitrary data.
+    Array,
+    /// A file descriptor.
+    ///
+    /// The file descriptor must be open and valid on send. It is not possible to pass a null value.
+    Fd,
+    /// Creates a new protocol object. A request or an event may have at most one new_id argument.
+    ///
+    /// If interface is specified, the new protocol object shall have the specified interface, and the new object’s (interface) version shall be the version of the object on which the request or event is being sent.
+    ///
+    /// If interface is not specified, the request shall implicitly have two additional arguments: A string for an interface name, and a uint for the new object’s version. Leaving the interface unspecified is reserved for special use, wl_registry.bind for example.
+    ///
+    /// Note
+    ///
+    /// An event argument must always specify the new_id interface.
+    NewId,
+    /// Reference to an existing protocol object.
+    ///
+    /// The attribute interface should be specified. Otherwise IPC libraries cannot enforce the interface, and checking the interface falls on user code and specification text.
+    Object,
+}
+
+impl Type {
+    fn from_bytes(ty: &[u8]) -> Self {
+        match ty {
+            b"int" => Self::Int,
+            b"uint" => Self::Uint,
+            b"fixed" => Self::Fixed,
+            b"string" => Self::String,
+            b"array" => Self::Array,
+            b"fd" => Self::Fd,
+            b"new_id" => Self::NewId,
+            b"object" => Self::Object,
+            _ => unreachable!("unknown type: {}", f(ty)),
+        }
     }
 }
 
