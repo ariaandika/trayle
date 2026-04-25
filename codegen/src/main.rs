@@ -81,6 +81,9 @@ fn main() {
     let tag = parser.next_tag_assert("protocol");
     let name = tag.attrs().next_assert("name");
     writeln!(output, "//! {}", f(name));
+    writeln!(output, "#[allow(unused)]");
+    writeln!(output, "use super::{{Id, NewId, NewIdOf}};");
+    writeln!(output, "use std::os::fd::RawFd;");
 
     // copyright?
     if parser.next_tag_if("copyright").is_some() {
@@ -130,6 +133,7 @@ fn interface<O: Write>(parser: &mut Parser, output: &mut O) {
     process_description(parser, output, "");
 
     writeln!(output, "pub mod {name} {{");
+    writeln!(output, "    use super::*;");
     writeln!(output, "    /// {name} version");
     writeln!(output, "    pub const VERSION: u32 = {version};");
 
@@ -248,6 +252,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         writeln!(output, "    /// deprecated-since: {dep_since}");
     }
     writeln!(output, "    pub mod {} {{", f(&name));
+    writeln!(output, "        use super::*;");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
     writeln!(output, "        pub const IS_REQUEST: bool = {};", op.is_request());
     writeln!(output, "        pub const IS_EVENT: bool = {};", op.is_event());
@@ -266,8 +271,30 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         } else {
             write!(output, ", ");
         }
-        // TODO: argument `summary`, `allow-null`, and `enum` currently ignored
-        write!(output, "{}: {}", f(&arg.name), arg.as_type_name());
+        // TODO: argument `summary` and `enum` currently ignored
+        let ty_name = match arg.ty {
+            Type::Int => "i32",
+            Type::Uint => "u32",
+            Type::Fixed => "f32",
+            Type::String => "&'a str",
+            Type::Array => "Array<'a>",
+            Type::Fd => "RawFd",
+            Type::NewId => "NewId",
+            Type::Object => "ObjectIdOf",
+        };
+        let ty_name = if arg.allow_null {
+            format_args!("Option<{}>", ty_name)
+        } else {
+            format_args!("{}", ty_name)
+        };
+        write!(output, "{}: {}", f(&arg.name), ty_name);
+        if let Some(iface) = arg.interface.as_ref() {
+            match arg.ty {
+                Type::Object => write!(output, "<{}>", f(iface)),
+                Type::NewId => write!(output, "Of<{}>", f(iface)),
+                _ => unreachable!("type of this argument must be either `object` or `new_id`."),
+            }
+        }
     }
     writeln!(output, ") {{");
     writeln!(output, "            todo!()");
