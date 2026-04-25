@@ -1,4 +1,4 @@
 [workspace]
-members = ["codegen","torio"]
+members = ["codegen", "todex", "torio"]
 resolver = "2"
 
