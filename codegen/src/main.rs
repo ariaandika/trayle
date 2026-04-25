@@ -248,8 +248,9 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         writeln!(output, "    /// deprecated-since: {dep_since}");
     }
     writeln!(output, "    pub mod {} {{", f(&name));
-    writeln!(output, "        pub const KIND: Kind = Kind::{op:?};");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
+    writeln!(output, "        pub const IS_REQUEST: bool = {};", op.is_request());
+    writeln!(output, "        pub const IS_EVENT: bool = {};", op.is_event());
     writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
 
     let mut args = Vec::with_capacity(8);
@@ -570,6 +571,20 @@ impl OpKind {
             OpKind::Request => "request",
             OpKind::Event => "event",
         }
+    }
+
+    /// Returns `true` if the op kind is [`Request`].
+    ///
+    /// [`Request`]: OpKind::Request
+    fn is_request(&self) -> bool {
+        matches!(self, Self::Request)
+    }
+
+    /// Returns `true` if the op kind is [`Event`].
+    ///
+    /// [`Event`]: OpKind::Event
+    fn is_event(&self) -> bool {
+        matches!(self, Self::Event)
     }
 }
 
