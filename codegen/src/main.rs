@@ -288,9 +288,11 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         }
     }
 
-    // ===== struct Encoded =====
+    let name = SmallBuf::new_camel_case(&name);
+
+    // ===== struct =====
     writeln!(output);
-    writeln!(output, "{PAD}pub struct Encoded{lifetime} {{");
+    writeln!(output, "{PAD}pub struct {name}{lifetime} {{");
     for arg in &args {
         // name type $(summary interface allow-null enum)?
         if let Some(sum) = arg.summary.as_ref() {
@@ -305,9 +307,9 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     }
     writeln!(output, "{PAD}}}");
 
-    // ===== impl Encoded =====
+    // ===== impl =====
     writeln!(output);
-    writeln!(output, "{PAD}impl{lifetime} Encoded{lifetime} {{");
+    writeln!(output, "{PAD}impl{lifetime} {name}{lifetime} {{");
 
     // ===== fn size() =====
     writeln!(output, "{PA2}pub fn size(&self) -> usize {{");
@@ -346,7 +348,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     }
     writeln!(output, "{PA2}}}");
 
-    // ===== end impl Encoded =====
+    // ===== end impl =====
     writeln!(output, "{PAD}}}");
 
     // ===== end mod =====
