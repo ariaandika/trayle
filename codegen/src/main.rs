@@ -4,6 +4,8 @@ use std::fs::File;
 use crate::parser::Parser;
 
 mod parser;
+mod element;
+mod codegen;
 
 // `/usr/share/wayland/wayland.dtd`
 // <!ELEMENT protocol (copyright?, description?, interface+)>
@@ -599,6 +601,59 @@ impl Type {
             b"object" => Self::Object,
             _ => unreachable!("unknown type: {}", f(ty)),
         }
+    }
+}
+
+// ===== Bytes =====
+
+#[derive(Default)]
+struct String {
+    inner: &'static str,
+}
+
+impl String {
+    fn to_camel_case(&self) -> Box<str> {
+        let mut string = self.to_string();
+        let mut chars = self.chars();
+
+        let prefix = chars.next().expect("name should be non-empty");
+
+        // some enum variant starts with digit
+        if prefix.is_ascii_digit() {
+            string.push('_');
+        }
+
+        string.push(prefix.to_ascii_uppercase());
+
+        while let Some(ch) = chars.next() {
+            // wayland use snake case, rename to camel case
+            let ch = if ch == '_' {
+                let Some(next) = chars.next() else {
+                    break;
+                };
+                next.to_ascii_uppercase()
+            } else {
+                ch
+            };
+
+            string.push(ch);
+        }
+
+        string.into_boxed_str()
+    }
+}
+
+impl std::fmt::Display for String {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        str::fmt(self, f)
+    }
+}
+
+impl std::ops::Deref for String {
+    type Target = str;
+
+    fn deref(&self) -> &Self::Target {
+        self.inner
     }
 }
 
