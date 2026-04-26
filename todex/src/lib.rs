@@ -1,7 +1,11 @@
 //! # Todex
 //!
 //! Wayland protocol decoder and encoder.
-mod id;
-mod proto;
+mod ty;
 
-pub use id::{Id, NewId, NewIdOf, ObjectId};
+pub mod encode;
+pub mod proto;
+
+// ===== reexports =====
+
+pub use ty::{Id, Array, NewId};

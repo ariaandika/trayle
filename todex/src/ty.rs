@@ -12,55 +12,54 @@ use std::num::NonZeroU32;
 /// used until `N-1` has been used. This ordering is not merely a guideline, but a strict
 /// requirement, and there are implementations of the protocol that rigorously enforce this rule,
 /// including the ubiquitous libwayland.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 #[repr(transparent)]
 pub struct Id(NonZeroU32);
 
 impl Id {
     /// Returns ID as `u32`.
+    #[inline]
     pub const fn as_u32(&self) -> u32 {
         self.0.get()
     }
 }
 
-/// New ID argument without specified interface.
+/// Wayland array.
+#[repr(transparent)]
+pub struct Array([u8]);
+
+impl std::ops::Deref for Array {
+    type Target = [u8];
+
+    fn deref(&self) -> &Self::Target {
+        &self.0
+    }
+}
+
+/// Wayland `new_id` argument without inferred interface.
 #[derive(Debug)]
 pub struct NewId {
+    name: &'static str,
+    version: u32,
     id: NonZeroU32,
 }
 
 impl NewId {
-    /// Returns ID as `u32`.
-    pub const fn as_u32(&self) -> u32 {
-        self.id.get()
+    #[inline]
+    pub fn new(name: &'static str, version: u32, id: NonZeroU32) -> Self {
+        Self { name, version, id }
+    }
+
+    pub(crate) fn name(&self) -> &'static str {
+        self.name
+    }
+
+    pub(crate) fn version(&self) -> u32 {
+        self.version
+    }
+
+    pub(crate) fn id_non_zero(&self) -> NonZeroU32 {
+        self.id
     }
 }
 
-/// New ID argument with specified interface.
-#[derive(Debug)]
-pub struct NewIdOf<T> {
-    id: NonZeroU32,
-    _p: std::marker::PhantomData<T>,
-}
-
-impl<T> NewIdOf<T> {
-    /// Returns ID as `u32`.
-    pub const fn as_u32(&self) -> u32 {
-        self.id.get()
-    }
-}
-
-/// Object ID argument.
-#[derive(Debug)]
-pub struct ObjectId<T> {
-    id: NonZeroU32,
-    _p: std::marker::PhantomData<T>,
-}
-
-
-impl<T> ObjectId<T> {
-    /// Returns ID as `u32`.
-    pub const fn as_u32(&self) -> u32 {
-        self.id.get()
-    }
-}
