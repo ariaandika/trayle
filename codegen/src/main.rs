@@ -252,14 +252,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         writeln!(output, "    /// deprecated-since: {dep_since}");
     }
 
-    // ===== mod =====
-    writeln!(output, "    pub mod {} {{", f(&name));
-    writeln!(output, "        use super::*;");
-    writeln!(output, "        pub const OPCODE: u32 = {opcode};");
-    writeln!(output, "        pub const IS_REQUEST: bool = {};", op.is_request());
-    writeln!(output, "        pub const IS_EVENT: bool = {};", op.is_event());
-    writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
-
+    // ===== arguments =====
     const PAD: &str = "        ";
     const PA2: &str = "            ";
     const PA3: &str = "                ";
@@ -288,6 +281,14 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         }
     }
 
+    // ===== mod =====
+    writeln!(output, "    pub mod {} {{", f(&name));
+    writeln!(output, "        use super::*;");
+    writeln!(output, "        pub const OPCODE: u32 = {opcode};");
+    writeln!(output, "        pub const IS_REQUEST: bool = {};", op.is_request());
+    writeln!(output, "        pub const IS_EVENT: bool = {};", op.is_event());
+    writeln!(output, "        pub const IS_TYPE_DESTRUCTOR: bool = {is_type_destructor};");
+
     let name = SmallBuf::new_camel_case(&name);
 
     // ===== struct =====
@@ -298,6 +299,13 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
         if let Some(sum) = arg.summary.as_ref() {
             writeln!(output, "{PA2}/// {}", f(sum));
         }
+        if let Some(iface) = arg.interface.as_deref() {
+            writeln!(output, "{PA2}/// interface: {}", f(iface));
+        }
+        if let Some(enum_name) = arg.enum_.as_deref() {
+            writeln!(output, "{PA2}/// enum: {}", f(enum_name));
+        }
+
         let ty_name = if arg.allow_null {
             format_args!("Option<{}>", ty_name(arg))
         } else {
