@@ -217,12 +217,12 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
 
     let tag = parser.next_tag_assert(op.as_str());
     let mut attrs = tag.attrs();
-    let name = attrs.next_assert("name");
-    let name = if name == b"move" {
+    let name = SmallBuf::new(attrs.next_assert("name"));
+    let mod_name = if &*name == b"move" {
         // some request is a rust keyword
         SmallBuf::new(b"r#move")
     } else {
-        SmallBuf::new(name)
+        SmallBuf::new(&name)
     };
 
     let mut is_type_destructor = false;
@@ -282,7 +282,7 @@ fn process_operation<O: Write>(op: OpKind, opcode: usize, parser: &mut Parser, o
     }
 
     // ===== mod =====
-    writeln!(output, "    pub mod {} {{", f(&name));
+    writeln!(output, "    pub mod {} {{", f(&mod_name));
     writeln!(output, "        use super::*;");
     writeln!(output, "        pub const OPCODE: u32 = {opcode};");
     writeln!(output, "        pub const IS_REQUEST: bool = {};", op.is_request());
