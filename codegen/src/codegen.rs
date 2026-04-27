@@ -29,8 +29,20 @@ impl Protocol {
         writeln!(o, "//!");
 
         if let Some(cp) = copyright {
-            writeln!(o, "//! {cp}");
+            writeln!(o, "//! ===== COPYRIGHT =====");
             writeln!(o, "//!");
+            for line in unsafe { str::from_utf8_unchecked(cp).lines() } {
+                write!(o, "//!");
+                let trimmed = line.trim_start();
+                let f = if trimmed.is_empty() {
+                    format_args!("")
+                } else {
+                    format_args!(" {trimmed}")
+                };
+                writeln!(o, "{f}");
+            }
+            writeln!(o, "//!");
+            writeln!(o, "//! ===== COPYRIGHT =====");
         }
         if let Some(desc) = description {
             desc.generate_inner_doc("", o);
@@ -58,6 +70,10 @@ impl Interface {
             {P1}pub const VERSION: u32 = {version};\n\
             {P1}pub const FROZEN: bool = {frozen};\n\
         ");
+    }
+
+    pub fn generate_trailer(o: &mut impl Write) {
+        writeln!(o, "{P1}}}");
     }
 }
 
@@ -130,7 +146,7 @@ impl Op {
                 writeln!(o, "{P2}/// {enum_name}");
             }
 
-            let ty_name = ty.to_rust_type(interface.as_deref());
+            let ty_name = ty.to_rust_type(interface.is_some());
 
             write!(o, "{P2}pub {name}: ");
             if *allow_null {
@@ -144,6 +160,11 @@ impl Op {
 
         // impl
         writeln!(o, "{P1}impl{lifetime} {name}{lifetime} {{");
+        writeln!(o, "{P2}pub const OPCODE: u32 = {opcode};");
+        writeln!(o, "{P2}pub const IS_REQUEST: bool = {is_request};");
+        writeln!(o, "{P2}pub const IS_EVENT: bool = {is_event};");
+        writeln!(o, "{P2}pub const IS_DESTRUCTOR: bool = {destructor};");
+        writeln!(o);
 
         // ===== fn size() =====
         writeln!(o, "{P2}pub fn size(&self) -> usize {{");
@@ -253,20 +274,16 @@ impl Description {
     /// Write an inner doc comment.
     pub fn generate_inner_doc(&self, pad: &str, o: &mut impl Write) {
         let Self { summary, content } = self;
-        if let Some(sum) = summary.as_deref() {
-            writeln!(o, "{pad}//! {sum}");
-            writeln!(o, "{pad}//!");
-        }
+        writeln!(o, "{pad}//! {summary}");
+        writeln!(o, "{pad}//!");
         writeln!(o, "{pad}//! {content}");
     }
 
     /// Write an outer doc comment.
     pub fn generate(&self, pad: &str, o: &mut impl Write) {
         let Self { summary, content } = self;
-        if let Some(sum) = summary.as_deref() {
-            writeln!(o, "{pad}/// {sum}");
-            writeln!(o, "{pad}///");
-        }
+        writeln!(o, "{pad}/// {summary}");
+        writeln!(o, "{pad}///");
         writeln!(o, "{pad}/// {content}");
     }
 }

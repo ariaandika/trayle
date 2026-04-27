@@ -1,301 +1,325 @@
-use std::mem;
-use std::ptr::copy_nonoverlapping;
+use std::cmp;
+use std::task::Poll::{self, *};
+use std::task::ready;
+
+use crate::Bytes;
+
+macro_rules! some {
+    ($e:expr) => {
+        match $e {
+            Some(ok) => ok,
+            None => return Pending,
+        }
+    };
+}
+
+/// find whitespace or `'>'`.
+fn tag_name(b: &u8) -> bool {
+    b.is_ascii_whitespace() || *b == b'>'
+}
+
+/// find `'<'`.
+fn tag_open(b: &u8) -> bool {
+    *b == b'<'
+}
+
+/// find `'>'`.
+fn tag_close(b: &u8) -> bool {
+    *b == b'>'
+}
+
+/// find `'='`.
+fn attr_name(b: &u8) -> bool {
+    *b == b'='
+}
 
 // ===== Parser =====
 
-/// Pull based parser.
-pub struct Parser {
-    read: usize,
-    buffer: Vec<u8>,
-    io: Box<dyn std::io::Read>,
+pub struct Parser<'a> {
+    buffer: &'a [u8],
 }
 
-impl Parser {
-    pub fn new<IO: std::io::Read + 'static>(io: IO) -> Self {
-        let mut me = Self {
-            read: 0,
-            buffer: Vec::with_capacity(1024),
-            io: Box::new(io),
-        };
-        let prolog = me.next_tag();
-        assert_eq!(prolog.buf, b"<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
-        me
+impl<'a> std::fmt::Debug for Parser<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Parser")
+            .field(
+                "buffer",
+                &str::from_utf8(&self.buffer[..cmp::min(self.buffer.len(), 512)]),
+            )
+            .finish()
+    }
+}
+
+impl<'a> Parser<'a> {
+    pub fn new(buffer: &'a [u8]) -> Self {
+        // loop {
+        //     let mut bytes = buffer.iter();
+        //     let prefix = some!(bytes.next());
+        //     let delim = some!(bytes.next());
+        //     if *prefix != b'<' {
+        //         // skip plain
+        //         let read = some!(buffer.iter().position(tag_open));
+        //         buffer = &buffer[read..];
+        //         continue;
+        //     }
+        //     if *delim == b'!' {
+        //         // skip comment
+        //         let read = some!(buffer[1..].iter().position(tag_open));
+        //         buffer = &buffer[read..];
+        //         continue;
+        //     }
+        //     break;
+        // }
+        // Ready(Self { buffer })
+        assert_eq!(buffer.first(), Some(&b'<'));
+        Self { buffer }
     }
 
-    #[cfg(test)]
-    fn new_test<IO: std::io::Read + 'static>(io: IO) -> Self {
-        Self {
-            read: 0,
-            buffer: Vec::with_capacity(1024),
-            io: Box::new(io),
+    pub fn as_bytes(&self) -> &'a [u8] {
+        self.buffer
+    }
+}
+
+impl<'a> Parser<'a> {
+    pub fn assert_prolog(&mut self, prolog: &str) -> Poll<()> {
+        let (p, rest) = some!(self.buffer.split_at_checked(prolog.len()));
+        assert_eq!(p, prolog.as_bytes());
+        self.buffer = rest.trim_ascii_start();
+        Ready(())
+    }
+
+    pub fn next_tag(&mut self, name: &str) -> Poll<(Tag, Bytes)> {
+        match ready!(self.next_tag_inner(&[name])) {
+            Ok(ok) => Ready(ok),
+            Err(err) => panic!("expected `{name}`, found `{err}`"),
         }
     }
-}
 
-impl Parser {
-    fn buf(&self) -> &[u8] {
-        &self.buffer[self.read..]
+    pub fn next_tag_if(&mut self, name: &str) -> Poll<Option<(Tag, Bytes)>> {
+        match ready!(self.next_tag_inner(&[name])) {
+            Ok(ok) => Ready(Some(ok)),
+            Err(_) => Ready(None),
+        }
     }
 
-    pub fn next_tag(&mut self) -> Tag<'_> {
-        let len = self.peek_tag_inner();
-        let buf = &self.buffer[self.read..self.read + len];
-        self.read += len;
-        Tag { buf }
+    pub fn next_tag_if_in(&mut self, names: &[&str]) -> Poll<Option<(Tag, Bytes)>> {
+        match ready!(self.next_tag_inner(names)) {
+            Ok(ok) => Ready(Some(ok)),
+            Err(_) => Ready(None),
+        }
     }
 
-    pub fn peek_tag(&mut self) -> Tag<'_> {
-        let len = self.peek_tag_inner();
-        let buf = &self.buffer[self.read..self.read + len];
-        Tag { buf }
-    }
+    fn next_tag_inner(&mut self, expect_names: &[&str]) -> Poll<Result<(Tag, Bytes), Bytes>> {
+        let Some((prefix, mut buf)) = self.buffer.split_first() else {
+            unreachable!()
+        };
+        assert_eq!(*prefix as char, '<');
 
-    fn peek_tag_inner(&mut self) -> usize {
-        // find `<`
-        if self.buf().first() != Some(&b'<') {
-            loop {
-                let Some(start) = self.buf().iter().position(|e|*e == b'<') else {
-                    self.read();
-                    continue;
-                };
-                let Some(delim) = self.buf().get(start + 1) else {
-                    self.read();
-                    continue;
-                };
+        let name_len = some!(buf.iter().position(tag_name));
 
-                if *delim == b'!' {
-                    // skip comment
-                    match self.buf()[start..].iter().position(|e|*e == b'>') {
-                        Some(len) => self.read += start + len,
-                        None => self.read(),
-                    }
-                    continue;
-                }
+        let is_closing = buf[0] == b'/';
+        buf = &buf[is_closing as usize..];
 
-                self.read += start;
+        let name = &buf[..name_len - is_closing as usize];
+        if !expect_names.iter().any(|ex|ex.as_bytes() == name) {
+            return Ready(Err(Bytes::new(name)));
+        }
+
+        let tag_len = some!(buf.iter().position(tag_close)) + 1;
+        let (tag_buf, buf) = buf.split_at(tag_len);
+        let tag = Tag {
+            is_closing,
+            buf: Bytes::new(tag_buf),
+        };
+
+        let content_len = some!(buf.iter().position(tag_open));
+        let (content, mut buf) = buf.split_at(content_len);
+        let content = Bytes::new(content);
+
+        loop {
+            if *some!(buf.get(1)) != b'!' {
                 break;
             }
+            let read = some!(buf[2..].iter().position(tag_open));
+            buf = &buf[2 + read..];
         }
 
-        // find `>`
-        loop {
-            match self.buf().iter().position(|e|*e == b'>') {
-                Some(close) => break close + 1,
-                None => {
-                    self.read();
-                    continue;
-                },
-            }
-        }
-    }
+        self.buffer = buf;
 
-    pub fn next_plain(&mut self) -> &[u8] {
-        // find `<`
-        loop {
-            let Some(end) = self.buf().iter().position(|e|*e == b'<') else {
-                self.read();
-                continue;
-            };
-            let Some(delim) = self.buf().get(end + 1) else {
-                self.read();
-                continue;
-            };
-
-            if *delim == b'!' {
-                // skip comment
-                match self.buf()[end..].iter().position(|e|*e == b'>') {
-                    Some(len) => self.read += end + len,
-                    None => self.read(),
-                }
-                continue;
-            }
-
-            let buf = &self.buffer[self.read..self.read + end];
-            self.read += end;
-            return buf;
-        }
-    }
-}
-
-// ===== Allocation =====
-
-impl Parser {
-    fn read(&mut self) {
-        self.reserve();
-
-        unsafe {
-            let spare: &mut [u8] = mem::transmute(self.buffer.spare_capacity_mut());
-
-            assert_ne!(spare.len(), 0);
-
-            let read = self.io.read(spare).unwrap();
-            if read == 0 {
-                panic!("end of file");
-            }
-
-            self.buffer.set_len(self.buffer.len() + read);
-        }
-    }
-
-    fn reserve(&mut self) {
-        let len = self.buf().len();
-
-        if self.read > self.buffer.capacity() / 2 {
-            // if the remaining data can be copied backward without overlapping, skip allocating
-            unsafe {
-                let ptr = self.buffer.as_mut_ptr();
-                copy_nonoverlapping(ptr.add(self.read), ptr, len);
-            }
-        } else {
-            let mut vec = Vec::with_capacity(self.buffer.capacity() << 1);
-            unsafe {
-                let spare: &mut [u8] = mem::transmute(vec.spare_capacity_mut());
-                copy_nonoverlapping(self.buffer.as_ptr().add(self.read), spare.as_mut_ptr(), len);
-            }
-            self.buffer = vec;
-        }
-
-        unsafe { self.buffer.set_len(len) };
-        self.read = 0;
+        Ready(Ok((tag, content)))
     }
 }
 
 // ===== Tag =====
 
-pub struct Tag<'a> {
-    buf: &'a [u8],
+#[derive(Debug)]
+pub struct Tag {
+    is_closing: bool,
+    buf: Bytes,
 }
 
-impl<'a> Tag<'a> {
+impl Tag {
     pub fn is_closing(&self) -> bool {
-        self.buf[1] == b'/'
+        self.is_closing
     }
 
     pub fn is_self_close(&self) -> bool {
         self.buf[self.buf.len() - 2] == b'/'
     }
 
-    pub fn name(&self) -> &'a [u8] {
-        let len = self
-            .buf
-            .iter()
-            .position(|e| *e == b'>' || e.is_ascii_whitespace())
-            .expect("unclosed tag");
-        let end_delim = (self.buf[1] == b'/') as usize;
-        &self.buf[1 + end_delim..len]
+    // pub fn name(&self) -> Bytes {
+    //     Bytes::new(self.name_slice())
+    // }
+
+    pub fn name_slice(&self) -> &[u8] {
+        let len = self.buf.iter().position(tag_name).expect("parser error");
+        &self.buf[..len]
     }
 
-    pub fn attrs(&self) -> Attrs<'a> {
-        let len = self
-            .buf
-            .iter()
-            .position(|e| *e == b'>' || e.is_ascii_whitespace())
-            .expect("unclosed tag");
-        assert_ne!(self.buf[len], b'>', "no attribute");
-        let end_delim = (self.buf[1] == b'/') as usize;
+    pub fn attrs(&self) -> Attrs {
+        let len = self.buf.iter().position(tag_name).expect("parser error");
         Attrs {
-            buf: &self.buf[1 + end_delim + len..self.buf.len() - 1],
+            buf: Bytes::new(self.buf[len..].trim_ascii_start()),
         }
     }
 }
 
 // ===== Attributes =====
 
-pub struct Attrs<'a> {
-    buf: &'a [u8],
+pub struct Attrs {
+    buf: Bytes,
 }
 
-impl<'a> Attrs<'a> {
-    pub fn next(&mut self) -> Attr<'a> {
-        self.try_next().expect("no attribute remaining")
+impl Attrs {
+    pub fn next(&mut self, name: &str) -> Attr {
+        if self.buf[0] == b'>' {
+            panic!("end of attribute, expect: `{name}`");
+        }
+        match self.next_inner(&[name]) {
+            Ok(ok) => ok,
+            Err(err) => panic!("expect attribute `{name}` found `{err}`"),
+        }
     }
 
-    pub fn try_next(&mut self) -> Option<Attr<'a>> {
-        let len = self.peek_inner()?;
-        let (buf, rest) = std::mem::take(&mut self.buf).split_at(len);
-        let whs = rest
-            .iter()
-            .position(|e| e.is_ascii_whitespace())
-            .map(|e|e + 1)
-            .unwrap_or(rest.len());
-        self.buf = &rest[whs..];
-        Some(Attr { buf })
-    }
-
-    fn peek_inner(&mut self) -> Option<usize> {
-        if self.buf.is_empty() {
+    pub fn next_if(&mut self, name: &str) -> Option<Attr> {
+        if self.buf[0] == b'>' {
             return None;
         }
-        let name_len = self
-            .buf
-            .iter()
-            .position(|e| *e == b'=')?;
-        assert_eq!(self.buf[name_len + 1], b'"', "unquoted attribute");
-        let len = self.buf[name_len + 2..]
-            .iter()
-            .position(|e| *e == b'"')
-            .expect("unclosed attr quote");
-        Some(name_len + 2 + len + 1)
+        self.next_inner(&[name]).ok()
     }
-}
 
-pub struct Attr<'a> {
-    buf: &'a [u8],
-}
+    pub fn next_if_in(&mut self, names: &[&str]) -> Option<Attr> {
+        if self.buf[0] == b'>' {
+            return None;
+        }
+        self.next_inner(names).ok()
+    }
 
-impl<'a> Attr<'a> {
-    pub fn name(&self) -> &'a [u8] {
-        let mut buf = self.buf;
-        while let Some((b, rest)) = buf.split_first() {
-            if b.is_ascii_whitespace() {
-                buf = rest;
-            } else {
+    fn next_inner(&mut self, expect_names: &[&str]) -> Result<Attr, Bytes> {
+        let mut buf = &*self.buf;
+        loop {
+            let [byte, rest @ ..] = buf else {
+                unreachable!("{:?}", self.buf)
+            };
+            buf = rest;
+            if *byte == b'=' {
+                let len = self.buf.element_offset(byte).unwrap();
+                let name = &self.buf[..len];
+                if !expect_names.iter().any(|ex|ex.as_bytes() == name) {
+                    return Err(Bytes::new(name));
+                }
                 break;
             }
         }
-        let len = buf
-            .iter()
-            .position(|e| *e == b'=')
-            .expect("no value attribute");
-        &buf[..len]
-    }
+        loop {
+            let [byte, rest @ ..] = buf else {
+                unreachable!()
+            };
+            buf = rest;
+            if *byte == b'"' {
+                break;
+            }
+        }
+        let end = loop {
+            let [byte, rest @ ..] = buf else {
+                unreachable!()
+            };
+            buf = rest;
+            if *byte == b'"' {
+                break byte;
+            }
+        };
+        let len = self.buf.element_offset(end).unwrap() + 1;
+        let (attr, rest) = self.buf.split_at(len);
+        let attr = Bytes::new(attr);
 
-    pub fn value(&self) -> &'a [u8] {
-        let off = self
+        let mut rest = rest.trim_ascii_start();
+        if rest[0] == b'/' {
+            rest = &rest[1..]
+        }
+        self.buf = Bytes::new(rest);
+        Ok(Attr { buf: attr })
+    }
+}
+
+pub struct Attr {
+    buf: Bytes,
+}
+
+impl Attr {
+    // pub fn name(&self) -> Bytes {
+    //     Bytes::new(self.name_slice())
+    // }
+
+    pub fn name_slice(&self) -> &[u8] {
+        let len = self
             .buf
             .iter()
-            .position(|e| *e == b'=')
+            .position(attr_name)
             .expect("no value attribute");
-        &self.buf[off + 2..self.buf.len() - 1]
+        &self.buf[..len]
+    }
+
+    pub fn value(&self) -> Bytes {
+        Bytes::new(self.value_slice())
+    }
+
+    pub fn value_slice(&self) -> &[u8] {
+        let len = self
+            .buf
+            .iter()
+            .position(attr_name)
+            .expect("no value attribute");
+        &self.buf[len + 2..self.buf.len() - 1]
     }
 }
 
-#[test]
-fn test_parser() {
-    const BUF: &[u8] = b"Nice <!-- lmao --><tag control>";
-
-    let mut parser = Parser::new_test(BUF);
-    assert_eq!(parser.peek_tag().buf, b"<tag control>");
-
-    let tag = parser.next_tag();
-    assert_eq!(tag.buf, b"<tag control>");
-    assert_eq!(tag.name(), b"tag");
-    assert_eq!(parser.buf(), b"");
-
-    // ===== Attr =====
-
-    const BUF2: &[u8] = b"<description summary=\"foo bar baz\" then=\"baz bar foo\">";
-
-    let mut parser = Parser::new_test(BUF2);
-    let tag = parser.next_tag();
-
-    let mut attrs = tag.attrs();
-
-    let attr = attrs.next();
-    assert_eq!(attr.name(), b"summary");
-    assert_eq!(attr.value(), b"foo bar baz");
-
-    let attr = attrs.next();
-    assert_eq!(attr.name(), b"then");
-    assert_eq!(attr.value(), b"baz bar foo");
-}
+// #[test]
+// fn test_parser() {
+//     const BUF: &[u8] = b"Nice <!-- lmao --><tag control>";
+//
+//     let mut parser = Parser::new_test(BUF);
+//     assert_eq!(parser.peek_tag().buf, b"<tag control>");
+//
+//     let tag = parser.next_tag();
+//     assert_eq!(tag.buf, b"<tag control>");
+//     assert_eq!(tag.name(), b"tag");
+//     assert_eq!(parser.buf(), b"");
+//
+//     // ===== Attr =====
+//
+//     const BUF2: &[u8] = b"<description summary=\"foo bar baz\" then=\"baz bar foo\">";
+//
+//     let mut parser = Parser::new_test(BUF2);
+//     let tag = parser.next_tag();
+//
+//     let mut attrs = tag.attrs();
+//
+//     let attr = attrs.next();
+//     assert_eq!(attr.name(), b"summary");
+//     assert_eq!(attr.value(), b"foo bar baz");
+//
+//     let attr = attrs.next();
+//     assert_eq!(attr.name(), b"then");
+//     assert_eq!(attr.value(), b"baz bar foo");
+// }

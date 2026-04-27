@@ -1,18 +1,20 @@
-use crate::String;
+use crate::Bytes;
 
 pub struct Protocol {
-    pub name: String,
-    pub copyright: Option<String>,
+    pub name: Bytes,
+    pub copyright: Option<Bytes>,
     pub description: Option<Description>,
 }
 
 pub struct Description {
-    pub summary: Option<String>,
-    pub content: String,
+    /// in the `.dtd` file, summary is required
+    /// but in the book, its optional
+    pub summary: Bytes,
+    pub content: Bytes,
 }
 
 pub struct Interface {
-    pub name: String,
+    pub name: Bytes,
     pub description: Option<Description>,
     pub version: u32,
     pub frozen: bool,
@@ -31,10 +33,17 @@ impl OpKind {
     pub fn is_event(&self) -> bool {
         matches!(self, Self::Event)
     }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OpKind::Request => "request",
+            OpKind::Event => "event",
+        }
+    }
 }
 
 pub struct Op {
-    pub name: String,
+    pub name: Bytes,
     pub description: Option<Description>,
     pub kind: OpKind,
     pub destructor: bool,
@@ -44,13 +53,14 @@ pub struct Op {
 }
 
 pub struct Arg {
-    pub name: String,
+    pub name: Bytes,
     pub description: Option<Description>,
     pub ty: Type,
-    pub interface: Option<String>,
+    pub interface: Option<Bytes>,
     pub allow_null: bool,
-    pub enum_name: Option<String>,
-    pub summary: Option<String>,
+    pub enum_name: Option<Bytes>,
+    pub summary: Option<Bytes>,
+    // LATEST:
 }
 
 impl Arg {
@@ -72,7 +82,21 @@ pub enum Type {
 }
 
 impl Type {
-    pub fn to_rust_type(&self, interface: Option<&str>) -> &'static str {
+    pub(crate) fn from_wl_type(ty: &[u8]) -> Self {
+        match ty {
+            b"int" => Self::Int,
+            b"uint" => Self::Uint,
+            b"fixed" => Self::Fixed,
+            b"string" => Self::String,
+            b"array" => Self::Array,
+            b"fd" => Self::Fd,
+            b"new_id" => Self::NewId,
+            b"object" => Self::Object,
+            _ => panic!("unknown type: {:?}", str::from_utf8(ty)),
+        }
+    }
+
+    pub fn to_rust_type(&self, inferred_interface: bool) -> &'static str {
         match self {
             Type::Int => "i32",
             Type::Uint => "u32",
@@ -81,7 +105,7 @@ impl Type {
             Type::Array => "Array<'a>",
             Type::Fd => "RawFd",
             Type::NewId => {
-                if interface.is_some() {
+                if inferred_interface {
                     "u32"
                 } else {
                     "NewId"
@@ -93,7 +117,7 @@ impl Type {
 }
 
 pub struct Enum {
-    pub name: String,
+    pub name: Bytes,
     pub description: Option<Description>,
     pub since: Option<u32>,
     pub bitfield: bool,
@@ -101,9 +125,9 @@ pub struct Enum {
 }
 
 pub struct Entry {
-    pub name: String,
-    pub value: String,
-    pub summary: Option<String>,
+    pub name: Bytes,
+    pub value: Bytes,
+    pub summary: Option<Bytes>,
     pub description: Option<Description>,
     pub since: Option<u32>,
     pub deprecated_since: Option<u32>,
