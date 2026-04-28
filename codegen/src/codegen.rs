@@ -168,32 +168,18 @@ impl Op {
         writeln!(o, "{P2}impl{lifetime} {struct_name}{lifetime} {{");
 
         // ===== fn size() =====
+        let constant_size: u32 = args.iter().map(Arg::constant_size).sum();
+
         writeln!(o, "{P3}#[inline]");
-        write!(o, "{P3}pub const fn size(&self) -> usize {{");
-        if args.is_empty() {
-            writeln!(o, " 0 }}");
-        } else {
-            write!(o, "\n{P4}");
-            let is_lf = args.len() > 3;
-            for (is_first, arg) in args.with_first() {
-                if !is_first {
-                    if is_lf {
-                        write!(o, "{P4}    + ");
-                    } else {
-                        write!(o, " + ");
-                    }
-                }
-                // write!(o, "{ENCODE_TRAIT}::size(&self.{})", arg.name);
-                arg.generate_size(o);
-                if is_lf {
-                    writeln!(o);
-                }
-            }
-            if !is_lf {
-                writeln!(o);
-            }
-            writeln!(o, "{P3}}}");
+        writeln!(o, "{P3}pub const fn size(&self) -> usize {{");
+        write!(o, "{P4}{constant_size}");
+        for arg in args {
+            let Some(dyn_size) = arg.dynamic_size() else {
+                continue;
+            };
+            write!(o, " + {dyn_size}");
         }
+        writeln!(o, "\n{P3}}}");
         writeln!(o);
 
         // ===== fn copy_to_slice() =====
@@ -272,27 +258,39 @@ impl Arg {
             .any(|arg| matches!(arg.ty, Type::String | Type::Array))
     }
 
-    fn generate_size(&self, o: &mut impl Write) {
-        let name = self.name.as_str();
+    fn constant_size(&self) -> u32 {
         match self.ty {
-            Type::Int => write!(o, "size_of::<i32>()"),
-            Type::Uint | Type::Object => write!(o, "size_of::<u32>()"),
-            Type::Fixed => write!(o, "size_of::<f32>()"),
-            Type::String => write!(o, "(size_of::<u32>() + roundup4({name}.len() + 1))"),
-            Type::Array => write!(o, "(size_of::<u32>() + roundup4({name}.len()))"),
-            Type::Fd => {}
+            Type::Int | Type::Uint | Type::Fixed | Type::String | Type::Array | Type::Object => 4,
+            Type::Fd => 0,
             Type::NewId => {
                 if self.interface.is_some() {
-                    write!(o, "size_of::<u32>()");
+                    4
                 } else {
-                    write!(o, "(size_of::<u32>() + roundup4({name}.len() + 1)) + ");
-                    write!(o, "size_of::<u64>()");
+                    12
                 }
             }
         }
     }
 
-    pub fn to_rust_type(&self) -> &'static str {
+    fn dynamic_size<'a>(&'a self) -> Option<DynamicSize<'a>> {
+        let is_null_term = match self.ty {
+            Type::Int | Type::Uint | Type::Fixed | Type::Fd | Type::Object => return None,
+            Type::String => true,
+            Type::Array => false,
+            Type::NewId => {
+                if self.interface.is_some() {
+                    return None;
+                }
+                true
+            }
+        };
+        Some(DynamicSize {
+            arg: self,
+            is_null_term,
+        })
+    }
+
+    fn to_rust_type(&self) -> &'static str {
         match self.ty {
             Type::Int => "i32",
             Type::Uint => "u32",
@@ -309,6 +307,21 @@ impl Arg {
             }
             Type::Object => "u32",
         }
+    }
+}
+
+struct DynamicSize<'a> {
+    arg: &'a Arg,
+    is_null_term: bool,
+}
+
+impl<'a> std::fmt::Display for DynamicSize<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "roundup4(self.{}.len()", self.arg.name.as_str())?;
+        if self.is_null_term {
+            write!(f, " + 1")?;
+        }
+        write!(f, ")")
     }
 }
 
