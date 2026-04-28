@@ -9,26 +9,23 @@ const P4: &str = "                ";
 // prelude
 const ENCODE_TRAIT: &str = "Encode";
 
-const PRELUDE: &str = "
+const PRELUDE: &str = "\
 #![allow(unused_imports)]
 use std::num::NonZeroU32;
 use std::os::fd::RawFd;
 
-macro_rules! roundup_4 {
-    ($n:expr) => { ((($n) + 3usize) & (usize::MAX << 2)) };
+const fn roundup4(value: usize) -> usize {
+    (value + 3) & (usize::MAX << 2)
 }";
 
 impl Protocol {
     pub fn generate_header(&self, o: &mut impl Write) {
-        let Self {
-            name,
-            copyright,
-            description: _,
-        } = self;
+        let name = &self.name;
+        let cp = self.copyright.as_ref();
 
         writeln!(o, "//! {name}");
         writeln!(o, "//!");
-        if let Some(cp) = copyright {
+        if let Some(cp) = cp {
             writeln!(o, "//! ===== COPYRIGHT =====");
             writeln!(o, "//!");
             for line in cp.as_str().lines().map(str::trim_start) {
@@ -44,13 +41,9 @@ impl Protocol {
 
 impl Interface {
     pub fn generate_header(&self, o: &mut impl Write) {
-        let Self {
-            name,
-            version,
-            frozen,
-            description: _,
-        } = self;
-
+        let name = &self.name;
+        let version = self.version;
+        let frozen = self.frozen;
         writeln!(
             o,
             "\n\
@@ -68,35 +61,70 @@ impl Interface {
 
 impl Op {
     pub fn generate(&self, opcode: u32, o: &mut impl Write) {
-        let Op {
-            kind,
-            name,
-            destructor,
-            since,
-            deprecated_since,
-            args,
-            description: _,
-        } = self;
-
-        let is_request = kind.is_request();
-        let is_event = kind.is_event();
+        let destructor = self.destructor;
+        let since = self.since;
+        let deprecated_since = self.deprecated_since;
+        let args = &self.args;
+        let is_request = self.kind.is_request();
+        let is_event = self.kind.is_event();
         let lifetime = if Arg::need_lifetime(args) { "<'a>" } else { "" };
-        let mod_name = match &**name {
+        let mod_name = match &*self.name {
             b"move" => "r#move",
-            _ => name.as_str(),
+            _ => self.name.as_str(),
         };
-        let name = name.to_camel_case();
+        let struct_name = self.name.to_camel_case();
+        let full_name = format_args!("{mod_name}::{struct_name}");
 
         writeln!(o);
 
+        // ===== constructor =====
+        for arg in args {
+            let name = &arg.name;
+            let ty = arg.ty.to_wl_type();
+            write!(o, "{P1}/// {name}: ");
+            match &arg.enum_name {
+                Some(enum_name) => write!(o, "{enum_name}"),
+                None => {
+                    write!(o, "{ty}");
+                    if let Some(iface) = arg.interface.as_ref() {
+                        write!(o, "<{iface}>");
+                    }
+                }
+            }
+            if arg.allow_null {
+                write!(o, " | null");
+            }
+            writeln!(o);
+        }
+        writeln!(o, "{P1}#[inline]");
+        write!(o, "{P1}pub const fn {mod_name}{lifetime}(");
+        for (is_first, arg) in args.with_first() {
+            let name = &arg.name;
+            if !is_first {
+                write!(o, ", ");
+            }
+            let ty = arg.to_rust_type();
+            write!(o, "{name}: {ty}");
+        }
+        writeln!(o, ") -> {full_name}{lifetime} {{");
+        write!(o, "{P2}{full_name} {{ ");
+        for (is_first, arg) in args.with_first() {
+            if !is_first {
+                write!(o, ", ");
+            }
+            write!(o, "{}", arg.name);
+        }
+        writeln!(o, " }}");
+        writeln!(o, "{P1}}}");
+        writeln!(o);
+
+        // ===== mod =====
         if let Some(since) = since {
             writeln!(o, "{P1}/// since: {since}");
         }
         if let Some(dep_since) = deprecated_since {
             writeln!(o, "{P1}/// deprecated-since: {dep_since}");
         }
-
-        // ===== mod =====
         writeln!(o, "{P1}pub mod {mod_name} {{");
         writeln!(o, "{P2}use super::*;");
         writeln!(o, "{P2}pub const OPCODE: u32 = {opcode};");
@@ -105,59 +133,30 @@ impl Op {
         writeln!(o, "{P2}pub const IS_DESTRUCTOR: bool = {destructor};");
         writeln!(o);
 
-        // ===== fn encode() =====
-        writeln!(o, "{P2}#[inline]");
-        write!(o, "{P2}pub const fn encode{lifetime}(");
-        for (is_first, arg) in args.with_first() {
-            if !is_first {
-                write!(o, ", ");
-            }
-            let ty = arg.to_rust_type();
-            write!(o, "{name}: {ty}");
-        }
-        writeln!(o, ") -> {name}{lifetime} {{");
-        write!(o, "{P3}{name} {{ ");
-        for (is_first, arg) in args.with_first() {
-            if !is_first {
-                write!(o, ", ");
-            }
-            write!(o, "{}", arg.name);
-        }
-        writeln!(o, " }}");
-        writeln!(o, "{P2}}}");
-        writeln!(o);
-
         // ===== struct =====
-        write!(o, "{P2}pub struct {name}{lifetime} {{");
+        write!(o, "{P2}pub struct {struct_name}{lifetime} {{");
         writeln!(o, "{}", &"}"[..args.is_empty() as usize]);
         for arg in args {
-            const PAD: &str = P3;
-            let Arg {
-                name,
-                ty,
-                interface,
-                allow_null,
-                enum_name,
-                summary: _,
-                description: _,
-            } = arg;
+            let name = &arg.name;
+            let rust_ty = arg.to_rust_type();
+            let wl_ty = arg.ty.to_wl_type();
 
-            write!(o, "{PAD}/// type: {}", ty.to_wl_type());
-            if let Some(iface) = interface {
-                write!(o, "<{iface}>");
+            write!(o, "{P3}/// type: ");
+            match &arg.enum_name {
+                Some(enum_name) => write!(o, "{enum_name}"),
+                None => {
+                    write!(o, "{wl_ty}");
+                    if let Some(iface) = &arg.interface {
+                        write!(o, "<{iface}>");
+                    }
+                }
             }
             writeln!(o);
-            if let Some(enum_name) = enum_name {
-                writeln!(o, "{PAD}/// enum: {enum_name}");
-            }
-
-            let ty_name = arg.to_rust_type();
-
-            write!(o, "{PAD}pub {name}: ");
-            if *allow_null {
-                writeln!(o, "Option<{ty_name}>,");
+            write!(o, "{P3}pub {name}: ");
+            if arg.allow_null {
+                writeln!(o, "Option<{rust_ty}>,");
             } else {
-                writeln!(o, "{ty_name},");
+                writeln!(o, "{rust_ty},");
             }
         }
         if !args.is_empty() {
@@ -165,8 +164,8 @@ impl Op {
         }
         writeln!(o);
 
-        // ===== impl Encoded =====
-        writeln!(o, "{P2}impl{lifetime} {name}{lifetime} {{");
+        // ===== impl =====
+        writeln!(o, "{P2}impl{lifetime} {struct_name}{lifetime} {{");
 
         // ===== fn size() =====
         writeln!(o, "{P3}#[inline]");
@@ -242,48 +241,25 @@ impl Op {
 
 impl Enum {
     pub fn generate(&self, o: &mut impl Write) {
-        let Self {
-            name,
-            description,
-            since,
-            bitfield,
-            entries,
-        } = self;
-        let _ = description;
+        let name = self.name.to_camel_case();
+        let bitfield = self.bitfield;
+        let entries = &self.entries;
 
         writeln!(o);
-
-        // if let Some(desc) = description {
-        //     desc.generate(P1, o);
-        //     writeln!(o, "{P1}///");
-        // }
-        if let Some(since) = since {
+        if let Some(since) = self.since {
             writeln!(o, "{P1}/// since: {since}");
         }
         writeln!(o, "{P1}/// bitfield: {bitfield}");
-
-        let name = name.to_camel_case();
-
         writeln!(o, "{P1}pub enum {name} {{");
         for entry in entries {
-            let Entry {
-                name,
-                value,
-                since,
-                deprecated_since,
-                summary: _,
-                description: _,
-            } = entry;
-
-            if let Some(since) = since {
+            let name = entry.name.to_camel_case();
+            let value = &entry.value;
+            if let Some(since) = entry.since {
                 writeln!(o, "{P2}/// since: {since}");
             }
-            if let Some(dep_since) = deprecated_since {
+            if let Some(dep_since) = entry.deprecated_since {
                 writeln!(o, "{P2}/// deprecated-since: {dep_since}");
             }
-
-            let name = name.to_camel_case();
-
             writeln!(o, "{P2}{name} = {value},");
         }
         writeln!(o, "{P1}}}");
@@ -302,14 +278,16 @@ impl Arg {
             Type::Int => write!(o, "size_of::<i32>()"),
             Type::Uint | Type::Object => write!(o, "size_of::<u32>()"),
             Type::Fixed => write!(o, "size_of::<f32>()"),
-            Type::String => write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1))"),
-            Type::Array => write!(o, "(size_of::<u32>() + roundup_4!({name}.len()))"),
+            Type::String => write!(o, "(size_of::<u32>() + roundup4({name}.len() + 1))"),
+            Type::Array => write!(o, "(size_of::<u32>() + roundup4({name}.len()))"),
             Type::Fd => {}
-            Type::NewId => if self.interface.is_some() {
-                write!(o, "size_of::<u32>()");
-            } else {
-                write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1)) + ");
-                write!(o, "size_of::<u64>()");
+            Type::NewId => {
+                if self.interface.is_some() {
+                    write!(o, "size_of::<u32>()");
+                } else {
+                    write!(o, "(size_of::<u32>() + roundup4({name}.len() + 1)) + ");
+                    write!(o, "size_of::<u64>()");
+                }
             }
         }
     }
