@@ -81,6 +81,8 @@ impl Op {
         for arg in args {
             let name = &arg.name;
             let ty = arg.ty.to_wl_type();
+            let n = if arg.allow_null { " | null" } else { "" };
+
             write!(o, "{P1}/// {name}: ");
             match &arg.enum_name {
                 Some(enum_name) => write!(o, "{enum_name}"),
@@ -91,28 +93,32 @@ impl Op {
                     }
                 }
             }
-            if arg.allow_null {
-                write!(o, " | null");
-            }
-            writeln!(o);
+            writeln!(o, "{n}");
         }
         writeln!(o, "{P1}#[inline]");
         write!(o, "{P1}pub const fn {mod_name}{lifetime}(");
         for (is_first, arg) in args.with_first() {
             let name = &arg.name;
+            let ty = arg.to_rust_type();
             if !is_first {
                 write!(o, ", ");
             }
-            let ty = arg.to_rust_type();
+            if arg.is_implicit_new_id() {
+                write!(o, "{name}_name: &'a str, {name}_version: u32, ");
+            }
             write!(o, "{name}: {ty}");
         }
         writeln!(o, ") -> {full_name}{lifetime} {{");
         write!(o, "{P2}{full_name} {{ ");
         for (is_first, arg) in args.with_first() {
+            let name = &arg.name;
             if !is_first {
                 write!(o, ", ");
             }
-            write!(o, "{}", arg.name);
+            if arg.is_implicit_new_id() {
+                write!(o, "{name}_name, {name}_version, ");
+            }
+            write!(o, "{name}");
         }
         writeln!(o, " }}");
         writeln!(o, "{P1}}}");
@@ -141,6 +147,12 @@ impl Op {
             let rust_ty = arg.to_rust_type();
             let wl_ty = arg.ty.to_wl_type();
 
+            if arg.is_implicit_new_id() {
+                writeln!(o, "{P3}/// type: new_id.string");
+                writeln!(o, "{P3}pub {name}_name: &'a str,");
+                writeln!(o, "{P3}/// type: new_id.uint");
+                writeln!(o, "{P3}pub {name}_version: u32,");
+            }
             write!(o, "{P3}/// type: ");
             match &arg.enum_name {
                 Some(enum_name) => write!(o, "{enum_name}"),
@@ -174,10 +186,13 @@ impl Op {
         writeln!(o, "{P3}pub const fn size(&self) -> usize {{");
         write!(o, "{P4}{constant_size}");
         for arg in args {
-            let Some(dyn_size) = arg.dynamic_size() else {
-                continue;
-            };
-            write!(o, " + {dyn_size}");
+            let name = &arg.name;
+            if matches!(arg.ty, Type::String | Type::Array) {
+                let n = if arg.is_string() { " + 1" } else { "" };
+                write!(o, " + roundup4(self.{name}.len(){n})");
+            } else if arg.is_implicit_new_id() {
+                write!(o, " + roundup4(self.{name}_name.len() + 1)");
+            }
         }
         writeln!(o, "\n{P3}}}");
         writeln!(o);
@@ -255,7 +270,15 @@ impl Enum {
 impl Arg {
     fn need_lifetime(args: &[Arg]) -> bool {
         args.iter()
-            .any(|arg| matches!(arg.ty, Type::String | Type::Array))
+            .any(|arg| matches!(arg.ty, Type::String | Type::Array) || arg.is_implicit_new_id())
+    }
+
+    fn is_string(&self) -> bool {
+        matches!(self.ty, Type::String)
+    }
+
+    fn is_implicit_new_id(&self) -> bool {
+        matches!(self.ty, Type::NewId) && self.interface.is_none()
     }
 
     fn constant_size(&self) -> u32 {
@@ -272,24 +295,6 @@ impl Arg {
         }
     }
 
-    fn dynamic_size<'a>(&'a self) -> Option<DynamicSize<'a>> {
-        let is_null_term = match self.ty {
-            Type::Int | Type::Uint | Type::Fixed | Type::Fd | Type::Object => return None,
-            Type::String => true,
-            Type::Array => false,
-            Type::NewId => {
-                if self.interface.is_some() {
-                    return None;
-                }
-                true
-            }
-        };
-        Some(DynamicSize {
-            arg: self,
-            is_null_term,
-        })
-    }
-
     fn to_rust_type(&self) -> &'static str {
         match self.ty {
             Type::Int => "i32",
@@ -298,27 +303,9 @@ impl Arg {
             Type::String => "&'a str",
             Type::Array => "&'a [u8]",
             Type::Fd => "RawFd",
-            Type::NewId => {
-                if self.interface.is_some() {
-                    "u32"
-                } else {
-                    "NewId"
-                }
-            }
+            Type::NewId => "u32",
             Type::Object => "u32",
         }
-    }
-}
-
-struct DynamicSize<'a> {
-    arg: &'a Arg,
-    is_null_term: bool,
-}
-
-impl<'a> std::fmt::Display for DynamicSize<'a> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let n = if self.is_null_term { " + 1" } else { "" };
-        write!(f, "roundup4(self.{}.len(){n})", self.arg.name.as_str())
     }
 }
 
