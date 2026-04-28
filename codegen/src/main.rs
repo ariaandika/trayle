@@ -459,7 +459,7 @@ impl Bytes {
     }
 
     fn to_camel_case(&self) -> Box<str> {
-        let mut string = self.to_string();
+        let mut string = String::with_capacity(self.len());
         let mut chars = self.as_str().chars();
 
         let prefix = chars.next().expect("name should be non-empty");

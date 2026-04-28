@@ -7,14 +7,14 @@ const P3: &str = "            ";
 const P4: &str = "                ";
 
 // prelude
-const TYPE_TRAIT: &str = "Type";
 const ENCODE_TRAIT: &str = "Encode";
+const TYPE_TRAIT: &str = "Type";
 
 const PRELUDE: &str = "
 #![warn(unused_imports)]
-pub use super::{Array, Type, Encode};\n\
-pub use std::os::fd::RawFd;\n\
+pub use super::{Array, Encode, Type};\n\
 pub use std::num::NonZeroU32;\n\
+pub use std::os::fd::RawFd;\n\
 ";
 
 impl Protocol {
@@ -65,15 +65,16 @@ impl Interface {
         }
 
         writeln!(
-            o, "pub mod {name} {{\n\
+            o,
+            "pub mod {name} {{\n\
             {P1}use super::*;\n\
             {P1}pub const VERSION: u32 = {version};\n\
-            {P1}pub const FROZEN: bool = {frozen};\n\
-        ");
+            {P1}pub const FROZEN: bool = {frozen};"
+        );
     }
 
     pub fn generate_trailer(o: &mut impl Write) {
-        writeln!(o, "{P1}}}");
+        writeln!(o, "}}");
     }
 }
 
@@ -113,7 +114,13 @@ impl Op {
             format_args!("")
         };
 
-        writeln!(o, "{P1}pub struct {name}{lifetime} {{");
+        write!(o, "{P1}pub struct {name}{lifetime} {{");
+        let f = if args.is_empty() {
+            format_args!("}}")
+        } else {
+            format_args!("")
+        };
+        writeln!(o, "{f}");
         for arg in args {
             let Arg {
                 name,
@@ -155,7 +162,9 @@ impl Op {
                 writeln!(o, "{ty_name},");
             }
         }
-        writeln!(o, "{P1}}}");
+        if !args.is_empty() {
+            writeln!(o, "{P1}}}");
+        }
         writeln!(o);
 
         // impl
@@ -167,21 +176,37 @@ impl Op {
         writeln!(o);
 
         // ===== fn size() =====
-        writeln!(o, "{P2}pub fn size(&self) -> usize {{");
-        for (is_first, arg) in args.with_first() {
-            if !is_first {
-                write!(o, " + ");
+        write!(o, "{P2}pub fn size(&self) -> usize {{");
+        if args.is_empty() {
+            writeln!(o, "}}");
+        } else {
+            write!(o, "\n{P3}");
+            let is_lf = args.len() > 3;
+            for (is_first, arg) in args.with_first() {
+                if !is_first {
+                    if is_lf {
+                        write!(o, "{P4}+ ");
+                    } else {
+                        write!(o, " + ");
+                    }
+                }
+                write!(o, "{TYPE_TRAIT}::size(&self.{})", arg.name);
+                if is_lf {
+                    writeln!(o);
+                }
             }
-            write!(o, "{TYPE_TRAIT}::size(&self.{})", arg.name);
+            if !is_lf {
+                writeln!(o);
+            }
+            writeln!(o, "{P2}}}");
         }
-        writeln!(o, "{P2}}}");
         writeln!(o);
 
         // ===== fn encode() =====
         writeln!(o, "{P2}pub fn encode(&self, buf: &mut [u8]) {{");
         match args.as_slice() {
             [] => writeln!(o, "{P3}let _ = buf;"),
-            [arg] => writeln!(o, "{ENCODE_TRAIT}::encode(&self.{}, buf);", arg.name),
+            [arg] => writeln!(o, "{P3}{ENCODE_TRAIT}::encode(&self.{}, buf);", arg.name),
             _ => {
                 writeln!(o, "{P3}if buf.len() != self.size() {{");
                 writeln!(o, "{P3}    panic!(\"buffer should have the exact required length\");");
@@ -200,7 +225,6 @@ impl Op {
             },
         }
         writeln!(o, "{P2}}}");
-        writeln!(o);
 
         // end impl
         writeln!(o, "{P1}}}");
@@ -264,7 +288,7 @@ impl Enum {
 
             let name = name.to_camel_case();
 
-            writeln!(o, "{name} = {value},");
+            writeln!(o, "{P2}{name} = {value},");
         }
         writeln!(o, "{P1}}}");
     }
@@ -273,18 +297,29 @@ impl Enum {
 impl Description {
     /// Write an inner doc comment.
     pub fn generate_inner_doc(&self, pad: &str, o: &mut impl Write) {
-        let Self { summary, content } = self;
-        writeln!(o, "{pad}//! {summary}");
-        writeln!(o, "{pad}//!");
-        writeln!(o, "{pad}//! {content}");
+        self.generate_inner(pad, '!', o);
     }
 
     /// Write an outer doc comment.
     pub fn generate(&self, pad: &str, o: &mut impl Write) {
+        self.generate_inner(pad, '/', o);
+    }
+
+    fn generate_inner(&self, pad: &str, doc: char, o: &mut impl Write) {
         let Self { summary, content } = self;
-        writeln!(o, "{pad}/// {summary}");
-        writeln!(o, "{pad}///");
-        writeln!(o, "{pad}/// {content}");
+        writeln!(o, "{pad}//{doc} {summary}");
+        writeln!(o, "{pad}//{doc}");
+        let content = unsafe { str::from_utf8_unchecked(content) };
+        for line in content.trim().lines() {
+            write!(o, "{pad}//{doc}");
+            let trimmed = line.trim_start();
+            let f = if trimmed.is_empty() {
+                format_args!("")
+            } else {
+                format_args!(" {trimmed}")
+            };
+            writeln!(o, "{f}");
+        }
     }
 }
 
