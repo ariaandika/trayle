@@ -13,8 +13,7 @@ const PRELUDE: &str = "
 #![allow(unused_imports)]
 use super::{Array, Encodem NewId};\n\
 use std::num::NonZeroU32;\n\
-use std::os::fd::RawFd;\n\
-";
+use std::os::fd::RawFd;";
 
 impl Protocol {
     pub fn generate_header(&self, o: &mut impl Write) {
@@ -23,6 +22,7 @@ impl Protocol {
             copyright,
             description,
         } = self;
+        let _ = description;
 
         writeln!(o, "//! {name}");
         writeln!(o, "//!");
@@ -43,9 +43,9 @@ impl Protocol {
             writeln!(o, "//!");
             writeln!(o, "//! ===== COPYRIGHT =====");
         }
-        if let Some(desc) = description {
-            desc.generate_inner_doc("", o);
-        }
+        // if let Some(desc) = description {
+        //     desc.generate_inner_doc("", o);
+        // }
         writeln!(o, "{PRELUDE}");
     }
 }
@@ -58,10 +58,13 @@ impl Interface {
             frozen,
             description,
         } = self;
+        let _ = description;
 
-        if let Some(desc) = description {
-            desc.generate("", o);
-        }
+        writeln!(o);
+
+        // if let Some(desc) = description {
+        //     desc.generate("", o);
+        // }
 
         writeln!(
             o,
@@ -88,22 +91,21 @@ impl Op {
             deprecated_since,
             args,
         } = self;
+        let _ = description;
 
         let is_request = kind.is_request();
         let is_event = kind.is_event();
 
         writeln!(o);
 
-        if let Some(desc) = description {
-            desc.generate(P1, o);
-        }
+        // if let Some(desc) = description {
+        //     desc.generate(P1, o);
+        // }
         if let Some(since) = since {
-            writeln!(o, "{P1}///");
-            writeln!(o, "{P1}/// {since}");
+            writeln!(o, "{P1}/// since: {since}");
         }
         if let Some(dep_since) = deprecated_since {
-            writeln!(o, "{P1}///");
-            writeln!(o, "{P1}/// {dep_since}");
+            writeln!(o, "{P1}/// deprecated-since: {dep_since}");
         }
 
         let name = name.to_camel_case();
@@ -130,26 +132,28 @@ impl Op {
                 enum_name,
                 summary,
             } = arg;
+            let _ = description;
+            let _ = summary;
 
-            let has_header = description.is_some() || summary.is_some();
-            let has_trailer = interface.is_some() || enum_name.is_some();
+            // let has_header = description.is_some() || summary.is_some();
+            // let has_trailer = interface.is_some() || enum_name.is_some();
 
             // summary should not be used if a description is used.
-            if let Some(desc) = description {
-                desc.generate(P2, o);
-            } else if let Some(sum) = summary {
-                writeln!(o, "{P2}/// {sum}");
-            }
+            // if let Some(desc) = description {
+            //     desc.generate(P2, o);
+            // } else if let Some(sum) = summary {
+            //     writeln!(o, "{P2}/// {sum}");
+            // }
 
-            if has_header && has_trailer {
-                writeln!(o, "{P2}///");
-            }
+            // if has_header && has_trailer {
+            //     writeln!(o, "{P2}///");
+            // }
 
             if let Some(iface) = interface {
-                writeln!(o, "{P2}/// {iface}");
+                writeln!(o, "{P2}/// interface: {iface}");
             }
             if let Some(enum_name) = enum_name {
-                writeln!(o, "{P2}/// {enum_name}");
+                writeln!(o, "{P2}/// enum: {enum_name}");
             }
 
             let ty_name = ty.to_rust_type(interface.is_some());
@@ -239,13 +243,14 @@ impl Enum {
             bitfield,
             entries,
         } = self;
+        let _ = description;
 
         writeln!(o);
 
-        if let Some(desc) = description {
-            desc.generate(P1, o);
-            writeln!(o, "{P1}///");
-        }
+        // if let Some(desc) = description {
+        //     desc.generate(P1, o);
+        //     writeln!(o, "{P1}///");
+        // }
         if let Some(since) = since {
             writeln!(o, "{P1}/// since: {since}");
         }
@@ -263,20 +268,22 @@ impl Enum {
                 since,
                 deprecated_since,
             } = entry;
+            let _ = description;
+            let _ = summary;
 
-            let has_header = description.is_some() || summary.is_some();
-            let has_trailer = since.is_some() || deprecated_since.is_some();
+            // let has_header = description.is_some() || summary.is_some();
+            // let has_trailer = since.is_some() || deprecated_since.is_some();
 
             // summary should not be used if a description is used.
-            if let Some(desc) = description {
-                desc.generate(P2, o);
-            } else if let Some(sum) = summary {
-                writeln!(o, "{P2}/// {sum}");
-            }
+            // if let Some(desc) = description {
+            //     desc.generate(P2, o);
+            // } else if let Some(sum) = summary {
+            //     writeln!(o, "{P2}/// {sum}");
+            // }
 
-            if has_header && has_trailer {
-                writeln!(o, "{P2}///");
-            }
+            // if has_header && has_trailer {
+            //     writeln!(o, "{P2}///");
+            // }
 
             if let Some(since) = since {
                 writeln!(o, "{P2}/// since: {since}");
@@ -294,32 +301,32 @@ impl Enum {
 }
 
 impl Description {
-    /// Write an inner doc comment.
-    pub fn generate_inner_doc(&self, pad: &str, o: &mut impl Write) {
-        self.generate_inner(pad, '!', o);
-    }
-
-    /// Write an outer doc comment.
-    pub fn generate(&self, pad: &str, o: &mut impl Write) {
-        self.generate_inner(pad, '/', o);
-    }
-
-    fn generate_inner(&self, pad: &str, doc: char, o: &mut impl Write) {
-        let Self { summary, content } = self;
-        writeln!(o, "{pad}//{doc} {summary}");
-        writeln!(o, "{pad}//{doc}");
-        let content = unsafe { str::from_utf8_unchecked(content) };
-        for line in content.trim().lines() {
-            write!(o, "{pad}//{doc}");
-            let trimmed = line.trim_start();
-            let f = if trimmed.is_empty() {
-                format_args!("")
-            } else {
-                format_args!(" {trimmed}")
-            };
-            writeln!(o, "{f}");
-        }
-    }
+    // /// Write an inner doc comment.
+    // pub fn generate_inner_doc(&self, pad: &str, o: &mut impl Write) {
+    //     self.generate_inner(pad, '!', o);
+    // }
+    //
+    // /// Write an outer doc comment.
+    // pub fn generate(&self, pad: &str, o: &mut impl Write) {
+    //     self.generate_inner(pad, '/', o);
+    // }
+    //
+    // fn generate_inner(&self, pad: &str, doc: char, o: &mut impl Write) {
+    //     let Self { summary, content } = self;
+    //     writeln!(o, "{pad}//{doc} {summary}");
+    //     writeln!(o, "{pad}//{doc}");
+    //     let content = unsafe { str::from_utf8_unchecked(content) };
+    //     for line in content.trim().lines() {
+    //         write!(o, "{pad}//{doc}");
+    //         let trimmed = line.trim_start();
+    //         let f = if trimmed.is_empty() {
+    //             format_args!("")
+    //         } else {
+    //             format_args!(" {trimmed}")
+    //         };
+    //         writeln!(o, "{f}");
+    //     }
+    // }
 }
 
 

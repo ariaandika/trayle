@@ -6,6 +6,7 @@ pub struct Protocol {
     pub description: Option<Description>,
 }
 
+#[allow(unused)]
 pub struct Description {
     /// in the `.dtd` file, summary is required
     /// but in the book, its optional
