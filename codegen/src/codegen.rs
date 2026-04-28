@@ -1,5 +1,5 @@
 use crate::Write;
-use crate::element::{Arg, Description, Entry, Enum, Interface, Op, Protocol, Type};
+use crate::element::*;
 
 const P1: &str = "    ";
 const P2: &str = "        ";
@@ -23,32 +23,21 @@ impl Protocol {
         let Self {
             name,
             copyright,
-            description,
+            description: _,
         } = self;
-        let _ = description;
 
         writeln!(o, "//! {name}");
         writeln!(o, "//!");
-
         if let Some(cp) = copyright {
             writeln!(o, "//! ===== COPYRIGHT =====");
             writeln!(o, "//!");
-            for line in unsafe { str::from_utf8_unchecked(cp).lines() } {
-                write!(o, "//!");
-                let trimmed = line.trim_start();
-                let f = if trimmed.is_empty() {
-                    format_args!("")
-                } else {
-                    format_args!(" {trimmed}")
-                };
-                writeln!(o, "{f}");
+            for line in cp.as_str().lines().map(str::trim_start) {
+                let sp = &" "[line.is_empty() as usize..];
+                writeln!(o, "//!{sp}{line}");
             }
             writeln!(o, "//!");
             writeln!(o, "//! ===== COPYRIGHT =====");
         }
-        // if let Some(desc) = description {
-        //     desc.generate_inner_doc("", o);
-        // }
         writeln!(o, "{PRELUDE}");
     }
 }
@@ -59,19 +48,13 @@ impl Interface {
             name,
             version,
             frozen,
-            description,
+            description: _,
         } = self;
-        let _ = description;
-
-        writeln!(o);
-
-        // if let Some(desc) = description {
-        //     desc.generate("", o);
-        // }
 
         writeln!(
             o,
-            "pub mod {name} {{\n\
+            "\n\
+            pub mod {name} {{\n\
             {P1}use super::*;\n\
             {P1}pub const VERSION: u32 = {version};\n\
             {P1}pub const FROZEN: bool = {frozen};"
@@ -86,25 +69,26 @@ impl Interface {
 impl Op {
     pub fn generate(&self, opcode: u32, o: &mut impl Write) {
         let Op {
-            name,
-            description,
             kind,
+            name,
             destructor,
             since,
             deprecated_since,
             args,
+            description: _,
         } = self;
-        let _ = description;
 
         let is_request = kind.is_request();
         let is_event = kind.is_event();
         let lifetime = if Arg::need_lifetime(args) { "<'a>" } else { "" };
+        let mod_name = match &**name {
+            b"move" => "r#move",
+            _ => name.as_str(),
+        };
+        let name = name.to_camel_case();
 
         writeln!(o);
 
-        // if let Some(desc) = description {
-        //     desc.generate(P1, o);
-        // }
         if let Some(since) = since {
             writeln!(o, "{P1}/// since: {since}");
         }
@@ -113,10 +97,6 @@ impl Op {
         }
 
         // ===== mod =====
-        let mod_name = match &**name {
-            b"move" => "r#move",
-            _ => name.as_str(),
-        };
         writeln!(o, "{P1}pub mod {mod_name} {{");
         writeln!(o, "{P2}use super::*;");
         writeln!(o, "{P2}pub const OPCODE: u32 = {opcode};");
@@ -132,10 +112,11 @@ impl Op {
             if !is_first {
                 write!(o, ", ");
             }
-            write!(o, "{}: {}", arg.name, arg.ty.to_rust_type(arg.interface.is_some()));
+            let ty = arg.to_rust_type();
+            write!(o, "{name}: {ty}");
         }
-        writeln!(o, ") -> Encoded{lifetime} {{");
-        write!(o, "{P3}Encode {{ ");
+        writeln!(o, ") -> {name}{lifetime} {{");
+        write!(o, "{P3}{name} {{ ");
         for (is_first, arg) in args.with_first() {
             if !is_first {
                 write!(o, ", ");
@@ -146,36 +127,20 @@ impl Op {
         writeln!(o, "{P2}}}");
         writeln!(o);
 
-        // ===== struct Encoded =====
-        write!(o, "{P2}pub struct Encoded{lifetime} {{");
-        writeln!(o, "{}", if args.is_empty() { "}}" } else { "" });
+        // ===== struct =====
+        write!(o, "{P2}pub struct {name}{lifetime} {{");
+        writeln!(o, "{}", &"}"[..args.is_empty() as usize]);
         for arg in args {
             const PAD: &str = P3;
             let Arg {
                 name,
-                description,
                 ty,
                 interface,
                 allow_null,
                 enum_name,
-                summary,
+                summary: _,
+                description: _,
             } = arg;
-            let _ = description;
-            let _ = summary;
-
-            // let has_header = description.is_some() || summary.is_some();
-            // let has_trailer = interface.is_some() || enum_name.is_some();
-
-            // summary should not be used if a description is used.
-            // if let Some(desc) = description {
-            //     desc.generate(P2, o);
-            // } else if let Some(sum) = summary {
-            //     writeln!(o, "{P2}/// {sum}");
-            // }
-
-            // if has_header && has_trailer {
-            //     writeln!(o, "{P2}///");
-            // }
 
             write!(o, "{PAD}/// type: {}", ty.to_wl_type());
             if let Some(iface) = interface {
@@ -186,7 +151,7 @@ impl Op {
                 writeln!(o, "{PAD}/// enum: {enum_name}");
             }
 
-            let ty_name = ty.to_rust_type(interface.is_some());
+            let ty_name = arg.to_rust_type();
 
             write!(o, "{PAD}pub {name}: ");
             if *allow_null {
@@ -201,7 +166,7 @@ impl Op {
         writeln!(o);
 
         // ===== impl Encoded =====
-        writeln!(o, "{P2}impl{lifetime} Encoded{lifetime} {{");
+        writeln!(o, "{P2}impl{lifetime} {name}{lifetime} {{");
 
         // ===== fn size() =====
         writeln!(o, "{P3}#[inline]");
@@ -239,20 +204,31 @@ impl Op {
             [arg] => writeln!(o, "{P4}{ENCODE_TRAIT}::encode(&self.{}, buf);", arg.name),
             _ => {
                 writeln!(o, "{P4}if buf.len() != self.size() {{");
-                writeln!(o, "{P4}    panic!(\"buffer should have the exact required length\");");
+                writeln!(
+                    o,
+                    "{P4}    panic!(\"buffer should have the exact required length\");"
+                );
                 writeln!(o, "{P4}}}");
                 writeln!(o, "{P4}unsafe {{");
                 for (is_last, arg) in args.with_last() {
                     let buf = if is_last {
                         "buf"
                     } else {
-                        writeln!(o, "{P4}    let (write, buf) = buf.split_at_mut_unchecked({ENCODE_TRAIT}::size(&self.{}));", arg.name);
+                        writeln!(
+                            o,
+                            "{P4}    let (write, buf) = buf.split_at_mut_unchecked({ENCODE_TRAIT}::size(&self.{}));",
+                            arg.name
+                        );
                         "write"
                     };
-                    writeln!(o, "{P4}    {ENCODE_TRAIT}::encode_unchecked(&self.{}, {buf});", arg.name);
+                    writeln!(
+                        o,
+                        "{P4}    {ENCODE_TRAIT}::encode_unchecked(&self.{}, {buf});",
+                        arg.name
+                    );
                 }
                 writeln!(o, "{P4}}}");
-            },
+            }
         }
         writeln!(o, "{P3}}}");
 
@@ -261,26 +237,6 @@ impl Op {
 
         // ===== end mod =====
         writeln!(o, "{P1}}}");
-    }
-}
-
-impl Arg {
-    fn generate_size(&self, o: &mut impl Write) {
-        let name = self.name.as_str();
-        match self.ty {
-            Type::Int => write!(o, "size_of::<i32>()"),
-            Type::Uint | Type::Object => write!(o, "size_of::<u32>()"),
-            Type::Fixed => write!(o, "size_of::<f32>()"),
-            Type::String => write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1))"),
-            Type::Array => write!(o, "(size_of::<u32>() + roundup_4!({name}.len()))"),
-            Type::Fd => {}
-            Type::NewId => if self.interface.is_some() {
-                write!(o, "size_of::<u32>()");
-            } else {
-                write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1)) + ");
-                write!(o, "size_of::<u64>()");
-            }
-        }
     }
 }
 
@@ -313,27 +269,11 @@ impl Enum {
             let Entry {
                 name,
                 value,
-                summary,
-                description,
                 since,
                 deprecated_since,
+                summary: _,
+                description: _,
             } = entry;
-            let _ = description;
-            let _ = summary;
-
-            // let has_header = description.is_some() || summary.is_some();
-            // let has_trailer = since.is_some() || deprecated_since.is_some();
-
-            // summary should not be used if a description is used.
-            // if let Some(desc) = description {
-            //     desc.generate(P2, o);
-            // } else if let Some(sum) = summary {
-            //     writeln!(o, "{P2}/// {sum}");
-            // }
-
-            // if has_header && has_trailer {
-            //     writeln!(o, "{P2}///");
-            // }
 
             if let Some(since) = since {
                 writeln!(o, "{P2}/// since: {since}");
@@ -350,35 +290,95 @@ impl Enum {
     }
 }
 
-impl Description {
-    // /// Write an inner doc comment.
-    // pub fn generate_inner_doc(&self, pad: &str, o: &mut impl Write) {
-    //     self.generate_inner(pad, '!', o);
-    // }
-    //
-    // /// Write an outer doc comment.
-    // pub fn generate(&self, pad: &str, o: &mut impl Write) {
-    //     self.generate_inner(pad, '/', o);
-    // }
-    //
-    // fn generate_inner(&self, pad: &str, doc: char, o: &mut impl Write) {
-    //     let Self { summary, content } = self;
-    //     writeln!(o, "{pad}//{doc} {summary}");
-    //     writeln!(o, "{pad}//{doc}");
-    //     let content = unsafe { str::from_utf8_unchecked(content) };
-    //     for line in content.trim().lines() {
-    //         write!(o, "{pad}//{doc}");
-    //         let trimmed = line.trim_start();
-    //         let f = if trimmed.is_empty() {
-    //             format_args!("")
-    //         } else {
-    //             format_args!(" {trimmed}")
-    //         };
-    //         writeln!(o, "{f}");
-    //     }
-    // }
+impl Arg {
+    fn need_lifetime(args: &[Arg]) -> bool {
+        args.iter()
+            .any(|arg| matches!(arg.ty, Type::String | Type::Array))
+    }
+
+    fn generate_size(&self, o: &mut impl Write) {
+        let name = self.name.as_str();
+        match self.ty {
+            Type::Int => write!(o, "size_of::<i32>()"),
+            Type::Uint | Type::Object => write!(o, "size_of::<u32>()"),
+            Type::Fixed => write!(o, "size_of::<f32>()"),
+            Type::String => write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1))"),
+            Type::Array => write!(o, "(size_of::<u32>() + roundup_4!({name}.len()))"),
+            Type::Fd => {}
+            Type::NewId => if self.interface.is_some() {
+                write!(o, "size_of::<u32>()");
+            } else {
+                write!(o, "(size_of::<u32>() + roundup_4!({name}.len() + 1)) + ");
+                write!(o, "size_of::<u64>()");
+            }
+        }
+    }
+
+    pub fn to_rust_type(&self) -> &'static str {
+        match self.ty {
+            Type::Int => "i32",
+            Type::Uint => "u32",
+            Type::Fixed => "f32",
+            Type::String => "&'a str",
+            Type::Array => "&'a [u8]",
+            Type::Fd => "RawFd",
+            Type::NewId => {
+                if self.interface.is_some() {
+                    "u32"
+                } else {
+                    "NewId"
+                }
+            }
+            Type::Object => "u32",
+        }
+    }
 }
 
+impl Type {
+    pub fn from_wl_type(ty: &[u8]) -> Self {
+        match ty {
+            b"int" => Self::Int,
+            b"uint" => Self::Uint,
+            b"fixed" => Self::Fixed,
+            b"string" => Self::String,
+            b"array" => Self::Array,
+            b"fd" => Self::Fd,
+            b"new_id" => Self::NewId,
+            b"object" => Self::Object,
+            _ => panic!("unknown type: {:?}", str::from_utf8(ty)),
+        }
+    }
+
+    pub fn to_wl_type(&self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Uint => "uint",
+            Self::Fixed => "fixed",
+            Self::String => "string",
+            Self::Array => "array",
+            Self::Fd => "fd",
+            Self::NewId => "new_id",
+            Self::Object => "object",
+        }
+    }
+}
+
+impl OpKind {
+    pub fn is_request(&self) -> bool {
+        matches!(self, Self::Request)
+    }
+
+    pub fn is_event(&self) -> bool {
+        matches!(self, Self::Event)
+    }
+
+    pub fn as_str(&self) -> &'static str {
+        match self {
+            OpKind::Request => "request",
+            OpKind::Event => "event",
+        }
+    }
+}
 
 trait IterExt: Sized {
     type Iter<'a>: Iterator where Self: 'a;

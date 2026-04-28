@@ -52,25 +52,6 @@ impl<'a> std::fmt::Debug for Parser<'a> {
 
 impl<'a> Parser<'a> {
     pub fn new(buffer: &'a [u8]) -> Self {
-        // loop {
-        //     let mut bytes = buffer.iter();
-        //     let prefix = some!(bytes.next());
-        //     let delim = some!(bytes.next());
-        //     if *prefix != b'<' {
-        //         // skip plain
-        //         let read = some!(buffer.iter().position(tag_open));
-        //         buffer = &buffer[read..];
-        //         continue;
-        //     }
-        //     if *delim == b'!' {
-        //         // skip comment
-        //         let read = some!(buffer[1..].iter().position(tag_open));
-        //         buffer = &buffer[read..];
-        //         continue;
-        //     }
-        //     break;
-        // }
-        // Ready(Self { buffer })
         assert_eq!(buffer.first(), Some(&b'<'));
         Self { buffer }
     }
@@ -293,33 +274,3 @@ impl Attr {
         &self.buf[len + 2..self.buf.len() - 1]
     }
 }
-
-// #[test]
-// fn test_parser() {
-//     const BUF: &[u8] = b"Nice <!-- lmao --><tag control>";
-//
-//     let mut parser = Parser::new_test(BUF);
-//     assert_eq!(parser.peek_tag().buf, b"<tag control>");
-//
-//     let tag = parser.next_tag();
-//     assert_eq!(tag.buf, b"<tag control>");
-//     assert_eq!(tag.name(), b"tag");
-//     assert_eq!(parser.buf(), b"");
-//
-//     // ===== Attr =====
-//
-//     const BUF2: &[u8] = b"<description summary=\"foo bar baz\" then=\"baz bar foo\">";
-//
-//     let mut parser = Parser::new_test(BUF2);
-//     let tag = parser.next_tag();
-//
-//     let mut attrs = tag.attrs();
-//
-//     let attr = attrs.next();
-//     assert_eq!(attr.name(), b"summary");
-//     assert_eq!(attr.value(), b"foo bar baz");
-//
-//     let attr = attrs.next();
-//     assert_eq!(attr.name(), b"then");
-//     assert_eq!(attr.value(), b"baz bar foo");
-// }
