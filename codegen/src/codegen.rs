@@ -8,13 +8,12 @@ const P4: &str = "                ";
 
 // prelude
 const ENCODE_TRAIT: &str = "Encode";
-const TYPE_TRAIT: &str = "Type";
 
 const PRELUDE: &str = "
-#![warn(unused_imports)]
-pub use super::{Array, Encode, Type};\n\
-pub use std::num::NonZeroU32;\n\
-pub use std::os::fd::RawFd;\n\
+#![allow(unused_imports)]
+use super::{Array, Encodem NewId};\n\
+use std::num::NonZeroU32;\n\
+use std::os::fd::RawFd;\n\
 ";
 
 impl Protocol {
@@ -178,7 +177,7 @@ impl Op {
         // ===== fn size() =====
         write!(o, "{P2}pub fn size(&self) -> usize {{");
         if args.is_empty() {
-            writeln!(o, "}}");
+            writeln!(o, " 0 }}");
         } else {
             write!(o, "\n{P3}");
             let is_lf = args.len() > 3;
@@ -190,7 +189,7 @@ impl Op {
                         write!(o, " + ");
                     }
                 }
-                write!(o, "{TYPE_TRAIT}::size(&self.{})", arg.name);
+                write!(o, "{ENCODE_TRAIT}::size(&self.{})", arg.name);
                 if is_lf {
                     writeln!(o);
                 }
@@ -216,7 +215,7 @@ impl Op {
                     let buf = if is_last {
                         "buf"
                     } else {
-                        writeln!(o, "{P4}let (write, buf) = buf.split_at_mut_unchecked(Type::size(&self.{}));", arg.name);
+                        writeln!(o, "{P4}let (write, buf) = buf.split_at_mut_unchecked({ENCODE_TRAIT}::size(&self.{}));", arg.name);
                         "write"
                     };
                     writeln!(o, "{P4}{ENCODE_TRAIT}::encode_unchecked(&self.{}, {buf});", arg.name);

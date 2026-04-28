@@ -102,7 +102,7 @@ impl Type {
             Type::Uint => "u32",
             Type::Fixed => "f32",
             Type::String => "&'a str",
-            Type::Array => "Array<'a>",
+            Type::Array => "&'a Array",
             Type::Fd => "RawFd",
             Type::NewId => {
                 if inferred_interface {
