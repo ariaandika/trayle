@@ -72,7 +72,7 @@ impl Op {
             b"move" => "r#move",
             _ => self.name.as_str(),
         };
-        let struct_name = self.name.to_camel_case();
+        let struct_name = camel_case(&self.name);
         let full_name = format_args!("{mod_name}::{struct_name}");
 
         writeln!(o);
@@ -227,7 +227,7 @@ impl Op {
 
 impl Enum {
     pub fn generate(&self, o: &mut impl Write) {
-        let name = self.name.to_camel_case();
+        let name = camel_case(&self.name);
         let bitfield = self.bitfield;
         let entries = &self.entries;
 
@@ -238,7 +238,7 @@ impl Enum {
         writeln!(o, "{P1}/// bitfield: {bitfield}");
         writeln!(o, "{P1}pub enum {name} {{");
         for entry in entries {
-            let name = entry.name.to_camel_case();
+            let name = camel_case(&entry.name);
             let value = &entry.value;
             if let Some(since) = entry.since {
                 writeln!(o, "{P2}/// since: {since}");
@@ -317,11 +317,8 @@ struct DynamicSize<'a> {
 
 impl<'a> std::fmt::Display for DynamicSize<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "roundup4(self.{}.len()", self.arg.name.as_str())?;
-        if self.is_null_term {
-            write!(f, " + 1")?;
-        }
-        write!(f, ")")
+        let n = if self.is_null_term { " + 1" } else { "" };
+        write!(f, "roundup4(self.{}.len(){n})", self.arg.name.as_str())
     }
 }
 
@@ -368,6 +365,39 @@ impl OpKind {
             OpKind::Request => "request",
             OpKind::Event => "event",
         }
+    }
+}
+
+fn camel_case(bytes: &crate::Bytes) -> CamelCase<'_> {
+    CamelCase { name: bytes.as_str() }
+}
+
+struct CamelCase<'a> {
+    name: &'a str,
+}
+
+impl<'a> std::fmt::Display for CamelCase<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let mut chars = self.name.chars();
+        let prefix = chars.next().expect("name should be non-empty");
+        // some enum variant starts with digit
+        if prefix.is_ascii_digit() {
+            write!(f, "_")?;
+        }
+        write!(f, "{}", prefix.to_ascii_uppercase())?;
+        while let Some(ch) = chars.next() {
+            // wayland use snake case, rename to camel case
+            let ch = if ch == '_' {
+                let Some(next) = chars.next() else {
+                    break;
+                };
+                next.to_ascii_uppercase()
+            } else {
+                ch
+            };
+            write!(f, "{ch}")?;
+        }
+        Ok(())
     }
 }
 

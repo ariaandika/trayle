@@ -457,36 +457,6 @@ impl Bytes {
     fn as_str(&self) -> &str {
         unsafe { str::from_utf8_unchecked(self.inner) }
     }
-
-    fn to_camel_case(&self) -> Box<str> {
-        let mut string = String::with_capacity(self.len());
-        let mut chars = self.as_str().chars();
-
-        let prefix = chars.next().expect("name should be non-empty");
-
-        // some enum variant starts with digit
-        if prefix.is_ascii_digit() {
-            string.push('_');
-        }
-
-        string.push(prefix.to_ascii_uppercase());
-
-        while let Some(ch) = chars.next() {
-            // wayland use snake case, rename to camel case
-            let ch = if ch == '_' {
-                let Some(next) = chars.next() else {
-                    break;
-                };
-                next.to_ascii_uppercase()
-            } else {
-                ch
-            };
-
-            string.push(ch);
-        }
-
-        string.into_boxed_str()
-    }
 }
 
 impl std::fmt::Display for Bytes {
