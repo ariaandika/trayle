@@ -61,7 +61,6 @@ pub struct Arg {
     pub allow_null: bool,
     pub enum_name: Option<Bytes>,
     pub summary: Option<Bytes>,
-    // LATEST:
 }
 
 impl Arg {
@@ -83,7 +82,7 @@ pub enum Type {
 }
 
 impl Type {
-    pub(crate) fn from_wl_type(ty: &[u8]) -> Self {
+    pub fn from_wl_type(ty: &[u8]) -> Self {
         match ty {
             b"int" => Self::Int,
             b"uint" => Self::Uint,
@@ -97,13 +96,26 @@ impl Type {
         }
     }
 
+    pub fn to_wl_type(&self) -> &'static str {
+        match self {
+            Self::Int => "int",
+            Self::Uint => "uint",
+            Self::Fixed => "fixed",
+            Self::String => "string",
+            Self::Array => "array",
+            Self::Fd => "fd",
+            Self::NewId => "new_id",
+            Self::Object => "object",
+        }
+    }
+
     pub fn to_rust_type(&self, inferred_interface: bool) -> &'static str {
         match self {
             Type::Int => "i32",
             Type::Uint => "u32",
             Type::Fixed => "f32",
             Type::String => "&'a str",
-            Type::Array => "&'a Array",
+            Type::Array => "&'a [u8]",
             Type::Fd => "RawFd",
             Type::NewId => {
                 if inferred_interface {
