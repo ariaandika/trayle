@@ -16,8 +16,10 @@ use std::ptr::copy_nonoverlapping;
 #[cfg_attr(not(panic = \"immediate-abort\"), inline(never), cold)]
 #[cfg_attr(panic = \"immediate-abort\", inline)]
 #[track_caller]
-const fn len_mismatch_fail(src_len: usize, dst_len: usize) -> ! {
-    panic!(\"destination slice length ({dst_len}) does not match the required slice length ({src_len})\");
+fn len_mismatch_fail(src_len: usize, dst_len: usize) -> ! {
+    panic!(
+        \"destination slice length ({dst_len}) does not match the required slice length ({src_len})\"
+    );
 }
 
 const fn roundup4(value: usize) -> usize {
@@ -172,9 +174,13 @@ impl Op {
         write!(o, "{P1}#[inline]\n{P1}pub const fn {mod_name}{lifetime}(");
         // arguments
         for (is_first, arg) in Arg::encodables(args).with_first() {
+            let sep = if is_first { "" } else { ", " };
             let name = &arg.name;
             let ty = arg.to_rust_type();
-            let sep = if is_first { "" } else { ", " };
+            let ty = match arg.allow_null {
+                true => format_args!("Option<{ty}>"),
+                false => format_args!("{ty}")
+            };
             let new_id = if arg.is_implicit_new_id() {
                 format_args!("{name}_name: &'a str, {name}_version: u32, ")
             } else {
@@ -259,13 +265,19 @@ impl Op {
     fn generate_fn_size(&self, o: &mut impl Write) {
         let constant_size = self.args.iter().map(Arg::constant_size).sum::<u32>();
 
-        writeln!(o, "{P3}#[inline]\n{P3}pub const fn size(&self) -> usize {{");
+        writeln!(o, "{P3}#[inline]\n{P3}pub fn size(&self) -> usize {{");
         write!(o, "{P4}{constant_size}");
         for arg in &self.args {
             let name = &arg.name;
-            if matches!(arg.ty, Type::String | Type::Array) {
-                let n = if arg.is_string() { " + 1" } else { "" };
-                write!(o, " + roundup4(self.{name}.len(){n})");
+            if matches!(arg.ty, Type::String) {
+                if arg.allow_null {
+                    write!(o, " + self.{name}.map(|e|roundup4(e.len() + 1)).unwrap_or_default()");
+                } else {
+                    write!(o, " + roundup4(self.{name}.len() + 1)");
+                }
+            }
+            if matches!(arg.ty, Type::Array) {
+                write!(o, " + roundup4(self.{name}.len())");
             }
             if arg.is_implicit_new_id() {
                 write!(o, " + roundup4(self.{name}_name.len() + 1)");
@@ -298,9 +310,9 @@ impl Op {
         const P5: &str = "                    ";
         let end_idx = Arg::encodables(&self.args).count() - 1;
         let is_mut = if end_idx == 0 {
-            "mut "
-        } else {
             ""
+        } else {
+            "mut "
         };
 
         if require_fd {
@@ -313,18 +325,19 @@ impl Op {
             {P3}/// Given pointer must be valid for write until [`size()`] length.\n\
             {P3}///\n\
             {P3}/// [`size()`]: Self::size\n\
-            {P3}pub unsafe fn copy_to_raw(&self, mut ptr: *mut u8) {{\n\
+            {P3}pub unsafe fn copy_to_raw(&self, {is_mut}ptr: *mut u8) {{\n\
             {P3}    unsafe {{"
         );
         // encoding
         for (i, arg) in Arg::encodables(&self.args).enumerate() {
+            let is_not_last = i != end_idx;
             let name = &arg.name;
             let adv = match arg.ty {
                 Type::Int => {
                     writeln!(o, "{P5}ptr.cast::<i32>().write(self.{name});");
                     format_args!("{P5}ptr = ptr.add(4);")
                 },
-                Type::Uint | Type::Object => {
+                Type::Uint => {
                     writeln!(o, "{P5}ptr.cast::<u32>().write(self.{name});");
                     format_args!("{P5}ptr = ptr.add(4);")
                 },
@@ -332,15 +345,44 @@ impl Op {
                     writeln!(o, "{P5}ptr.cast::<i32>().write((self.{name} * 256.0).round() as i32);");
                     format_args!("{P5}ptr = ptr.add(4);")
                 },
+                Type::Object => {
+                    let suffix = match arg.allow_null {
+                        true => ".unwrap_or_default()",
+                        false => ""
+                    };
+                    writeln!(o, "{P5}ptr.cast::<u32>().write(self.{name}{suffix});");
+                    format_args!("{P5}ptr = ptr.add(4);")
+                },
                 Type::String => {
-                    writeln!(
-                        o,
-                        "{P5}let len = self.{name}.len() as u32;\n\
-                        {P5}ptr.cast::<u32>().write(len + 1);\n\
-                        {P5}copy_nonoverlapping(self.{name}.as_ptr(), ptr.add(4), len as usize);\n\
-                        {P5}ptr.add((4 + len) as usize).write(0);"
-                    );
-                    format_args!("{P5}ptr = ptr.add(4 + roundup4((len + 1) as usize));")
+                    if arg.allow_null {
+                        let write = if is_not_last { "write" } else { "_" };
+                        writeln!(
+                            o,
+                            "{P5}let {write} = match self.{name} {{\n\
+                            {P5}    Some(s) => {{\n\
+                            {P5}        let len = s.len() as u32;\n\
+                            {P5}        ptr.cast::<u32>().write(len + 1);\n\
+                            {P5}        copy_nonoverlapping(s.as_ptr(), ptr.add(4), len as usize);\n\
+                            {P5}        ptr.add((4 + len) as usize).write(0);\n\
+                            {P5}        4 + roundup4((len + 1) as usize)\n\
+                            {P5}    }}\n\
+                            {P5}    None => {{\n\
+                            {P5}        ptr.cast::<u32>().write(0);\n\
+                            {P5}        4\n\
+                            {P5}    }}\n\
+                            {P5}}};"
+                        );
+                        format_args!("{P5}ptr = ptr.add(write);")
+                    } else {
+                        writeln!(
+                            o,
+                            "{P5}let len = self.{name}.len() as u32;\n\
+                            {P5}ptr.cast::<u32>().write(len + 1);\n\
+                            {P5}copy_nonoverlapping(self.{name}.as_ptr(), ptr.add(4), len as usize);\n\
+                            {P5}ptr.add((4 + len) as usize).write(0);\n"
+                        );
+                        format_args!("{P5}ptr = ptr.add(4 + roundup4((len + 1) as usize));")
+                    }
                 },
                 Type::Array => {
                     writeln!(
@@ -369,7 +411,7 @@ impl Op {
                     format_args!("{P5}ptr = ptr.add(4);")
                 }
             };
-            if i != end_idx {
+            if is_not_last {
                 writeln!(o, "{adv}");
             }
         }
@@ -412,10 +454,6 @@ impl Arg {
 
     fn is_fd(&self) -> bool {
         matches!(self.ty, Type::Fd)
-    }
-
-    fn is_string(&self) -> bool {
-        matches!(self.ty, Type::String)
     }
 
     fn is_implicit_new_id(&self) -> bool {
