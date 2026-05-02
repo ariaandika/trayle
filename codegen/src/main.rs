@@ -9,34 +9,9 @@ mod parser;
 mod element;
 mod codegen;
 
-// NOTE:
-//
-// some of rule in dtd file and the book is different, this codegen follows the dtd file
-//
-// parenth contains childrens, in the same sequence, comma separated
-// - `+`, at least one, or more
-// - `*`, zero or more
-// - `?`, zero or one
-// - `|`, either/or
-//
-// <!ATTLIST element-name attribute-name attribute-type attribute-value>
-// attribute are NOT in order, in `enum dnd_action`, `bitfield` appear before `since`
-// #IMPLIED is optional
-
 fn main() {
     let Some(path) = args().nth(1) else {
-        eprintln!("error: protocol file path is required");
-        eprintln!();
-        eprintln!("available files:");
-
-        const WAYLAND: &str = "/usr/share/wayland/wayland.xml";
-        if std::path::Path::new(WAYLAND).exists() {
-            eprintln!("{WAYLAND}");
-        }
-
-        let _ = std::process::Command::new("find")
-            .args(["/usr/share/wayland-protocols/stable", "-type", "f"])
-            .status();
+        eprintln!("Error: file path argument is required");
         std::process::exit(1);
     };
 
@@ -54,9 +29,6 @@ fn main() {
 }
 
 fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
-    // let bytes = buffer.as_bytes();
-    // let mut parser = Parser::new(bytes);
-
     parser.assert_prolog("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 
     // <!ELEMENT protocol (copyright?, description?, interface+)>
@@ -81,8 +53,6 @@ fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
         copyright,
         description,
     }.generate_header(output);
-
-    // advance_buffer!(parser, bytes, buffer);
 }
 
 fn parse_description(parser: &mut Parser) -> Option<element::Description> {
@@ -103,9 +73,6 @@ fn parse_description(parser: &mut Parser) -> Option<element::Description> {
 }
 
 fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
-    // let bytes = buffer.as_bytes();
-    // let mut parser = Parser::new(bytes);
-
     // <!ELEMENT interface (description?,(request|event|enum)+)>
     //   <!ATTLIST interface name CDATA #REQUIRED>
     //   <!ATTLIST interface version CDATA #REQUIRED>
@@ -140,12 +107,30 @@ fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
         frozen,
     }
     .generate_header(output);
-    // advance_buffer!(parser, bytes, buffer);
 
     // ===== request/event =====
 
     let mut state = InterfaceOpCode::new();
-    while parse_operation(&mut state, parser, output) { }
+    loop {
+        match parser.peek() {
+            b"request" => parse_operation(
+                "request",
+                element::OpKind::Request,
+                state.request(),
+                parser,
+                output,
+            ),
+            b"event" => parse_operation(
+                "event",
+                element::OpKind::Event,
+                state.event(),
+                parser,
+                output,
+            ),
+            b"enum" => parse_enum(parser, output),
+            _ => break,
+        }
+    }
 
     // ===== end request/event =====
 
@@ -180,51 +165,41 @@ impl InterfaceOpCode {
 }
 
 fn parse_operation(
-    state: &mut InterfaceOpCode,
+    tag_name: &str,
+    kind: element::OpKind,
+    opcode: u16,
     parser: &mut Parser,
     output: &mut impl Write,
-) -> bool {
-    if let Some(ok) = parse_enum(parser, output) {
-        return ok
-    }
-
-    // let bytes = buffer.as_bytes();
-    // let mut parser = Parser::new(bytes);
-
+) {
     // <!ELEMENT request (description?,arg*)>
     // <!ELEMENT event (description?,arg*)>
     //   <!ATTLIST _ name CDATA #REQUIRED>
     //   <!ATTLIST _ type CDATA #IMPLIED>
     //   <!ATTLIST _ since CDATA #IMPLIED>
     //   <!ATTLIST _ deprecated-since CDATA #IMPLIED>
-    let Some((tag, _)) = parser.next_tag_if_in(&["request", "event"]) else {
-        return false;
-    };
-
-    let (kind, opcode) = match tag.name_str() {
-        "request" => (element::OpKind::Request, state.request()),
-        "event" => (element::OpKind::Event, state.event()),
-        tag => unreachable!("unknown tag: {tag}"),
-    };
+    let (tag, _) = parser.next_tag(tag_name);
     let mut attrs = tag.attrs();
     let name = attrs.next("name").value();
     let mut destructor = false;
     let mut since = None;
     let mut deprecated_since = None;
 
-    while let Some(attr) = attrs.next_if_in(&["type", "since", "deprecated-since"]) {
-        match attr.name_str() {
+    while let Some(attr) = attrs.peek() {
+        match attr {
             "type" => {
+                let attr = attrs.next("type");
                 assert_eq!(attr.value_str(), "destructor");
                 destructor = true;
             }
             "since" => {
+                let attr = attrs.next("since");
                 since = Some(atou(attr.value_str().as_bytes()));
             }
             "deprecated-since" => {
+                let attr = attrs.next("deprecated-since");
                 deprecated_since = Some(atou(attr.value_str().as_bytes()));
             }
-            _ => unreachable!(),
+            name => unreachable!("unknown attribute: `{name}`"),
         }
     }
 
@@ -247,25 +222,29 @@ fn parse_operation(
         let mut allow_null = false;
         let mut enum_name = None;
 
-        while let Some(attr) = attrs.next_if_in(&["summary", "interface", "allow-null", "enum"]) {
-            match attr.name_str() {
+        while let Some(attr) = attrs.peek() {
+            match attr {
                 "summary" => {
+                    let attr = attrs.next("summary");
                     summary = Some(attr.value());
                 }
                 "interface" => {
+                    let attr = attrs.next("interface");
                     interface = Some(attr.value());
                 }
                 "enum" => {
+                    let attr = attrs.next("enum");
                     enum_name = Some(attr.value());
                 }
                 "allow-null" => {
+                    let attr = attrs.next("allow-null");
                     allow_null = match attr.value_str() {
                         "true" => true,
                         "false" => false,
                         _ => unreachable!(),
                     };
                 }
-                _ => unreachable!(),
+                name => unreachable!("unknown attribute: `{name}`"),
             }
         }
         let description = parse_description(parser);
@@ -292,38 +271,35 @@ fn parse_operation(
         description,
         args,
     }.generate(opcode, output);
-    // advance_buffer!(parser, bytes, buffer);
-    true
 }
 
-fn parse_enum(parser: &mut Parser, output: &mut impl Write) -> Option<bool> {
-    // let bytes = buffer.as_bytes();
-    // let mut parser = Parser::new(bytes);
-
+fn parse_enum(parser: &mut Parser, output: &mut impl Write) {
     // <!ELEMENT enum (description?,entry*)>
     //   <!ATTLIST enum name CDATA #REQUIRED>
     //   <!ATTLIST enum since CDATA #IMPLIED>
     //   <!ATTLIST enum bitfield CDATA #IMPLIED>
-    let (tag, _) = parser.next_tag_if("enum")?;
+    let (tag, _) = parser.next_tag("enum");
 
     let mut attrs = tag.attrs();
     let name = attrs.next("name").value();
     let mut since = None;
     let mut bitfield = false;
 
-    while let Some(attr) = attrs.next_if_in(&["since", "bitfield"]) {
-        match attr.name_str() {
+    while let Some(attr) = attrs.peek() {
+        match attr {
             "since" => {
+                let attr = attrs.next("since");
                 since = Some(atou(attr.value_str().as_bytes()));
             }
             "bitfield" => {
+                let attr = attrs.next("bitfield");
                 bitfield = match attr.value_str() {
                     "true" => true,
                     "false" => false,
                     _ => unreachable!()
                 };
             }
-            _ => unreachable!(),
+            name => unreachable!("unknown attribute: `{name}`"),
         }
     }
 
@@ -344,21 +320,23 @@ fn parse_enum(parser: &mut Parser, output: &mut impl Write) -> Option<bool> {
         let mut since = None;
         let mut deprecated_since = None;
 
-        while let Some(attr) = attrs.next_if_in(&["summary", "interface", "allow-null", "enum"]) {
-            match attr.name_str() {
+        while let Some(attr) = attrs.peek() {
+            match attr {
                 "summary" => {
+                    let attr = attrs.next("summary");
                     summary = Some(attr.value());
                 }
                 "since" => {
+                    let attr = attrs.next("since");
                     since = Some(atou(attr.value_str().as_bytes()));
                 }
                 "deprecated-since" => {
+                    let attr = attrs.next("deprecated-since");
                     deprecated_since = Some(atou(attr.value_str().as_bytes()));
                 }
-                _ => unreachable!(),
+                name => unreachable!("unknown attribute: `{name}`"),
             }
         }
-
         let description = parse_description(parser);
         entries.push(element::Entry {
             name,
@@ -380,9 +358,6 @@ fn parse_enum(parser: &mut Parser, output: &mut impl Write) -> Option<bool> {
         bitfield,
         entries,
     }.generate(output);
-    // advance_buffer!(parser, bytes, buffer);
-    // Ready(Some(true))
-    Some(true)
 }
 
 // ===== Util =====

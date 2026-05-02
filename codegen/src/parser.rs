@@ -3,16 +3,6 @@ use std::task::Poll::{self, *};
 
 use crate::buffer::{FileBuffer, Str};
 
-/// `Some` or returns `Pending`.
-macro_rules! some {
-    ($e:expr) => {
-        match $e {
-            Some(ok) => ok,
-            None => return Pending,
-        }
-    };
-}
-
 // ===== Parser =====
 
 pub struct Parser {
@@ -41,27 +31,18 @@ impl Parser {
     }
 
     pub fn next_tag(&mut self, name: &str) -> (Tag, Str) {
-        match self.next_tag_inner(&[name]) {
-            Ok(ok) => ok,
-            Err(err) => panic!("expected `{name}`, found `{err}`"),
+        let name_bytes = self.peek();
+        if name_bytes != name.as_bytes() {
+            panic!("expected `{name}` tag, found `{}`", String::from_utf8_lossy(name_bytes))
         }
+        self.next_tag_inner()
     }
 
     pub fn next_tag_if(&mut self, name: &str) -> Option<(Tag, Str)> {
-        self.next_tag_inner(&[name]).ok()
-    }
-
-    pub fn next_tag_if_in(&mut self, names: &[&str]) -> Option<(Tag, Str)> {
-        self.next_tag_inner(names).ok()
-    }
-
-    fn next_tag_inner(&mut self, expect_names: &[&str]) -> Result<(Tag, Str), Box<str>> {
-        loop {
-            match self.poll_next_tag_inner(expect_names) {
-                Ready(ok) => return ok,
-                Pending => self.buffer.read(),
-            }
+        if self.peek() != name.as_bytes() {
+            return None;
         }
+        Some(self.next_tag_inner())
     }
 }
 
@@ -84,19 +65,51 @@ fn tag_close(b: &u8) -> bool {
 /// whitespace or `'>'`.
 static TAG_NAME_DELIM: [char; 6] = ['\t', '\n', '\x0C', '\r', ' ', '>'];
 
+/// `Some` or returns `Pending`.
+macro_rules! some {
+    ($e:expr) => {
+        match $e {
+            Some(ok) => ok,
+            None => return Pending,
+        }
+    };
+}
+
 impl Parser {
-    fn poll_next_tag_inner(&mut self, expect_names: &[&str]) -> Poll<Result<(Tag, Str), Box<str>>> {
+    pub fn peek(&mut self) -> &[u8] {
+        loop {
+            let Some(ok) = self.buffer.split_first() else {
+                self.buffer.read();
+                continue;
+            };
+            let (b'<', bytes) = ok else {
+                unreachable!("internal error: not in `<` boundary")
+            };
+            let Some(name_len) = bytes.iter().position(tag_name) else {
+                self.buffer.read();
+                continue;
+            };
+            let is_closing = bytes[0] == b'/';
+            let name = &bytes[is_closing as usize..name_len];
+            // SAFETY: fuck off marbles
+            return unsafe { std::mem::transmute::<&[u8], &[u8]>(name) };
+        }
+    }
+
+    fn next_tag_inner(&mut self) -> (Tag, Str) {
+        loop {
+            match self.poll_next_tag_inner() {
+                Ready(ok) => return ok,
+                Pending => self.buffer.read(),
+            }
+        }
+    }
+
+    fn poll_next_tag_inner(&mut self) -> Poll<(Tag, Str)> {
         let (b'<', bytes) = some!(self.buffer.split_first()) else {
             unreachable!("internal error: not in `<` boundary")
         };
-
-        // name check
-        let name_len = some!(bytes.iter().position(tag_name));
         let is_closing = bytes[0] == b'/';
-        let name = &bytes[is_closing as usize..name_len];
-        if !expect_names.iter().any(|e|e.as_bytes() == name) {
-            return Ready(Err(String::from_utf8_lossy(name).into_owned().into_boxed_str()));
-        }
 
         // get the tag
         let tag_len = some!(bytes.iter().position(tag_close)) + 1;
@@ -106,27 +119,27 @@ impl Parser {
         let content_len = some!(bytes.iter().position(tag_open));
 
         // skip comment, if there is comment mixed with plain content, well shiver my timber
-        let mut skip_len = content_len;
+        let mut skip_len = 0;
         loop {
-            let bytes = &bytes[skip_len..];
+            let bytes = &bytes[content_len + skip_len..];
             if *some!(bytes.get(1)) != b'!' {
                 break;
             }
             let read = some!(bytes[2..].iter().position(tag_open));
-            skip_len += 2+ read;
+            skip_len += 2 + read;
         }
 
         // no more pending
         self.buffer.advance(1); // skip '<'
         let tag = self.buffer.split_to(tag_len);
         let content = self.buffer.split_to(content_len);
-        self.buffer.advance(skip_len - content_len);
+        self.buffer.advance(skip_len);
 
         let tag = Tag {
             is_closing,
             string: tag,
         };
-        Ready(Ok((tag, content)))
+        Ready((tag, content))
     }
 }
 
@@ -151,10 +164,10 @@ impl Tag {
     //     Bytes::new(self.name_slice())
     // }
 
-    pub fn name_str(&self) -> &str {
-        let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
-        &self.string[..len]
-    }
+    // pub fn name_str(&self) -> &str {
+    //     let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
+    //     &self.string[..len]
+    // }
 
     pub fn attrs(&self) -> Attrs {
         let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
@@ -175,40 +188,38 @@ impl Attrs {
         if *self.string.first().unwrap() == b'>' {
             panic!("end of attribute, expect: `{name}`");
         }
-        match self.next_inner(&[name]) {
-            Ok(ok) => ok,
-            Err(err) => panic!("expect attribute `{name}` found `{err}`"),
+        if let peek = self.peek().unwrap() && peek != name {
+            panic!("expect attribute `{name}` found `{peek}`");
         }
+        self.next_inner()
     }
 
     pub fn next_if(&mut self, name: &str) -> Option<Attr> {
         if *self.string.first().unwrap() == b'>' {
             return None;
         }
-        self.next_inner(&[name]).ok()
+        if self.peek()? != name {
+            return None;
+        }
+        Some(self.next_inner())
     }
 
-    pub fn next_if_in(&mut self, names: &[&str]) -> Option<Attr> {
+    pub fn peek(&self) -> Option<&str> {
         if *self.string.first().unwrap() == b'>' {
             return None;
         }
-        self.next_inner(names).ok()
+        Some(self.string.split_once('=').expect("no value attr").0)
     }
 
-    fn next_inner(&mut self, expect_names: &[&str]) -> Result<Attr, Box<str>> {
+    fn next_inner(&mut self) -> Attr {
         let len = self.string.find('"').expect("no value attr");
-        let name = &self.string[..len - 1];
-        if !expect_names.contains(&name) {
-            return Err(name.to_string().into_boxed_str());
-        }
         let len = self.string[len + 1..].find('"').expect("unclosed value quote") + len + 2;
         let string = self.string.split_to(len);
         self.string.trim_ascii_start();
         if self.string.starts_with('/') {
             self.string.advance(1);
         }
-
-        Ok(Attr { string })
+        Attr { string }
     }
 }
 
@@ -220,11 +231,11 @@ impl Attr {
     // pub fn name(&self) -> Bytes {
     //     Bytes::new(self.name_slice())
     // }
-
-    pub fn name_str(&self) -> &str {
-        let len = self.string.find('=').expect("no value attribute");
-        &self.string[..len]
-    }
+    //
+    // pub fn name_str(&self) -> &str {
+    //     let len = self.string.find('=').expect("no value attribute");
+    //     &self.string[..len]
+    // }
 
     pub fn value(&self) -> Str {
         let len = self
