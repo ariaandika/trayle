@@ -49,6 +49,8 @@ fn main() {
     parse_protocol(&mut parser, &mut output);
 
     while parse_interface(&mut parser, &mut output) { }
+
+    element::Protocol::generate_trailer(&mut output);
 }
 
 fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
@@ -155,8 +157,8 @@ fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
 }
 
 struct InterfaceOpCode {
-    request: u32,
-    event: u32,
+    request: u16,
+    event: u16,
 }
 
 impl InterfaceOpCode {
@@ -164,13 +166,13 @@ impl InterfaceOpCode {
         Self { request: 0, event: 0 }
     }
 
-    fn request(&mut self) -> u32 {
+    fn request(&mut self) -> u16 {
         let r = self.request;
         self.request += 1;
         r
     }
 
-    fn event(&mut self) -> u32 {
+    fn event(&mut self) -> u16 {
         let e = self.event;
         self.event += 1;
         e
