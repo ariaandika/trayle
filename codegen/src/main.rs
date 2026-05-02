@@ -1,13 +1,11 @@
 use std::env::args;
 use std::fs::File;
-use std::task::Poll::{self, *};
-use std::task::ready;
 
 use crate::buffer::FileBuffer;
 use crate::parser::Parser;
 
-mod parser;
 mod buffer;
+mod parser;
 mod element;
 mod codegen;
 
@@ -24,14 +22,6 @@ mod codegen;
 // <!ATTLIST element-name attribute-name attribute-type attribute-value>
 // attribute are NOT in order, in `enum dnd_action`, `bitfield` appear before `since`
 // #IMPLIED is optional
-
-macro_rules! advance_buffer {
-    ($parser:ident, $bytes:ident, $buffer:ident) => {
-        let last = $parser.as_bytes().first().expect("what are the odds");
-        let len = $bytes.element_offset(last).unwrap();
-        $buffer.advance(len);
-    };
-}
 
 fn main() {
     let Some(path) = args().nth(1) else {
@@ -50,48 +40,39 @@ fn main() {
         std::process::exit(1);
     };
 
-    let mut buffer = FileBuffer::new(File::open(path).unwrap());
+    let mut file_buffer = FileBuffer::new(File::open(path).unwrap());
+    file_buffer.read();
+
+    let mut parser = Parser::new(file_buffer);
     let mut output = std::io::stdout().lock();
 
-    loop {
-        buffer.read();
-        if parse_protocol(&mut buffer, &mut output).is_ready() {
-            break
-        }
-    }
+    parse_protocol(&mut parser, &mut output);
 
-    loop {
-        let Ready(ok) = parse_interface(&mut buffer, &mut output) else {
-            buffer.read();
-            continue;
-        };
-        if !ok {
-            break;
-        }
-    }
+    while parse_interface(&mut parser, &mut output) { }
 }
 
-fn parse_protocol(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<()> {
-    let bytes = buffer.as_bytes();
-    let mut parser = Parser::new(bytes);
+fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
+    // let bytes = buffer.as_bytes();
+    // let mut parser = Parser::new(bytes);
 
-    ready!(parser.assert_prolog("<?xml version=\"1.0\" encoding=\"UTF-8\"?>"));
+    parser.assert_prolog("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 
     // <!ELEMENT protocol (copyright?, description?, interface+)>
-    let (tag, _) = ready!(parser.next_tag("protocol"));
+    let (tag, _) = parser.next_tag("protocol");
     let name = tag.attrs().next("name").value();
 
     // copyright?
-    let copyright = if let Some((_, content)) = ready!(parser.next_tag_if("copyright")) {
-        let (tag, _) = ready!(parser.next_tag("copyright"));
+    let copyright = if let Some((_, mut content)) = parser.next_tag_if("copyright") {
+        let (tag, _) = parser.next_tag("copyright");
         assert!(tag.is_closing());
-        Some(Bytes::new(content.trim_ascii()))
+        content.trim_ascii();
+        Some(content)
     } else {
         None
     };
 
     // description?
-    let description = ready!(parse_description(&mut parser));
+    let description = parse_description(parser);
 
     element::Protocol {
         name,
@@ -99,52 +80,51 @@ fn parse_protocol(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<()> 
         description,
     }.generate_header(output);
 
-    advance_buffer!(parser, bytes, buffer);
-    Ready(())
+    // advance_buffer!(parser, bytes, buffer);
 }
 
-fn parse_description(parser: &mut Parser) -> Poll<Option<element::Description>> {
+fn parse_description(parser: &mut Parser) -> Option<element::Description> {
     // <!ELEMENT description (#PCDATA)>
     //   <!ATTLIST description summary CDATA #REQUIRED>
-    if let Some((tag, content)) = ready!(parser.next_tag_if("description")) {
+    if let Some((tag, content)) = parser.next_tag_if("description") {
         let is_self_close = tag.is_self_close();
         let summary = tag.attrs().next("summary").value();
         // some description is self closing tag
         if !is_self_close {
-            let (tag, _) = ready!(parser.next_tag("description"));
+            let (tag, _) = parser.next_tag("description");
             assert!(tag.is_closing());
         }
-        Ready(Some(element::Description { summary, content }))
+        Some(element::Description { summary, content })
     } else {
-        Ready(None)
+        None
     }
 }
 
-fn parse_interface(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<bool> {
-    let bytes = buffer.as_bytes();
-    let mut parser = Parser::new(bytes);
+fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
+    // let bytes = buffer.as_bytes();
+    // let mut parser = Parser::new(bytes);
 
     // <!ELEMENT interface (description?,(request|event|enum)+)>
     //   <!ATTLIST interface name CDATA #REQUIRED>
     //   <!ATTLIST interface version CDATA #REQUIRED>
     //   <!ATTLIST interface frozen CDATA #IMPLIED>
-    let Some((tag, _)) = ready!(parser.next_tag_if("interface")) else {
-        return Ready(false);
+    let Some((tag, _)) = parser.next_tag_if("interface") else {
+        return false;
     };
     let mut attrs = tag.attrs();
     let name = attrs.next("name").value();
-    let version = atou(attrs.next("version").value_slice());
+    let version = atou(attrs.next("version").value_str().as_bytes());
     let frozen = match attrs.next_if("frozen") {
         Some(attr) => {
-            assert_eq!(attr.value_slice(), b"true");
+            assert_eq!(attr.value_str(), "true");
             true
         }
         None => false,
     };
 
-    let description = if let Some((tag, content)) = ready!(parser.next_tag_if("description")) {
+    let description = if let Some((tag, content)) = parser.next_tag_if("description") {
         let summary = tag.attrs().next("summary").value();
-        let (tag, _) = ready!(parser.next_tag("description"));
+        let (tag, _) = parser.next_tag("description");
         assert!(tag.is_closing());
         Some(element::Description { summary, content })
     } else {
@@ -158,37 +138,20 @@ fn parse_interface(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<boo
         frozen,
     }
     .generate_header(output);
-    advance_buffer!(parser, bytes, buffer);
+    // advance_buffer!(parser, bytes, buffer);
 
     // ===== request/event =====
 
     let mut state = InterfaceOpCode::new();
-    loop {
-        let Ready(ok) = parse_operation(&mut state, buffer, output) else {
-            buffer.read();
-            continue;
-        };
-        if !ok {
-            break;
-        }
-    }
+    while parse_operation(&mut state, parser, output) { }
 
     // ===== end request/event =====
 
-    loop {
-        let bytes = buffer.as_bytes();
-        let mut parser = Parser::new(bytes);
-        let Ready((tag, _)) = parser.next_tag("interface") else {
-            buffer.read();
-            continue;
-        };
-        assert!(tag.is_closing());
-        advance_buffer!(parser, bytes, buffer);
-        break;
-    }
+    let (tag, _) = parser.next_tag("interface");
+    assert!(tag.is_closing());
     element::Interface::generate_trailer(output);
 
-    Ready(true)
+    true
 }
 
 struct InterfaceOpCode {
@@ -216,15 +179,15 @@ impl InterfaceOpCode {
 
 fn parse_operation(
     state: &mut InterfaceOpCode,
-    buffer: &mut FileBuffer,
+    parser: &mut Parser,
     output: &mut impl Write,
-) -> Poll<bool> {
-    if let Some(ok) = ready!(parse_enum(buffer, output)) {
-        return Ready(ok)
+) -> bool {
+    if let Some(ok) = parse_enum(parser, output) {
+        return ok
     }
 
-    let bytes = buffer.as_bytes();
-    let mut parser = Parser::new(bytes);
+    // let bytes = buffer.as_bytes();
+    // let mut parser = Parser::new(bytes);
 
     // <!ELEMENT request (description?,arg*)>
     // <!ELEMENT event (description?,arg*)>
@@ -232,14 +195,14 @@ fn parse_operation(
     //   <!ATTLIST _ type CDATA #IMPLIED>
     //   <!ATTLIST _ since CDATA #IMPLIED>
     //   <!ATTLIST _ deprecated-since CDATA #IMPLIED>
-    let Some((tag, _)) = ready!(parser.next_tag_if_in(&["request", "event"])) else {
-        return Ready(false);
+    let Some((tag, _)) = parser.next_tag_if_in(&["request", "event"]) else {
+        return false;
     };
 
-    let (kind, opcode) = match tag.name_slice() {
-        b"request" => (element::OpKind::Request, state.request()),
-        b"event" => (element::OpKind::Event, state.event()),
-        _ => unreachable!(),
+    let (kind, opcode) = match tag.name_str() {
+        "request" => (element::OpKind::Request, state.request()),
+        "event" => (element::OpKind::Event, state.event()),
+        tag => unreachable!("unknown tag: {tag}"),
     };
     let mut attrs = tag.attrs();
     let name = attrs.next("name").value();
@@ -248,25 +211,25 @@ fn parse_operation(
     let mut deprecated_since = None;
 
     while let Some(attr) = attrs.next_if_in(&["type", "since", "deprecated-since"]) {
-        match attr.name_slice() {
-            b"type" => {
-                assert_eq!(attr.value_slice(), b"destructor");
+        match attr.name_str() {
+            "type" => {
+                assert_eq!(attr.value_str(), "destructor");
                 destructor = true;
             }
-            b"since" => {
-                since = Some(atou(attr.value_slice()));
+            "since" => {
+                since = Some(atou(attr.value_str().as_bytes()));
             }
-            b"deprecated-since" => {
-                deprecated_since = Some(atou(attr.value_slice()));
+            "deprecated-since" => {
+                deprecated_since = Some(atou(attr.value_str().as_bytes()));
             }
             _ => unreachable!(),
         }
     }
 
-    let description = ready!(parse_description(&mut parser));
+    let description = parse_description(parser);
     let mut args = vec![];
 
-    while let Some((tag, _)) = ready!(parser.next_tag_if("arg")) {
+    while let Some((tag, _)) = parser.next_tag_if("arg") {
         // <!ELEMENT arg (description?)>
         //   <!ATTLIST arg name CDATA #REQUIRED>
         //   <!ATTLIST arg type CDATA #REQUIRED>
@@ -276,34 +239,34 @@ fn parse_operation(
         //   <!ATTLIST arg enum CDATA #IMPLIED>
         let mut attrs = tag.attrs();
         let name = attrs.next("name").value();
-        let ty = element::Type::from_wl_type(attrs.next("type").value_slice());
+        let ty = element::Type::from_wl_type(attrs.next("type").value_str());
         let mut summary = None;
         let mut interface = None;
         let mut allow_null = false;
         let mut enum_name = None;
 
         while let Some(attr) = attrs.next_if_in(&["summary", "interface", "allow-null", "enum"]) {
-            match attr.name_slice() {
-                b"summary" => {
+            match attr.name_str() {
+                "summary" => {
                     summary = Some(attr.value());
                 }
-                b"interface" => {
+                "interface" => {
                     interface = Some(attr.value());
                 }
-                b"enum" => {
+                "enum" => {
                     enum_name = Some(attr.value());
                 }
-                b"allow-null" => {
-                    allow_null = match attr.value_slice() {
-                        b"true" => true,
-                        b"false" => false,
+                "allow-null" => {
+                    allow_null = match attr.value_str() {
+                        "true" => true,
+                        "false" => false,
                         _ => unreachable!(),
                     };
                 }
                 _ => unreachable!(),
             }
         }
-        let description = ready!(parse_description(&mut parser));
+        let description = parse_description(parser);
         args.push(element::Arg {
             name,
             ty,
@@ -315,7 +278,7 @@ fn parse_operation(
         });
     }
 
-    let (tag, _) = ready!(parser.next_tag(kind.as_str()));
+    let (tag, _) = parser.next_tag(kind.as_str());
     assert!(tag.is_closing());
 
     element::Op {
@@ -327,21 +290,19 @@ fn parse_operation(
         description,
         args,
     }.generate(opcode, output);
-    advance_buffer!(parser, bytes, buffer);
-    Ready(true)
+    // advance_buffer!(parser, bytes, buffer);
+    true
 }
 
-fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<bool>> {
-    let bytes = buffer.as_bytes();
-    let mut parser = Parser::new(bytes);
+fn parse_enum(parser: &mut Parser, output: &mut impl Write) -> Option<bool> {
+    // let bytes = buffer.as_bytes();
+    // let mut parser = Parser::new(bytes);
 
     // <!ELEMENT enum (description?,entry*)>
     //   <!ATTLIST enum name CDATA #REQUIRED>
     //   <!ATTLIST enum since CDATA #IMPLIED>
     //   <!ATTLIST enum bitfield CDATA #IMPLIED>
-    let Some((tag, _)) = ready!(parser.next_tag_if("enum")) else {
-        return Ready(None);
-    };
+    let (tag, _) = parser.next_tag_if("enum")?;
 
     let mut attrs = tag.attrs();
     let name = attrs.next("name").value();
@@ -349,14 +310,14 @@ fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<b
     let mut bitfield = false;
 
     while let Some(attr) = attrs.next_if_in(&["since", "bitfield"]) {
-        match attr.name_slice() {
-            b"since" => {
-                since = Some(atou(attr.value_slice()));
+        match attr.name_str() {
+            "since" => {
+                since = Some(atou(attr.value_str().as_bytes()));
             }
-            b"bitfield" => {
-                bitfield = match attr.value_slice() {
-                    b"true" => true,
-                    b"false" => false,
+            "bitfield" => {
+                bitfield = match attr.value_str() {
+                    "true" => true,
+                    "false" => false,
                     _ => unreachable!()
                 };
             }
@@ -364,10 +325,10 @@ fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<b
         }
     }
 
-    let description = ready!(parse_description(&mut parser));
+    let description = parse_description(parser);
     let mut entries = vec![];
 
-    while let Some((tag, _)) = ready!(parser.next_tag_if("entry")) {
+    while let Some((tag, _)) = parser.next_tag_if("entry") {
         // <!ELEMENT entry (description?)>
         //   <!ATTLIST entry name CDATA #REQUIRED>
         //   <!ATTLIST entry value CDATA #REQUIRED>
@@ -382,21 +343,21 @@ fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<b
         let mut deprecated_since = None;
 
         while let Some(attr) = attrs.next_if_in(&["summary", "interface", "allow-null", "enum"]) {
-            match attr.name_slice() {
-                b"summary" => {
+            match attr.name_str() {
+                "summary" => {
                     summary = Some(attr.value());
                 }
-                b"since" => {
-                    since = Some(atou(attr.value_slice()));
+                "since" => {
+                    since = Some(atou(attr.value_str().as_bytes()));
                 }
-                b"deprecated-since" => {
-                    deprecated_since = Some(atou(attr.value_slice()));
+                "deprecated-since" => {
+                    deprecated_since = Some(atou(attr.value_str().as_bytes()));
                 }
                 _ => unreachable!(),
             }
         }
 
-        let description = ready!(parse_description(&mut parser));
+        let description = parse_description(parser);
         entries.push(element::Entry {
             name,
             value,
@@ -407,7 +368,7 @@ fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<b
         });
     }
 
-    let (tag, _) = ready!(parser.next_tag("enum"));
+    let (tag, _) = parser.next_tag("enum");
     assert!(tag.is_closing());
 
     element::Enum {
@@ -417,8 +378,9 @@ fn parse_enum(buffer: &mut FileBuffer, output: &mut impl Write) -> Poll<Option<b
         bitfield,
         entries,
     }.generate(output);
-    advance_buffer!(parser, bytes, buffer);
-    Ready(Some(true))
+    // advance_buffer!(parser, bytes, buffer);
+    // Ready(Some(true))
+    Some(true)
 }
 
 // ===== Util =====
@@ -439,42 +401,5 @@ trait Write {
 impl<W: std::io::Write> Write for W {
     fn write_fmt(&mut self, args: std::fmt::Arguments<'_>) {
         std::io::Write::write_fmt(self, args).unwrap();
-    }
-}
-
-#[derive(Default)]
-struct Bytes {
-    inner: &'static [u8],
-}
-
-impl Bytes {
-    fn new(bytes: &[u8]) -> Self {
-        // SAFETY: lmao deez nutz
-        let inner = unsafe { std::mem::transmute::<&[u8], &[u8]>(bytes) };
-        Self { inner }
-    }
-
-    fn as_str(&self) -> &str {
-        unsafe { str::from_utf8_unchecked(self.inner) }
-    }
-}
-
-impl std::fmt::Display for Bytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
-    }
-}
-
-impl std::fmt::Debug for Bytes {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.as_str().fmt(f)
-    }
-}
-
-impl std::ops::Deref for Bytes {
-    type Target = [u8];
-
-    fn deref(&self) -> &Self::Target {
-        self.inner
     }
 }

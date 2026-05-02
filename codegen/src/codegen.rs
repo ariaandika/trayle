@@ -1,4 +1,5 @@
 use crate::Write;
+use crate::buffer::Str;
 use crate::element::*;
 
 const P1: &str = "    ";
@@ -70,7 +71,7 @@ impl Interface {
 struct OpContext<'a> {
     lifetime: &'static str,
     mod_name: &'a str,
-    struct_name: CamelCase<'a>,
+    struct_name: CamelCase,
 }
 
 impl Op {
@@ -87,10 +88,10 @@ impl Op {
         }
 
         let mod_name = match &*self.name {
-            b"move" => "r#move",
+            "move" => "r#move",
             _ => self.name.as_str(),
         };
-        let struct_name = camel_case(&self.name);
+        let struct_name = camel_case(self.name.clone());
         let lifetime = if Arg::need_lifetime(&self.args) { "<'a>" } else { "" };
 
         let cx = OpContext {
@@ -105,7 +106,7 @@ impl Op {
         self.generate_mod_header(opcode, &cx, o);
         self.generate_struct(&cx, o);
 
-        writeln!(o, "{P2}impl{lifetime} {struct_name}{lifetime} {{");
+        writeln!(o, "{P2}impl{lifetime} {}{lifetime} {{", cx.struct_name);
         self.generate_fn_size(o);
         self.generate_fn_copy_to(require_fd, o);
         self.generate_fn_copy_to_unchecked(require_fd, o);
@@ -116,15 +117,15 @@ impl Op {
 
     fn generate_empty_encodable(&self, opcode: u32, o: &mut impl Write) {
         let mod_name = match &*self.name {
-            b"move" => "r#move",
+            "move" => "r#move",
             _ => self.name.as_str(),
         };
-        let struct_name = camel_case(&self.name);
+        let struct_name = camel_case(self.name.clone());
         let full_name = format_args!("{mod_name}::{struct_name}");
         let cx = OpContext {
             lifetime: "",
             mod_name,
-            struct_name,
+            struct_name: struct_name.clone(),
         };
 
         writeln!(o);
@@ -421,7 +422,7 @@ impl Op {
 
 impl Enum {
     pub fn generate(&self, o: &mut impl Write) {
-        let name = camel_case(&self.name);
+        let name = camel_case(self.name.clone());
         let bitfield = self.bitfield;
         let entries = &self.entries;
 
@@ -432,7 +433,7 @@ impl Enum {
         writeln!(o, "{P1}/// bitfield: {bitfield}");
         writeln!(o, "{P1}pub enum {name} {{");
         for entry in entries {
-            let name = camel_case(&entry.name);
+            let name = camel_case(entry.name.clone());
             let value = &entry.value;
             if let Some(since) = entry.since {
                 writeln!(o, "{P2}/// since: {since}");
@@ -493,17 +494,17 @@ impl Arg {
 }
 
 impl Type {
-    pub fn from_wl_type(ty: &[u8]) -> Self {
+    pub fn from_wl_type(ty: &str) -> Self {
         match ty {
-            b"int" => Self::Int,
-            b"uint" => Self::Uint,
-            b"fixed" => Self::Fixed,
-            b"string" => Self::String,
-            b"array" => Self::Array,
-            b"fd" => Self::Fd,
-            b"new_id" => Self::NewId,
-            b"object" => Self::Object,
-            _ => panic!("unknown type: {:?}", str::from_utf8(ty)),
+            "int" => Self::Int,
+            "uint" => Self::Uint,
+            "fixed" => Self::Fixed,
+            "string" => Self::String,
+            "array" => Self::Array,
+            "fd" => Self::Fd,
+            "new_id" => Self::NewId,
+            "object" => Self::Object,
+            _ => panic!("unknown type: {ty}"),
         }
     }
 
@@ -530,16 +531,16 @@ impl OpKind {
     }
 }
 
-fn camel_case(bytes: &crate::Bytes) -> CamelCase<'_> {
-    CamelCase { name: bytes.as_str() }
+fn camel_case(name: Str) -> CamelCase {
+    CamelCase { name }
 }
 
-#[derive(Clone, Copy)]
-struct CamelCase<'a> {
-    name: &'a str,
+#[derive(Clone)]
+struct CamelCase {
+    name: Str,
 }
 
-impl<'a> std::fmt::Display for CamelCase<'a> {
+impl std::fmt::Display for CamelCase {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let mut chars = self.name.chars();
         let prefix = chars.next().expect("name should be non-empty");

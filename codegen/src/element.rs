@@ -1,21 +1,21 @@
 #![allow(unused)] // the structs are designed to mimic the definition
-use crate::Bytes;
+use crate::buffer::Str;
 
 pub struct Protocol {
-    pub name: Bytes,
-    pub copyright: Option<Bytes>,
+    pub name: Str,
+    pub copyright: Option<Str>,
     pub description: Option<Description>,
 }
 
 pub struct Description {
     /// in the `.dtd` file, summary is required
     /// but in the book, its optional
-    pub summary: Bytes,
-    pub content: Bytes,
+    pub summary: Str,
+    pub content: Str,
 }
 
 pub struct Interface {
-    pub name: Bytes,
+    pub name: Str,
     pub version: u32,
     pub frozen: bool,
     pub description: Option<Description>,
@@ -28,7 +28,7 @@ pub enum OpKind {
 
 pub struct Op {
     pub kind: OpKind,
-    pub name: Bytes,
+    pub name: Str,
     pub destructor: bool,
     pub since: Option<u32>,
     pub deprecated_since: Option<u32>,
@@ -48,17 +48,17 @@ pub enum Type {
 }
 
 pub struct Arg {
-    pub name: Bytes,
+    pub name: Str,
     pub ty: Type,
-    pub interface: Option<Bytes>,
+    pub interface: Option<Str>,
     pub allow_null: bool,
-    pub enum_name: Option<Bytes>,
-    pub summary: Option<Bytes>,
+    pub enum_name: Option<Str>,
+    pub summary: Option<Str>,
     pub description: Option<Description>,
 }
 
 pub struct Enum {
-    pub name: Bytes,
+    pub name: Str,
     pub since: Option<u32>,
     pub bitfield: bool,
     pub entries: Vec<Entry>,
@@ -66,10 +66,10 @@ pub struct Enum {
 }
 
 pub struct Entry {
-    pub name: Bytes,
-    pub value: Bytes,
+    pub name: Str,
+    pub value: Str,
     pub since: Option<u32>,
     pub deprecated_since: Option<u32>,
-    pub summary: Option<Bytes>,
+    pub summary: Option<Str>,
     pub description: Option<Description>,
 }
