@@ -24,8 +24,6 @@ fn main() {
     parse_protocol(&mut parser, &mut output);
 
     while parse_interface(&mut parser, &mut output) { }
-
-    element::Protocol::generate_trailer(&mut output);
 }
 
 fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
