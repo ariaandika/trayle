@@ -161,7 +161,13 @@ impl Op {
             if arg.is_implicit_new_id() {
                 write!(o, "encoded_{name}_size");
             } else if arg.allow_null {
-                write!(o, "match {name} {{\n{P4}Some(s) => roundup4(s.len() as u16 + 1),\n{P4}None => 0,\n{P3}}}")
+                write!(
+                    o,
+                    "match {name} {{\n\
+                    {P4}Some(s) => roundup4(s.len() as u16 + 1),\n\
+                    {P4}None => 0,\n\
+                    {P3}}}"
+                )
             } else {
                 write!(o, "roundup4({name}.len() as u16");
                 if matches!(arg.ty, Type::String) {
@@ -183,10 +189,9 @@ impl Op {
                 let name = &arg.name;
                 let rust_ty = arg.to_rust_type();
                 if arg.is_implicit_new_id() {
-                    write!(f, "encoded_{name}: &[u8]")?;
-                } else {
-                    write!(f, "{name}: {rust_ty}")?;
+                    write!(f, "encoded_{name}: &[u8], ")?;
                 }
+                write!(f, "{name}: {rust_ty}")?;
                 write!(f, ", ")?;
             }
             Ok(())
@@ -213,22 +218,17 @@ impl Op {
                             {P3}ptr.cast::<u32>().write(len as u32);\n\
                             {P3}ptr.add(4).copy_from_nonoverlapping({name}.as_ptr(), len as usize);"
                         )?;
-                        format_args!("{P4}ptr = ptr.add(4 + roundup4(len as usize));")
+                        format_args!("{P4}ptr = ptr.add((4 + roundup4(len)) as usize);")
                     },
                     Type::NewId => if arg.is_implicit_new_id() {
                         writeln!(
                             f,
-                            "{P3}let len = self.{name}_name_len;\n\
-                            {P3}ptr.cast::<u32>().write((len + 1) as u32);\n\
-                            {P3}ptr.add(4).copy_from_nonoverlapping(self.{name}_name_ptr, len as usize);\n\
-                            {P3}ptr.add((4 + len) as usize).write(0);\n\
-                            {P3}ptr = ptr.add((4 + roundup4(len + 1)) as usize);\n\
-                            {P3}ptr.cast::<u32>().write(self.{name}_version);\n\
-                            {P3}ptr.add(4).cast::<u32>().write(self.{name});"
+                            "{P3}ptr.copy_from_nonoverlapping(encoded_{name}.as_ptr(), encoded_{name}.len());\n\
+                            {P3}ptr.add(encoded_{name}.len()).cast::<u32>().write({name});"
                         )?;
-                        format_args!("{P3}ptr = ptr.add(12 + roundup4(len + 1) as usize);")
+                        format_args!("{P3}ptr = ptr.add(encoded_{name}.len() + 4);")
                     } else {
-                        writeln!(f, "{P3}ptr.cast::<u32>().write(self.{name});")?;
+                        writeln!(f, "{P3}ptr.cast::<u32>().write({name});")?;
                         format_args!("{P3}ptr = ptr.add(4);")
                     }
                     Type::String => {
@@ -258,10 +258,10 @@ impl Op {
                                 f,
                                 "{P3}let len = {name}.len() as u16;\n\
                                 {P3}ptr.cast::<u32>().write((len + 1) as u32);\n\
-                                {P3}ptr.add(4).copy_from_nonoverlapping(s.as_ptr(), len as usize);\n\
+                                {P3}ptr.add(4).copy_from_nonoverlapping({name}.as_ptr(), len as usize);\n\
                                 {P3}ptr.add((4 + len) as usize).write(0);"
                             )?;
-                            format_args!("{P3}ptr = ptr.add(4 + roundup4(len + 1) as usize);")
+                            format_args!("{P3}ptr = ptr.add((4 + roundup4(len + 1)) as usize);")
                         }
                     },
                 };
