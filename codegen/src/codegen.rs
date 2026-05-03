@@ -115,12 +115,12 @@ impl Op {
         let dtor_doc = or_empty!(self.destructor, ", type \"destructor\"");
         let since = or_empty!(
             self.since.is_some(),
-            "{P1}/// since: {}",
+            "{P1}/// since: {}\n",
             self.since.unwrap()
         );
         let dep_since = or_empty!(
             self.deprecated_since.is_some(),
-            "{P1}/// deprecated-since: {}",
+            "{P1}/// deprecated-since: {}\n",
             self.deprecated_since.unwrap()
         );
         write!(
