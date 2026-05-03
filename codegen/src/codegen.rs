@@ -70,10 +70,14 @@ impl Interface {
         let pad_len = roundup4(name_len) - name_len;
         let size = 4 + roundup4(name_len) + 4;
 
-        let name_len = fmt_u32_string(name.len() as u32 + 1);
+        let encoded_name_len = fmt_u32_string(name.len() as u32 + 1);
         let padding = &"\\0\\0\\0\\0"[..(pad_len * 2) as usize];
         let version = fmt_u32_string(version);
-        writeln!(o, "{P1}pub static NEW_ID: [u8; {size}] = *b\"{name_len}{name}\\0{padding}{version}\";");
+        writeln!(
+            o,
+            "{P1}pub static NEW_ID: [u8; {size}] = *b\"{encoded_name_len}{name}\\0{padding}{version}\";\n\
+            {P1}pub const NAME_LEN: u16 = {name_len};"
+        );
     }
 
     pub fn generate_trailer(o: &mut impl Write) {
@@ -148,7 +152,7 @@ impl Op {
                 write!(o, ", ");
             }
             if arg.is_implicit_new_id() {
-                write!(o, "encoded_{name}_size: u16");
+                write!(o, "{name}_name_len: u16");
             } else {
                 write!(o, "{name}: {rust_ty}");
             }
@@ -159,7 +163,7 @@ impl Op {
 
             write!(o, " + ");
             if arg.is_implicit_new_id() {
-                write!(o, "encoded_{name}_size");
+                write!(o, "{name}_name_len");
             } else if arg.allow_null {
                 write!(
                     o,
