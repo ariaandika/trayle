@@ -25,7 +25,7 @@ const P4: &str = "                ";
 const HEADERS: &str = "\
 #![allow(unused_imports)]
 #![allow(unsafe_op_in_unsafe_fn)]
-use std::num::NonZeroU32;
+use std::slice;
 
 const fn roundup4(value: u16) -> u16 {
     (value + 3) & (u16::MAX << 2)
@@ -88,6 +88,7 @@ impl Interface {
 struct OpContext<'a> {
     mod_name: ModName<'a>,
     fd_count: u32,
+    lifetime: bool,
     args: Args<'a>,
 }
 
@@ -97,11 +98,13 @@ impl Op {
         let cx = OpContext {
             mod_name: ModName::new(self.name.as_str()),
             fd_count: args.fd_count(),
+            lifetime: args.lifetime(),
             args,
         };
 
         writeln!(o);
         self.generate_mod_header(opcode, &cx, o);
+        self.generate_struct(&cx, o);
         self.generate_fn_size(&cx, o);
         self.generate_fn_encode(&cx, o);
         self.generate_mod_trailer(o);
@@ -146,7 +149,7 @@ impl Op {
         write!(o, "\n{P2}pub const fn size(");
         for (i, arg) in cx.args.dynamic_sizes().enumerate() {
             let name = &arg.name;
-            let rust_ty = arg.to_rust_type();
+            let rust_ty = arg.to_rust_type(false);
 
             if i != 0 {
                 write!(o, ", ");
@@ -191,7 +194,7 @@ impl Op {
         let arguments = std::fmt::from_fn(|f|{
             for arg in cx.args.encodables() {
                 let name = &arg.name;
-                let rust_ty = arg.to_rust_type();
+                let rust_ty = arg.to_rust_type(false);
                 if arg.is_implicit_new_id() {
                     write!(f, "encoded_{name}: &[u8], ")?;
                 }
@@ -206,7 +209,7 @@ impl Op {
                 let name = &arg.name;
                 let adv = match arg.ty {
                     Type::Int | Type::Uint | Type::Object => {
-                        let ty = arg.to_rust_type();
+                        let ty = arg.to_rust_type(false);
                         writeln!(f, "{P3}ptr.cast::<{ty}>().write({name});")?;
                         format_args!("{P3}ptr = ptr.add(4);")
                     },
@@ -273,7 +276,6 @@ impl Op {
                     writeln!(f, "{adv}")?;
                 }
             }
-
             Ok(())
         });
 
@@ -288,6 +290,35 @@ impl Op {
             {body}\
             {P2}}}\n\
             "
+        );
+    }
+
+    fn generate_struct(&self, cx: &OpContext, o: &mut impl Write) {
+        let struct_name = CamelCase(&self.name);
+        let lifetime = or_empty!(cx.lifetime, "<'a>");
+        let fields = std::fmt::from_fn(|f|{
+            for arg in cx.args.encodables() {
+                let name = &arg.name;
+                let rust_ty = arg.to_rust_type(true);
+                if arg.is_implicit_new_id() {
+                    write!(
+                        f,
+                        "\
+                        {P3}pub {name}_name: &'a str,\n\
+                        {P3}pub {name}_version: u32,\n\
+                        "
+                    )?;
+                }
+                writeln!(f, "{P3}pub {name}: {rust_ty},")?;
+            }
+            Ok(())
+        });
+        write!(
+            o,
+            "\n\
+            {P2}pub struct {struct_name}{lifetime} {{\n\
+            {fields}\
+            {P2}}}\n"
         );
     }
 }
@@ -324,6 +355,10 @@ struct Args<'a>(&'a [Arg]);
 impl Args<'_> {
     fn fd_count(&self) -> u32 {
         self.0.iter().map(|e| e.is_fd() as u32).sum()
+    }
+
+    fn lifetime(&self) -> bool {
+        self.0.iter().any(|e| e.is_dynamic_size() || e.is_implicit_new_id())
     }
 
     /// non fd arguments
@@ -383,24 +418,36 @@ impl Arg {
         matches!(self.ty, Type::String | Type::Array)
     }
 
-    fn to_rust_type(&self) -> &'static str {
+    fn to_rust_type(&self, is_lifetime: bool) -> &'static str {
         match self.ty {
             Type::Int => "i32",
             Type::Uint => "u32",
             Type::Fixed => "f32",
-            Type::String => if self.allow_null {
-                "Option<&str>"
-            } else {
-                "&str"
-            },
-            Type::Array => "&[u8]",
+            Type::String => {
+                if self.allow_null {
+                    if is_lifetime {
+                        "Option<&'a str>"
+                    } else {
+                        "Option<&str>"
+                    }
+                } else {
+                    if is_lifetime {
+                        "&'a str"
+                    } else {
+                        "&str"
+                    }
+                }
+            }
+            Type::Array => {
+                if is_lifetime {
+                    "&'a [u8]"
+                } else {
+                    "&[u8]"
+                }
+            }
             Type::Fd => "RawFd",
             Type::NewId => "u32",
-            Type::Object => if self.allow_null {
-                "u32"
-            } else {
-                "NonZeroU32"
-            },
+            Type::Object => "u32",
         }
     }
 }
