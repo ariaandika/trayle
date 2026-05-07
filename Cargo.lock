@@ -26,6 +26,10 @@ source = "git+https://github.com/ariaandika/tcio#679732ac2d8438b1a077f684ed2b66e
 [[package]]
 name = "todex"
 version = "0.1.0"
+dependencies = [
+ "libc",
+ "tcio",
+]
 
 [[package]]
 name = "torio"
@@ -34,4 +38,5 @@ dependencies = [
  "anyhow",
  "libc",
  "tcio",
+ "todex",
 ]

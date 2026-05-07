@@ -33,6 +33,10 @@ impl Id {
         Self(id)
     }
 
+    pub const fn wl_display() -> Id {
+        Id(NonZeroU32::new(1).unwrap())
+    }
+
     /// Returns ID as `u32`.
     #[inline]
     pub const fn as_u32(&self) -> u32 {

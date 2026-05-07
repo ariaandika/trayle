@@ -50,10 +50,52 @@ pub trait DecodePayload<'a>: Sized {
     unsafe fn decode_raw(msg: *const u8) -> Result<Self, DecodeError>;
 }
 
-pub struct Message<P> {
-    pub object_id: Id,
-    pub opcode: u16,
-    pub payload: P,
+pub struct Message(*const u8);
+
+impl Message {
+    pub(crate) fn new(ptr: *const u8) -> Self {
+        Self(ptr)
+    }
+
+    pub fn object_id(&self) -> u32 {
+        unsafe { *self.0.cast::<u32>() }
+    }
+
+    pub fn opcode(&self) -> u16 {
+        unsafe { *self.0.add(4).cast::<u16>() }
+    }
+
+    pub fn len(&self) -> u16 {
+        unsafe { *self.0.add(6).cast::<u16>() }
+    }
+
+    pub fn payload(&self) -> &[u8] {
+        unsafe { std::slice::from_raw_parts(self.0.add(8), (self.len() - 8) as usize) }
+    }
+
+    pub fn as_ptr(&self) -> *const u8 {
+        self.0
+    }
+}
+
+pub struct MessageHeader([u8; 8]);
+
+impl MessageHeader {
+    pub(crate) fn new(header: [u8; 8]) -> Self {
+        Self(header)
+    }
+
+    pub fn object_id(&self) -> u32 {
+        u32::from_ne_bytes(*self.0.first_chunk().unwrap())
+    }
+
+    pub fn opcode(&self) -> u16 {
+        u16::from_ne_bytes(*self.0[4..6].first_chunk().unwrap())
+    }
+
+    pub fn len(&self) -> u16 {
+        u16::from_ne_bytes(*self.0.last_chunk().unwrap())
+    }
 }
 
 pub fn encode_message<P: EncodePayload, W: Writer>(object_id: u32, payload: &P, writer: &mut W) {

@@ -4,10 +4,12 @@
 
 mod primitive;
 
-pub mod message;
+pub mod conn;
 pub mod error;
 
-mod wayland;
+pub mod message;
+#[allow(warnings)]
+pub mod wayland;
 
 // ===== reexports =====
 

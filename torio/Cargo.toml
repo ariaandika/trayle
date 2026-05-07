@@ -7,3 +7,4 @@ edition = "2024"
 anyhow = "1.0.100"
 libc = "0.2.177"
 tcio = { git = "https://github.com/ariaandika/tcio", version = "0.1.4" }
+todex = { path = "../todex" }

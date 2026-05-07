@@ -6,8 +6,13 @@ use std::task::Poll;
 use std::{env, io, ptr};
 use tcio::bytes::{Buf, BytesMut};
 
-use crate::objects::{Fixed, Header, Message, ReadBuffer, Request, WriteBuffer};
-use crate::roundup_4;
+use crate::Id;
+use crate::error::BoxError;
+use crate::message::{EncodePayload, Message, MessageHeader};
+use crate::wayland::wl_display;
+
+// use crate::objects::{Fixed, Header, Message, ReadBuffer, Request, WriteBuffer};
+// use crate::roundup_4;
 
 #[derive(Debug)]
 pub struct WaylandSocket {
@@ -19,83 +24,8 @@ pub struct WaylandSocket {
     recv_fds: VecDeque<RawFd>,
 }
 
-impl WriteBuffer for WaylandSocket {
-    fn put_int(&mut self, int: i32) {
-        self.write_buffer.extend_from_slice(&int.to_ne_bytes());
-    }
-
-    fn put_uint(&mut self, uint: u32) {
-        self.write_buffer.extend_from_slice(&uint.to_ne_bytes());
-    }
-
-    fn put_fixed(&mut self, fixed: Fixed) {
-        self.put_int(fixed.to_raw());
-    }
-
-    fn put_string(&mut self, string: &str) {
-        self.write_buffer.reserve(string.len() + 5);
-        self.write_buffer.extend_from_slice(&roundup_4!(string.len() + 1).to_ne_bytes());
-        self.write_buffer.extend_from_slice(string.as_bytes());
-        self.write_buffer.extend_from_slice(b"\0");
-    }
-
-    fn put_new_id(&mut self, interface: &str, version: u32, new_id: u32) {
-        self.put_string(interface);
-        self.put_uint(version);
-        self.put_uint(new_id);
-    }
-
-    fn put_array<T>(&mut self, _array: &[T]) {
-        todo!()
-    }
-
-    fn put_fd<Fd: AsFd>(&mut self, fd: Fd) {
-        self.send_fds.push(fd.as_fd().as_raw_fd());
-    }
-}
-
-impl ReadBuffer for WaylandSocket {
-    fn get_int(&mut self) -> i32 {
-        let b = *self.read_buffer.first_chunk::<4>().unwrap();
-        self.read_buffer.advance(4);
-        i32::from_ne_bytes(b)
-    }
-
-    fn get_uint(&mut self) -> u32 {
-        let b = *self.read_buffer.first_chunk::<4>().unwrap();
-        self.read_buffer.advance(4);
-        u32::from_ne_bytes(b)
-    }
-
-    fn get_fixed(&mut self) -> Fixed {
-        let b = *self.read_buffer.first_chunk::<4>().unwrap();
-        self.read_buffer.advance(4);
-        Fixed::from_int(i32::from_ne_bytes(b))
-    }
-
-    fn get_string(&mut self) -> String {
-        let b = &mut self.read_buffer;
-        let len = u32::from_ne_bytes(*b.first_chunk::<4>().unwrap()) as usize;
-        let string = String::from_utf8(b[4..4 + len - 1].to_vec()).unwrap();
-        b.advance(4 + len);
-        string
-    }
-
-    fn get_new_id(&mut self) -> (String, u32, u32) {
-        (self.get_string(), self.get_uint(), self.get_uint())
-    }
-
-    fn get_array<T>(&mut self) -> Vec<T> {
-        todo!()
-    }
-
-    fn get_fd(&mut self) -> RawFd {
-        self.recv_fds.pop_front().unwrap()
-    }
-}
-
 impl WaylandSocket {
-    pub fn connect_default() -> anyhow::Result<Self> {
+    pub fn connect_default() -> Result<Self, BoxError> {
         let xdg_runtime_dir = env::var("XDG_RUNTIME_DIR").unwrap_or_else(|_| "wayland-0".into());
         let wayland_display = env::var("WAYLAND_DISPLAY")?;
 
@@ -112,23 +42,22 @@ impl WaylandSocket {
         })
     }
 
-    pub fn send_request<R: Request>(&mut self, request: R) -> io::Result<()> {
-        let offset = u16::try_from(self.write_buffer.len()).unwrap();
-
-        self.write_buffer.extend_from_slice(&request.object_id().to_ne_bytes());
-        self.write_buffer.extend_from_slice(&R::OP_CODE.to_ne_bytes());
-
-        // spare 2 bytes for later write
-        self.write_buffer.extend_from_slice(&0u16.to_ne_bytes());
-
-        request.write_body(self);
-        let len = u16::try_from(self.write_buffer.len()).unwrap().strict_sub(offset);
-        self.write_buffer[6..8].copy_from_slice(&len.to_ne_bytes());
-
-        Ok(())
+    /// Request are buffered.
+    pub fn send_request<P: EncodePayload>(&mut self, object_id: Id, request: P) {
+        let payload_size = request.encoded_size();
+        let msg_size = 8 + payload_size;
+        self.write_buffer.reserve(msg_size as usize);
+        let ptr = self.write_buffer.spare_capacity_mut().as_mut_ptr().cast::<u8>();
+        unsafe {
+            ptr.cast::<u32>().write(object_id.as_u32());
+            ptr.add(4).cast::<u16>().write(P::OPCODE);
+            ptr.add(6).cast::<u16>().write(msg_size);
+            request.encode_raw(ptr.add(8));
+            self.write_buffer.set_len(self.write_buffer.len() + msg_size as usize);
+        }
     }
 
-    pub fn flush(&mut self) -> anyhow::Result<()> {
+    pub fn flush(&mut self) -> Result<(), BoxError> {
         // self.io.write_all(&self.write_buffer)?;
         sendmsg(
             self.io.as_raw_fd(),
@@ -143,7 +72,7 @@ impl WaylandSocket {
         Ok(())
     }
 
-    pub fn poll_message(&mut self) -> anyhow::Result<Option<Message>> {
+    pub fn poll_message(&mut self) -> Result<Option<Message>, BoxError> {
         if self.read_buffer.is_empty() {
             let read = self.read_io()?;
             if read == 0 {
@@ -168,16 +97,16 @@ impl WaylandSocket {
             return Poll::Pending;
         };
 
-        let len = Header::len_of(header);
+        let header = Message::new(header.as_ptr());
 
-        if self.read_buffer.len() < len {
+        if self.read_buffer.len() < header.len() as usize {
             return Poll::Pending;
         }
-
-        Poll::Ready(Message::new(self.read_buffer.split_to(len)))
+        self.read_buffer.advance(header.len() as usize);
+        Poll::Ready(header)
     }
 
-    fn read_io(&mut self) -> anyhow::Result<usize> {
+    fn read_io(&mut self) -> Result<usize, BoxError> {
         if self.read_buffer.capacity() == self.read_buffer.len() {
             self.read_buffer.reserve(64);
         }
@@ -186,9 +115,7 @@ impl WaylandSocket {
             std::slice::from_raw_parts_mut(spare.as_mut_ptr().cast::<u8>(), spare.len())
         };
         let read = self.io.read(spare)?;
-        unsafe {
-            self.read_buffer.set_len(self.read_buffer.len() + read);
-        }
+        unsafe { self.read_buffer.set_len(self.read_buffer.len() + read) };
         Ok(read)
     }
 }
@@ -200,7 +127,6 @@ fn sendmsg(socket_fd: RawFd, buffer: &mut Vec<u8>, msg: &[u8], fds: &[RawFd]) ->
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
 
-
     let (buf_ptr, buf_len) = if fds.is_empty() {
         (std::ptr::null_mut(), 0)
     } else {
@@ -209,6 +135,7 @@ fn sendmsg(socket_fd: RawFd, buffer: &mut Vec<u8>, msg: &[u8], fds: &[RawFd]) ->
         (buffer.spare_capacity_mut().as_mut_ptr().cast(), cmsg_size as usize)
     };
 
+    println!("{msg:?}");
     let mut iov = iovec {
         iov_base: msg.as_ptr() as *mut c_void,
         iov_len: msg.len(),
@@ -244,3 +171,4 @@ fn sendmsg(socket_fd: RawFd, buffer: &mut Vec<u8>, msg: &[u8], fds: &[RawFd]) ->
         }
     }
 }
+

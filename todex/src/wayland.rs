@@ -51,6 +51,7 @@ pub mod wl_display {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Sync {
             pub callback: u32,
         }
@@ -84,6 +85,7 @@ pub mod wl_display {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GetRegistry {
             pub registry: u32,
         }
@@ -116,6 +118,7 @@ pub mod wl_display {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Error<'a> {
             pub object_id: u32,
             pub code: u32,
@@ -186,6 +189,7 @@ pub mod wl_display {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct DeleteId {
             pub id: u32,
         }
@@ -227,6 +231,7 @@ pub mod wl_registry {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Bind<'a> {
             pub name: u32,
             pub id_name: &'a str,
@@ -290,6 +295,7 @@ pub mod wl_registry {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Global<'a> {
             pub name: u32,
             pub interface: &'a str,
@@ -352,6 +358,7 @@ pub mod wl_registry {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GlobalRemove {
             pub name: u32,
         }
@@ -394,6 +401,7 @@ pub mod wl_callback {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Done {
             pub callback_data: u32,
         }
@@ -436,6 +444,7 @@ pub mod wl_compositor {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct CreateSurface {
             pub id: u32,
         }
@@ -469,6 +478,7 @@ pub mod wl_compositor {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct CreateRegion {
             pub id: u32,
         }
@@ -502,6 +512,7 @@ pub mod wl_compositor {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -541,6 +552,7 @@ pub mod wl_shm_pool {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 24;
 
+        #[derive(Debug)]
         pub struct CreateBuffer {
             pub id: u32,
             pub offset: i32,
@@ -599,6 +611,7 @@ pub mod wl_shm_pool {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -629,6 +642,7 @@ pub mod wl_shm_pool {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Resize {
             pub size: i32,
         }
@@ -825,6 +839,7 @@ pub mod wl_shm {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct CreatePool {
             pub id: u32,
             pub size: i32,
@@ -863,6 +878,7 @@ pub mod wl_shm {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Format {
             pub format: u32,
         }
@@ -896,6 +912,7 @@ pub mod wl_shm {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -935,6 +952,7 @@ pub mod wl_buffer {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -965,6 +983,7 @@ pub mod wl_buffer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -1011,6 +1030,7 @@ pub mod wl_data_offer {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Accept<'a> {
             pub serial: u32,
             pub mime_type: Option<&'a str>,
@@ -1079,6 +1099,7 @@ pub mod wl_data_offer {
         pub const OPCODE: u16 = 1;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Receive<'a> {
             pub mime_type: &'a str,
         }
@@ -1131,6 +1152,7 @@ pub mod wl_data_offer {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -1160,6 +1182,7 @@ pub mod wl_data_offer {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Offer<'a> {
             pub mime_type: &'a str,
         }
@@ -1212,6 +1235,7 @@ pub mod wl_data_offer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Finish {
         }
 
@@ -1242,6 +1266,7 @@ pub mod wl_data_offer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct SetActions {
             pub dnd_actions: u32,
             pub preferred_action: u32,
@@ -1280,6 +1305,7 @@ pub mod wl_data_offer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SourceActions {
             pub source_actions: u32,
         }
@@ -1313,6 +1339,7 @@ pub mod wl_data_offer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Action {
             pub dnd_action: u32,
         }
@@ -1360,6 +1387,7 @@ pub mod wl_data_source {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Offer<'a> {
             pub mime_type: &'a str,
         }
@@ -1412,6 +1440,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -1441,6 +1470,7 @@ pub mod wl_data_source {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Target<'a> {
             pub mime_type: Option<&'a str>,
         }
@@ -1504,6 +1534,7 @@ pub mod wl_data_source {
         pub const OPCODE: u16 = 1;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Send<'a> {
             pub mime_type: &'a str,
         }
@@ -1556,6 +1587,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Cancelled {
         }
 
@@ -1586,6 +1618,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetActions {
             pub dnd_actions: u32,
         }
@@ -1619,6 +1652,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct DndDropPerformed {
         }
 
@@ -1649,6 +1683,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct DndFinished {
         }
 
@@ -1679,6 +1714,7 @@ pub mod wl_data_source {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Action {
             pub dnd_action: u32,
         }
@@ -1727,6 +1763,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct StartDrag {
             pub source: u32,
             pub origin: u32,
@@ -1775,6 +1812,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct SetSelection {
             pub source: u32,
             pub serial: u32,
@@ -1813,6 +1851,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct DataOffer {
             pub id: u32,
         }
@@ -1846,6 +1885,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 20;
 
+        #[derive(Debug)]
         pub struct Enter {
             pub serial: u32,
             pub surface: u32,
@@ -1899,6 +1939,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Leave {
         }
 
@@ -1929,6 +1970,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Motion {
             pub time: u32,
             pub x: f32,
@@ -1972,6 +2014,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Drop {
         }
 
@@ -2002,6 +2045,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Selection {
             pub id: u32,
         }
@@ -2035,6 +2079,7 @@ pub mod wl_data_device {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -2074,6 +2119,7 @@ pub mod wl_data_device_manager {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct CreateDataSource {
             pub id: u32,
         }
@@ -2107,6 +2153,7 @@ pub mod wl_data_device_manager {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct GetDataDevice {
             pub id: u32,
             pub seat: u32,
@@ -2154,6 +2201,7 @@ pub mod wl_data_device_manager {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -2198,6 +2246,7 @@ pub mod wl_shell {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct GetShellSurface {
             pub id: u32,
             pub surface: u32,
@@ -2245,6 +2294,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Pong {
             pub serial: u32,
         }
@@ -2278,6 +2328,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Move {
             pub seat: u32,
             pub serial: u32,
@@ -2329,6 +2380,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Resize {
             pub seat: u32,
             pub serial: u32,
@@ -2372,6 +2424,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct SetToplevel {
         }
 
@@ -2407,6 +2460,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct SetTransient {
             pub parent: u32,
             pub x: i32,
@@ -2463,6 +2517,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct SetFullscreen {
             pub method: u32,
             pub framerate: u32,
@@ -2506,6 +2561,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 24;
 
+        #[derive(Debug)]
         pub struct SetPopup {
             pub seat: u32,
             pub serial: u32,
@@ -2564,6 +2620,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetMaximized {
             pub output: u32,
         }
@@ -2596,6 +2653,7 @@ pub mod wl_shell_surface {
         pub const OPCODE: u16 = 8;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct SetTitle<'a> {
             pub title: &'a str,
         }
@@ -2647,6 +2705,7 @@ pub mod wl_shell_surface {
         pub const OPCODE: u16 = 9;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct SetClass<'a> {
             pub class_: &'a str,
         }
@@ -2699,6 +2758,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Ping {
             pub serial: u32,
         }
@@ -2732,6 +2792,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Configure {
             pub edges: u32,
             pub width: i32,
@@ -2775,6 +2836,7 @@ pub mod wl_shell_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct PopupDone {
         }
 
@@ -2824,6 +2886,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -2854,6 +2917,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Attach {
             pub buffer: u32,
             pub x: i32,
@@ -2897,6 +2961,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Damage {
             pub x: i32,
             pub y: i32,
@@ -2945,6 +3010,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Frame {
             pub callback: u32,
         }
@@ -2978,6 +3044,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetOpaqueRegion {
             pub region: u32,
         }
@@ -3011,6 +3078,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetInputRegion {
             pub region: u32,
         }
@@ -3044,6 +3112,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Commit {
         }
 
@@ -3074,6 +3143,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Enter {
             pub output: u32,
         }
@@ -3107,6 +3177,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Leave {
             pub output: u32,
         }
@@ -3140,6 +3211,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetBufferTransform {
             pub transform: i32,
         }
@@ -3173,6 +3245,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct SetBufferScale {
             pub scale: i32,
         }
@@ -3206,6 +3279,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct DamageBuffer {
             pub x: i32,
             pub y: i32,
@@ -3254,6 +3328,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Offset {
             pub x: i32,
             pub y: i32,
@@ -3292,6 +3367,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct PreferredBufferScale {
             pub factor: i32,
         }
@@ -3325,6 +3401,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct PreferredBufferTransform {
             pub transform: u32,
         }
@@ -3358,6 +3435,7 @@ pub mod wl_surface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GetRelease {
             pub callback: u32,
         }
@@ -3412,6 +3490,7 @@ pub mod wl_seat {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Capabilities {
             pub capabilities: u32,
         }
@@ -3445,6 +3524,7 @@ pub mod wl_seat {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GetPointer {
             pub id: u32,
         }
@@ -3478,6 +3558,7 @@ pub mod wl_seat {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GetKeyboard {
             pub id: u32,
         }
@@ -3511,6 +3592,7 @@ pub mod wl_seat {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct GetTouch {
             pub id: u32,
         }
@@ -3543,6 +3625,7 @@ pub mod wl_seat {
         pub const OPCODE: u16 = 1;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Name<'a> {
             pub name: &'a str,
         }
@@ -3595,6 +3678,7 @@ pub mod wl_seat {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -3639,6 +3723,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct SetCursor {
             pub serial: u32,
             pub surface: u32,
@@ -3687,6 +3772,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Enter {
             pub serial: u32,
             pub surface: u32,
@@ -3735,6 +3821,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Leave {
             pub serial: u32,
             pub surface: u32,
@@ -3773,6 +3860,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Motion {
             pub time: u32,
             pub surface_x: f32,
@@ -3822,6 +3910,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Button {
             pub serial: u32,
             pub time: u32,
@@ -3876,6 +3965,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Axis {
             pub time: u32,
             pub axis: u32,
@@ -3919,6 +4009,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -3949,6 +4040,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Frame {
         }
 
@@ -3988,6 +4080,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct AxisSource {
             pub axis_source: u32,
         }
@@ -4021,6 +4114,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct AxisStop {
             pub time: u32,
             pub axis: u32,
@@ -4059,6 +4153,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct AxisDiscrete {
             pub axis: u32,
             pub discrete: i32,
@@ -4097,6 +4192,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct AxisValue120 {
             pub axis: u32,
             pub value120: i32,
@@ -4141,6 +4237,7 @@ pub mod wl_pointer {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct AxisRelativeDirection {
             pub axis: u32,
             pub direction: u32,
@@ -4194,6 +4291,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Keymap {
             pub format: u32,
             pub size: u32,
@@ -4231,6 +4329,7 @@ pub mod wl_keyboard {
         pub const OPCODE: u16 = 1;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Enter<'a> {
             pub serial: u32,
             pub surface: u32,
@@ -4287,6 +4386,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Leave {
             pub serial: u32,
             pub surface: u32,
@@ -4333,6 +4433,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Key {
             pub serial: u32,
             pub time: u32,
@@ -4381,6 +4482,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 20;
 
+        #[derive(Debug)]
         pub struct Modifiers {
             pub serial: u32,
             pub mods_depressed: u32,
@@ -4434,6 +4536,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -4464,6 +4567,7 @@ pub mod wl_keyboard {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct RepeatInfo {
             pub rate: i32,
             pub delay: i32,
@@ -4511,6 +4615,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 24;
 
+        #[derive(Debug)]
         pub struct Down {
             pub serial: u32,
             pub time: u32,
@@ -4569,6 +4674,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Up {
             pub serial: u32,
             pub time: u32,
@@ -4612,6 +4718,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Motion {
             pub time: u32,
             pub id: i32,
@@ -4660,6 +4767,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Frame {
         }
 
@@ -4690,6 +4798,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Cancel {
         }
 
@@ -4720,6 +4829,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -4750,6 +4860,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct Shape {
             pub id: i32,
             pub major: f32,
@@ -4793,6 +4904,7 @@ pub mod wl_touch {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct Orientation {
             pub id: i32,
             pub orientation: f32,
@@ -4861,6 +4973,7 @@ pub mod wl_output {
         pub const OPCODE: u16 = 0;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Geometry<'a> {
             pub x: i32,
             pub y: i32,
@@ -4972,6 +5085,7 @@ pub mod wl_output {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Mode {
             pub flags: u32,
             pub width: i32,
@@ -5020,6 +5134,7 @@ pub mod wl_output {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Done {
         }
 
@@ -5050,6 +5165,7 @@ pub mod wl_output {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct Scale {
             pub factor: i32,
         }
@@ -5083,6 +5199,7 @@ pub mod wl_output {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Release {
         }
 
@@ -5112,6 +5229,7 @@ pub mod wl_output {
         pub const OPCODE: u16 = 4;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Name<'a> {
             pub name: &'a str,
         }
@@ -5163,6 +5281,7 @@ pub mod wl_output {
         pub const OPCODE: u16 = 5;
         pub const IS_DESTRUCTOR: bool = false;
 
+        #[derive(Debug)]
         pub struct Description<'a> {
             pub description: &'a str,
         }
@@ -5224,6 +5343,7 @@ pub mod wl_region {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -5254,6 +5374,7 @@ pub mod wl_region {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Add {
             pub x: i32,
             pub y: i32,
@@ -5302,6 +5423,7 @@ pub mod wl_region {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 16;
 
+        #[derive(Debug)]
         pub struct Subtract {
             pub x: i32,
             pub y: i32,
@@ -5359,6 +5481,7 @@ pub mod wl_subcompositor {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -5395,6 +5518,7 @@ pub mod wl_subcompositor {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 12;
 
+        #[derive(Debug)]
         pub struct GetSubsurface {
             pub id: u32,
             pub surface: u32,
@@ -5447,6 +5571,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -5482,6 +5607,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct SetPosition {
             pub x: i32,
             pub y: i32,
@@ -5520,6 +5646,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct PlaceAbove {
             pub sibling: u32,
         }
@@ -5553,6 +5680,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct PlaceBelow {
             pub sibling: u32,
         }
@@ -5586,6 +5714,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct SetSync {
         }
 
@@ -5616,6 +5745,7 @@ pub mod wl_subsurface {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct SetDesync {
         }
 
@@ -5660,6 +5790,7 @@ pub mod wl_fixes {
         pub const IS_DESTRUCTOR: bool = true;
         pub const SIZE: u16 = 0;
 
+        #[derive(Debug)]
         pub struct Destroy {
         }
 
@@ -5690,6 +5821,7 @@ pub mod wl_fixes {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 4;
 
+        #[derive(Debug)]
         pub struct DestroyRegistry {
             pub registry: u32,
         }
@@ -5723,6 +5855,7 @@ pub mod wl_fixes {
         pub const IS_DESTRUCTOR: bool = false;
         pub const SIZE: u16 = 8;
 
+        #[derive(Debug)]
         pub struct AckGlobalRemove {
             pub registry: u32,
             pub name: u32,

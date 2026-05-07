@@ -313,6 +313,7 @@ impl Op {
             {P1}    pub const IS_DESTRUCTOR: bool = {dtor};\n\
             {const_size_fmt}\n\
             {dec_fd_doc}\
+            {P1}    #[derive(Debug)]\n\
             {P1}    pub struct {struct_name}{lf} {{\n\
             {fields}\
             {P1}    }}\n\n\

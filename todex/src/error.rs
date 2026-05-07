@@ -1,4 +1,6 @@
 
+pub type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
 #[derive(Debug)]
 pub enum DecodeError {
     Null,

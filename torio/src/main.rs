@@ -1,41 +1,50 @@
-use torio::conn::WaylandSocket;
-use torio::objects::wl_display::Display;
-use torio::objects::wl_registry;
-use torio::objects::wl_registry::Registry;
-use torio::objects::ObjectKind;
-use torio::objects::ObjectManager;
+use todex::Id;
+use todex::conn::WaylandSocket;
+use todex::message::DecodePayload;
+use todex::wayland::wl_display::get_registry::GetRegistry;
+use todex::wayland::wl_display::{self, sync};
+use todex::wayland::{wl_callback, wl_registry};
 
-fn main() -> anyhow::Result<()> {
+type BoxError = Box<dyn std::error::Error + Send + Sync>;
+
+fn main() -> Result<(), BoxError> {
     let mut socket = WaylandSocket::connect_default()?;
+    println!("Connected");
 
-    let mut manager = ObjectManager::new();
-    let display = Display::new();
-    let registry = Registry::with_manager(&mut manager);
+    let registry_id = 2;
+    let callback_id = 3;
 
-    socket.send_request(display.get_registry(&registry))?;
+    socket.send_request(Id::wl_display(), GetRegistry {
+        registry: registry_id,
+    });
+    socket.send_request(Id::wl_display(), sync::Sync {
+        callback: callback_id
+    });
     socket.flush()?;
+    println!("Send ok");
 
-    while let Some(message) = socket.poll_message()? {
-        let object_id = message.object_id();
-        let body = message.body();
-
-        let kind = manager.event_kind(&message).expect("invalid object from server");
-
-        match kind {
-            ObjectKind::Display => {
-                // TODO: error event
+    while let Some(msg) = socket.poll_message()? {
+        let id = msg.object_id();
+        let opcode = msg.opcode();
+        print!("{id}::{opcode} = ");
+        if id == registry_id && opcode == 0 {
+            unsafe {
+                let global = wl_registry::global::Global::decode_raw(msg.as_ptr())?;
+                println!("{global:?}");
             }
-            ObjectKind::Registry => {
-                match wl_registry::Event::from_message(message).unwrap() {
-                    wl_registry::Event::GlobalRemove => {}
-                    wl_registry::Event::Global(event) => {
-                        println!("[OID:{object_id}] {event:?}");
-                    }
-                }
+        } else if id == callback_id && opcode == 0 {
+            unsafe {
+                let done = wl_callback::done::Done::decode_raw(msg.as_ptr())?;
+                println!("{done:?}");
             }
-            _ => {
-                println!("[OID:{object_id}] unhandled message, body: {:?}",tcio::fmt::lossy(&body))
+        } else if id == 1 && opcode == 1 {
+            unsafe {
+                let delete_id = wl_display::delete_id::DeleteId::decode_raw(msg.as_ptr())?;
+                println!("{delete_id:?}");
             }
+            break;
+        } else {
+            println!("{}", tcio::fmt::lossy(&msg.payload()));
         }
     }
 
