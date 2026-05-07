@@ -1,4 +1,5 @@
 use std::fmt::Display;
+use std::fmt::from_fn;
 
 use crate::Write;
 use crate::element::*;
@@ -24,7 +25,19 @@ macro_rules! deref {
     };
 }
 
+/// `from_fn` uses `Fn` trait, not practical as a function
+macro_rules! iter_fmt {
+    ($iter: expr, |$arg:pat_param, $f:pat_param|$e:expr) => {
+        from_fn(|$f|{
+            for $arg in $iter {
+                $e
+            }
+            Ok(())
+        })
+    };
+}
 
+/// `format_args` lifetime are a bit monkey, not practical as a function
 macro_rules! or_empty {
     ($b:ident, $($tt:tt)*) => {
         if $b {
@@ -34,7 +47,16 @@ macro_rules! or_empty {
         }
     };
     (let $b:ident, $($tt:tt)*) => {
+        // `format_args` lifetime is lmao when using pattern matching
         if $b.is_some() {
+            format_args!($($tt)*,$b.unwrap())
+        } else {
+            format_args!("")
+        }
+    };
+    ($fmt:tt, $o:ident $(, $tt:tt)*) => {
+        // `format_args` lifetime is lmao when using pattern matching
+        if $o.is_some() {
             format_args!($($tt)*,$b.unwrap())
         } else {
             format_args!("")
@@ -56,59 +78,63 @@ const P4: &str = "                ";
 
 const HEADERS: &str = "\
 #![allow(unsafe_op_in_unsafe_fn)]
+use std::slice;
+
+use crate::error::DecodeError;
+use crate::message::DecodePayload;
 
 const fn roundup4(value: u16) -> u16 {
     (value + 3) & (u16::MAX << 2)
 }";
 
+const ERR_LEN: &str = "DecodeError::Insufficient";
+const ERR_UTF8: &str = "DecodeError::NonUtf8";
+const ERR_TERM: &str = "DecodeError::NoNullTerm";
+
 impl Protocol {
     pub fn generate_header(&self, o: &mut impl Write) {
-        let name = &self.name;
-        let cp = self.copyright.as_ref();
-
-        writeln!(o, "//! {name}");
-        if let Some(cp) = cp {
-            writeln!(o, "//!");
-            writeln!(o, "//! ===== COPYRIGHT =====");
-            writeln!(o, "//!");
-            for line in cp.as_str().lines().map(str::trim_start) {
-                let sp = &" "[line.is_empty() as usize..];
-                writeln!(o, "//!{sp}{line}");
-            }
-            writeln!(o, "//!");
-            writeln!(o, "//! ===== COPYRIGHT =====");
-        }
-        writeln!(o, "{HEADERS}");
+        let Self { name, copyright, .. } = self;
+        let cp = some_fmt(copyright.as_ref(), |cp, f| {
+            let cp = iter_fmt!(cp.as_str().lines().map(str::trim_start), |line, f| {
+                let sp = if line.is_empty() { "" } else { " " };
+                writeln!(f, "//!{sp}{line}")?;
+            });
+            write!(
+                f,
+                "//!\n\
+                //! ===== COPYRIGHT =====\n\
+                {cp}
+                //! ===== COPYRIGHT =====\n\
+                "
+            )
+        });
+        write!(o, "//! {name}\n{cp}{HEADERS}");
     }
 }
 
 impl Interface {
     pub fn generate_header(&self, o: &mut impl Write) {
-        let name = &self.name;
-        let version = self.version;
-        let frozen = self.frozen;
-        write!(
-            o,
-            "\n\
-            pub mod {name} {{\n\
-            {P1}use super::*;\n\
-            {P1}pub const VERSION: u32 = {version};\n\
-            {P1}pub const FROZEN: bool = {frozen};\n\
-            "
-        );
+        let Self { name, version, .. } = self;
+        let mod_name = ModName::new(name);
+        let struct_name = CamelCase(name);
         let name_len = name.len() as u32 + 1;
+
         let pad_len = roundup4(name_len) - name_len;
         let size = 4 + roundup4(name_len) + 4;
-
         let encoded_name_len = fmt_u32_string(name.len() as u32 + 1);
         let padding = &"\\0\\0\\0\\0"[..(pad_len * 2) as usize];
-        let version = fmt_u32_string(version);
+
+        let enc_version = fmt_u32_string(*version);
         write!(
             o,
-            "\
-            {P1}pub const NAME_LEN: u16 = {name_len};\n\
-            {P1}pub static NEW_ID: [u8; {size}] = *b\"{encoded_name_len}{name}\\0{padding}{version}\";\n\
-            "
+            "\n
+pub struct {struct_name};
+pub mod {mod_name} {{
+    use super::*;
+    pub const VERSION: u32 = {version};
+    pub const NAME_LEN: u16 = {name_len};
+    pub static NEW_ID: [u8; {size}] = *b\"{encoded_name_len}{name}\\0{padding}{enc_version}\";
+"
         );
     }
 
@@ -117,33 +143,36 @@ impl Interface {
     }
 }
 
-impl Enum {
-    pub fn generate(&self, o: &mut impl Write) {
-        let name = CamelCase(self.name.as_str());
-        let bitfield = self.bitfield;
-        let entries = &self.entries;
-
-        writeln!(o);
-        if let Some(since) = self.since {
-            writeln!(o, "{P1}/// since: {since}");
-        }
-        writeln!(o, "{P1}/// bitfield: {bitfield}");
-        writeln!(o, "{P1}pub enum {name} {{");
-        for entry in entries {
-            let name = CamelCase(entry.name.as_str());
-            let value = &entry.value;
-            if let Some(since) = entry.since {
-                writeln!(o, "{P2}/// since: {since}");
-            }
-            if let Some(dep_since) = entry.deprecated_since {
-                writeln!(o, "{P2}/// deprecated-since: {dep_since}");
-            }
-            writeln!(o, "{P2}{name} = {value},");
-        }
-        writeln!(o, "{P1}}}");
+impl std::fmt::Display for Enum {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { name, since, bitfield, entries, .. } = self;
+        let name = CamelCase(name);
+        let since = or_empty!(let since, "    /// since: {}\n");
+        let entries = iter_fmt!(entries, |e @ Entry { name, value, since, .. }, f|{
+            let dep_since = e.deprecated_since;
+            let name = CamelCase(name);
+            let since = or_empty!(let since, "{P2}/// since: {}\n");
+            let dep_since = or_empty!(let dep_since, "{P2}/// deprecated-since: {}\n");
+            writeln!(f, "{since}{dep_since}{P2}{name} = {value},")?;
+        });
+        write!(
+            f,
+            "\n\
+            {since}\
+            {P1}/// bitfield: {bitfield}\n\
+            {P1}pub enum {name} {{\n\
+            {entries}\
+            {P1}}}\n\
+            "
+        )
     }
 }
 
+// ===== Request/Event =====
+
+/// - [`OpFallibleDecode`]
+/// - [`ArgDecode`]
+/// - [`ArgEncode`]
 impl Op {
     pub fn generate(&self, opcode: u16, o: &mut impl Write) {
         // separate kind of message
@@ -189,7 +218,6 @@ impl Op {
         let kind = self.kind.as_str();
 
         let lf = or_empty!(is_dynamic, "<'a>");
-        let lf2 = or_empty!(is_dynamic, "'a");
         let dtor_doc = or_empty!(dtor, ", type \"destructor\"");
         let enc_fd_doc = or_empty!(is_fd, "{P2}/// Require fd.\n{P2}///\n");
         let dec_fd_doc = or_empty!(is_fd, "{P2}/// Fd available.\n");
@@ -203,20 +231,16 @@ impl Op {
         );
         let fields = self.fmt_encodables(|_, arg, f| {
             let name = &arg.name;
-            let rust_ty = if matches!(arg.ty, Type::String) {
-                "&'a [u8]"
-            } else {
-                arg.to_rust_type(true)
-            };
+            let rust_ty = arg.to_rust_type(true);
             if arg.is_implicit_new_id() {
-                writeln!(f, "{P3}pub {name}_name: &'a [u8],\n{P3}pub {name}_version: u32,")?;
+                writeln!(f, "{P3}pub {name}_name: &'a str,\n{P3}pub {name}_version: u32,")?;
             }
             writeln!(f, "{P3}pub {name}: {rust_ty},")
         });
         let construct_fields = self.fmt_encodables(|_, arg, f| {
             let name = &arg.name;
             if arg.is_implicit_new_id() {
-                writeln!(f, "{name}_name, {name}_version, ")?;
+                write!(f, "{name}_name, {name}_version, ")?;
             }
             write!(f, "{name}, ")
         });
@@ -265,15 +289,19 @@ impl Op {
             }
             .fmt(f)
         });
-        let decode_fallible = OpFallibleDecode::new(dynamic_count, P4, self);
-        let decode_body = self.fmt_encodables(|i, arg, f| {
-            ArgDecode {
-                arg,
-                is_last: i as u32 == encodable_count - 1,
+        let decode: &dyn Display = if dynamic_count == 0 {
+            &OpInfallibleDecode {
+                encodable_count,
                 p: P4,
+                op: self,
             }
-            .fmt(f)
-        });
+        } else {
+            &OpFallibleDecode {
+                encodable_count,
+                p: P4,
+                op: self,
+            }
+        };
 
         write!(
             o,
@@ -284,8 +312,15 @@ impl Op {
             {P1}    pub const OPCODE: u16 = {opcode};\n\
             {P1}    pub const IS_DESTRUCTOR: bool = {dtor};\n\
             {const_size_fmt}\n\
+            {dec_fd_doc}\
             {P1}    pub struct {struct_name}{lf} {{\n\
             {fields}\
+            {P1}    }}\n\n\
+            {P1}    impl<'a> DecodePayload<'a> for {struct_name}{lf} {{\n\
+            {P1}        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {{\n\
+            {decode}\
+            {P1}            Ok({struct_name} {{ {construct_fields}}})\n\
+            {P1}        }}\n\
             {P1}    }}\n\n\
             {P1}    pub fn size({size_args}) -> u16 {{\n\
             {P1}        {const_size}{dyn_sizes}\n\
@@ -295,23 +330,193 @@ impl Op {
             {P1}    pub {unsafe_fn}fn encode({encode_args}{ptr_id}: *mut u8) {{\n\
             {encode_body}\
             {P1}    }}\n\n\
-            {P1}    /// Returns `None` if dynamic size data have invalid length.\n\
-            {dec_fd_doc}\
-            {P1}    pub fn decode{lf}(bytes: &{lf2}[u8]) -> Option<{struct_name}{lf}> {{\n\
-            {P1}        unsafe {{\n\
-            {decode_fallible}\
-            {P1}            let mut ptr = bytes.as_ptr();\n\
-            {decode_body}\
-            {P1}            Some({struct_name} {{ {construct_fields}}})\n\
-            {P1}        }}\n\
-            {P1}    }}\n\
             {P1}}}\n\
             "
         );
     }
 }
 
-deref!(Op, Vec<Arg>, args);
+struct OpInfallibleDecode<'a> {
+    encodable_count: u32,
+    p: &'static str,
+    op: &'a Op,
+}
+
+deref!(OpInfallibleDecode<'a>, Op, op);
+
+impl<'a> Display for OpInfallibleDecode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { encodable_count, p, .. } = *self;
+        let decodes = self.fmt_encodables(|i,arg,f|{
+            ArgDecode {
+                arg,
+                is_last: i as u32 + 1 == encodable_count,
+                p,
+            }.fmt(f)
+        });
+        write!(f, "{p}ptr = ptr.add(8);\n{decodes}")
+    }
+}
+
+struct OpFallibleDecode<'a> {
+    encodable_count: u32,
+    p: &'static str,
+    op: &'a Op,
+}
+
+deref!(OpFallibleDecode<'a>, Op, op);
+
+impl<'a> Display for OpFallibleDecode<'a> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { encodable_count, p, op, .. } = *self;
+        let fallibles = from_fn(|f|{
+            let mut offset = 0;
+            for arg @ Arg { name, ty, .. } in op.args.encodables() {
+                match ty {
+                    Type::Int |
+                    Type::Uint |
+                    Type::Fixed |
+                    Type::Fd |
+                    Type::Object => {
+                        offset += 4;
+                        continue;
+                    },
+                    Type::NewId => if !arg.is_implicit_new_id() {
+                        offset += 4;
+                        continue;
+                    }
+                    Type::String => {}
+                    Type::Array => {}
+                }
+                let offset_len = offset + 4;
+                write!(
+                    f,
+                    "\
+                    {p}if rem < {offset_len} {{\n\
+                    {p}    return Err({ERR_LEN});\n\
+                    {p}}}\n\
+                    {p}rem -= {offset_len};\n\
+                    {p}let {name}_len = *ptr.add({offset}).cast::<u32>();\n\
+                    {p}let {name}_pad_len = roundup4({name}_len as u16);\n\
+                    {p}if rem < {name}_pad_len {{\n\
+                    {p}    return Err({ERR_LEN});\n\
+                    {p}}}\n\
+                    {p}rem -= {name}_pad_len;\n\
+                    ",
+                )?;
+                offset = if arg.is_implicit_new_id() { 8 } else { 0 };
+            }
+            Ok(())
+        });
+        let decodes = self.fmt_encodables(|i,arg,f|{
+            ArgDecode {
+                arg,
+                is_last: i as u32 + 1 == encodable_count,
+                p,
+            }.fmt(f)
+        });
+        write!(
+            f,
+            "\
+            {p}let mut rem = *ptr.add(6).cast::<u16>();\n\
+            {p}ptr = ptr.add(8);\n\
+            {fallibles}\
+            {decodes}\
+            "
+        )
+    }
+}
+
+struct ArgDecode<'a> {
+    arg: &'a Arg,
+    is_last: bool,
+    p: &'static str,
+}
+
+deref!(ArgDecode<'a>, Arg, arg);
+
+impl std::fmt::Display for ArgDecode<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let Self { p, is_last, .. } = *self;
+        let name = &self.name;
+        let adv = match self.ty {
+            Type::Int | Type::Uint | Type::Object => {
+                let rust_ty = self.to_rust_type(false);
+                writeln!(f, "{p}let {name} = *ptr.cast::<{rust_ty}>();")?;
+                format_args!("ptr = ptr.add(4);\n")
+            }
+            Type::Fixed => {
+                writeln!(f, "{p}let {name} = *ptr.cast::<i32>() as f32 / 256.0;")?;
+                format_args!("ptr = ptr.add(4);\n")
+            },
+            Type::Fd => format_args!(""),
+            Type::Array => {
+                writeln!(f, "{p}let {name} = slice::from_raw_parts(ptr.add(4), {name}_len as usize);")?;
+                format_args!("ptr = ptr.add((4 + {name}_pad_len) as usize);\n")
+            },
+            Type::String => {
+                if self.allow_null {
+                    write!(
+                        f,
+                        "\
+                        {p}let {name} = if {name}_len != 0 {{\n\
+                        {p}    let [{name} @ .., 0] = slice::from_raw_parts(ptr.add(4), {name}_len as usize) else {{\n\
+                        {p}        return Err({ERR_TERM});\n\
+                        {p}    }};\n\
+                        {p}    let Ok({name}) = str::from_utf8({name}) else {{\n\
+                        {p}        return Err({ERR_UTF8});\n\
+                        {p}    }};\n\
+                        {p}    Some({name})\n\
+                        {p}}} else {{\n\
+                        {p}    None\n\
+                        {p}}};\n\
+                        "
+                    )?;
+                } else {
+                    write!(
+                        f,
+                        "\
+                        {p}let [{name} @ .., 0] = slice::from_raw_parts(ptr.add(4), {name}_len as usize) else {{\n\
+                        {p}    return Err({ERR_TERM});\n\
+                        {p}}};\n\
+                        {p}let Ok({name}) = str::from_utf8({name}) else {{\n\
+                        {p}    return Err({ERR_UTF8});\n\
+                        {p}}};\n\
+                        "
+                    )?;
+                }
+                format_args!("ptr = ptr.add((4 + {name}_pad_len) as usize);\n")
+            },
+            Type::NewId => {
+                if self.is_implicit_new_id() {
+                    write!(
+                        f,
+                        "\
+                        {p}let [{name}_name @ .., 0] = slice::from_raw_parts(ptr.add(4), {name}_len as usize) else {{\n\
+                        {p}    return Err({ERR_TERM});\n\
+                        {p}}};\n\
+                        {p}let Ok({name}_name) = str::from_utf8({name}_name) else {{\n\
+                        {p}    return Err({ERR_UTF8});\n\
+                        {p}}};\n\
+                        {p}let {name}_version = *ptr.add((4 + {name}_pad_len) as usize).cast::<u32>();\n\
+                        {p}let {name} = *ptr.add((8 + {name}_pad_len) as usize).cast::<u32>();\n\
+                        "
+                    )?;
+                    format_args!("ptr = ptr.add((12 + {name}_pad_len) as usize);\n")
+                } else {
+                    writeln!(f, "{p}let {name} = *ptr.cast::<u32>();")?;
+                    format_args!("ptr = ptr.add(4);\n")
+                }
+            }
+        };
+        if !is_last {
+            write!(f, "{p}{adv}")?;
+        }
+        Ok(())
+    }
+}
+
+// TODO: encode roundup
 
 struct ArgEncode<'a> {
     arg: &'a Arg,
@@ -398,127 +603,9 @@ impl std::fmt::Display for ArgEncode<'_> {
     }
 }
 
-// TODO: encode roundup
-
-struct OpFallibleDecode<'a> {
-    dynamic_count: u32,
-    p: &'static str,
-    op: &'a Op,
-}
-
-deref!(OpFallibleDecode<'a>, Op, op);
-
-impl<'a> OpFallibleDecode<'a> {
-    fn new(dynamic_count: u32, p: &'static str, op: &'a Op) -> Self {
-        Self {
-            dynamic_count,
-            p,
-            op,
-        }
-    }
-}
-
-impl std::fmt::Display for OpFallibleDecode<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { dynamic_count, p, .. } = *self;
-        if dynamic_count == 0 {
-            return Ok(());
-        }
-        let mut offset = 0;
-        let mut id = "bytes";
-        for arg in self.args.encodables() {
-            let name = &arg.name;
-            let offset_len = offset + 4;
-            match arg.ty {
-                Type::Array | Type::String => {
-                    write!(
-                        f,
-                        "\
-                        {p}let buf = {id}.get({offset_len}..)?;\n\
-                        {p}let {name}_len = *buf.as_ptr().sub(4).cast::<u32>();\n\
-                        {p}let {name}_pad_len = roundup4({name}_len as u16);\n\
-                        {p}let ({name}, buf) = buf.split_at_checked({name}_pad_len as usize)?;\n\
-                        {p}let {name}_name = {name}.get_unchecked(..{name}_len as usize);\n\
-                        "
-                    )?;
-                    offset = 0;
-                    id = "buf";
-                }
-                _ => if arg.is_implicit_new_id() {
-                    write!(
-                        f,
-                        "\
-                        {p}let buf = {id}.get({offset_len}..)?;\n\
-                        {p}let {name}_len = *buf.as_ptr().sub(4).cast::<u32>();\n\
-                        {p}let {name}_pad_len = roundup4({name}_len as u16);\n\
-                        {p}let ({name}, buf) = buf.split_at_checked({name}_pad_len as usize)?;\n\
-                        {p}let {name}_name = {name}.get_unchecked(..{name}_len as usize);\n\
-                        "
-                    )?;
-                    offset = 8;
-                    id = "buf";
-                } else {
-                    offset += 4;
-                }
-            }
-        }
-        if offset != 0 {
-            writeln!(f, "{p}if buf.len() != {offset} {{\n{p}    return None;\n{p}}}")
-        } else {
-            writeln!(f, "{p}let _ = buf;")
-        }
-    }
-}
-
-struct ArgDecode<'a> {
-    arg: &'a Arg,
-    is_last: bool,
-    p: &'static str,
-}
-
-deref!(ArgDecode<'a>, Arg, arg);
-
-impl std::fmt::Display for ArgDecode<'_> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { p, is_last, .. } = *self;
-        let name = &self.name;
-        let adv = match self.ty {
-            Type::Int | Type::Uint | Type::Object => {
-                let rust_ty = self.to_rust_type(false);
-                writeln!(f, "{p}let {name} = *ptr.cast::<{rust_ty}>();")?;
-                format_args!("ptr = ptr.add(4);\n")
-            }
-            Type::Fixed => {
-                writeln!(f, "{p}let {name} = *ptr.cast::<i32>() as f32 / 256.0;")?;
-                format_args!("ptr = ptr.add(4);\n")
-            },
-            Type::Fd => format_args!(""),
-            Type::Array | Type::String => format_args!("ptr = ptr.add((4 + {name}_pad_len) as usize);\n"),
-            Type::NewId => {
-                if self.is_implicit_new_id() {
-                    write!(
-                        f,
-                        "\
-                        ptr = ptr.add((4 + {name}_pad_len) as usize);\n\
-                        let {name}_version = *ptr.cast::<u32>();\n\
-                        let {name} = *ptr.add(4).cast::<u32>();\n\
-                        "
-                    )?;
-                    format_args!("ptr = ptr.add(8);\n")
-                } else {
-                    writeln!(f, "let {name} = *ptr.cast::<u32>();")?;
-                    format_args!("ptr = ptr.add(4);\n")
-                }
-            }
-        };
-        if !is_last {
-            write!(f, "{p}{adv}")?;
-        }
-        Ok(())
-    }
-}
-
 // ===== subtypes =====
+
+deref!(Op, Vec<Arg>, args);
 
 impl Arg {
     fn is_fd(&self) -> bool {
@@ -619,7 +706,7 @@ trait ArgExt {
     where
         F: Fn(usize, &Arg, &mut std::fmt::Formatter) -> std::fmt::Result,
     {
-        std::fmt::from_fn(move |fmt| {
+        from_fn(move |fmt| {
             for (i, arg) in self.encodables().enumerate() {
                 f(i, arg, fmt)?;
             }
@@ -631,7 +718,7 @@ trait ArgExt {
     where
         F: Fn(usize, &Arg, &mut std::fmt::Formatter) -> std::fmt::Result,
     {
-        std::fmt::from_fn(move |fmt| {
+        from_fn(move |fmt| {
             for (i, arg) in self.dynamic_sizes().enumerate() {
                 f(i, arg, fmt)?;
             }
@@ -650,8 +737,18 @@ impl ArgExt for Vec<Arg> {
     }
 }
 
+fn some_fmt<T, F: Fn(&T, &mut std::fmt::Formatter) -> std::fmt::Result>(
+    option: Option<T>,
+    f: F,
+) -> impl std::fmt::Display {
+    from_fn(move |fmt| match option.as_ref() {
+        Some(ok) => f(ok, fmt),
+        None => Ok(()),
+    })
+}
+
 fn fmt_u32_string(value: u32) -> impl std::fmt::Display {
-    std::fmt::from_fn(move |f| {
+    from_fn(move |f| {
         for b in value.to_ne_bytes() {
             write!(f, "\\x{b:0>2x}")?;
         }

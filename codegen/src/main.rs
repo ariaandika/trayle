@@ -349,13 +349,14 @@ fn parse_enum(parser: &mut Parser, output: &mut impl Write) {
     let (tag, _) = parser.next_tag("enum");
     assert!(tag.is_closing());
 
-    element::Enum {
+    let enum_ = element::Enum {
         name,
         description,
         since,
         bitfield,
         entries,
-    }.generate(output);
+    };
+    write!(output, "{enum_}");
 }
 
 // ===== Util =====
