@@ -1,11 +1,14 @@
 //! # Todex
 //!
 //! Wayland protocol decoder and encoder.
-mod ty;
 
-pub mod encode;
-pub mod proto;
+mod primitive;
+
+pub mod message;
+pub mod error;
+
+mod wayland;
 
 // ===== reexports =====
 
-pub use ty::{Id, Array, NewId};
+pub use primitive::{Id, Array, NewId};
