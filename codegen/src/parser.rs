@@ -38,6 +38,12 @@ impl Parser {
         self.next_tag_inner()
     }
 
+    pub fn next_closing_tag(&mut self, name: &str) -> (Tag, Str) {
+        let (tag, content) = self.next_tag(name);
+        assert!(tag.is_closing());
+        (tag, content)
+    }
+
     pub fn next_tag_if(&mut self, name: &str) -> Option<(Tag, Str)> {
         if self.peek() != name.as_bytes() {
             return None;
@@ -172,7 +178,7 @@ impl Tag {
     pub fn attrs(&self) -> Attrs {
         let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
         let mut string = self.string.slice(len..);
-        string.trim_ascii_start();
+        string.trim_ascii_start_mut();
         Attrs { string, }
     }
 }
@@ -194,15 +200,15 @@ impl Attrs {
         self.next_inner()
     }
 
-    pub fn next_if(&mut self, name: &str) -> Option<Attr> {
-        if *self.string.first().unwrap() == b'>' {
-            return None;
-        }
-        if self.peek()? != name {
-            return None;
-        }
-        Some(self.next_inner())
-    }
+    // pub fn next_if(&mut self, name: &str) -> Option<Attr> {
+    //     if *self.string.first().unwrap() == b'>' {
+    //         return None;
+    //     }
+    //     if self.peek()? != name {
+    //         return None;
+    //     }
+    //     Some(self.next_inner())
+    // }
 
     pub fn peek(&self) -> Option<&str> {
         if *self.string.first().unwrap() == b'>' {
@@ -215,7 +221,7 @@ impl Attrs {
         let len = self.string.find('"').expect("no value attr");
         let len = self.string[len + 1..].find('"').expect("unclosed value quote") + len + 2;
         let string = self.string.split_to(len);
-        self.string.trim_ascii_start();
+        self.string.trim_ascii_start_mut();
         if self.string.starts_with('/') {
             self.string.advance(1);
         }
@@ -245,13 +251,21 @@ impl Attr {
         self.string.slice(len + 2..self.string.len() - 1)
     }
 
-    pub fn value_str(&self) -> &str {
-        let len = self
-            .string
-            .find('=')
-            .expect("no value attribute");
-        &self.string[len + 2..self.string.len() - 1]
-    }
+    // pub fn value_bytes(&self) -> &[u8] {
+    //     let len = self
+    //         .string
+    //         .find('=')
+    //         .expect("no value attribute");
+    //     &self.string.as_bytes()[len + 2..self.string.len() - 1]
+    // }
+    //
+    // pub fn value_str(&self) -> &str {
+    //     let len = self
+    //         .string
+    //         .find('=')
+    //         .expect("no value attribute");
+    //     &self.string[len + 2..self.string.len() - 1]
+    // }
 }
 
 impl std::fmt::Debug for Parser {

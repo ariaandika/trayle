@@ -54,7 +54,7 @@ impl Str {
         Str { shared, ptr, len }
     }
 
-    pub fn trim_ascii(&mut self) {
+    pub fn trim_ascii_mut(&mut self) {
         let string = self.as_str().trim_ascii();
         let ptr = NonNull::new(string.as_ptr().cast_mut()).unwrap();
         let len = string.len();
@@ -62,7 +62,7 @@ impl Str {
         self.len = len;
     }
 
-    pub fn trim_ascii_start(&mut self) {
+    pub fn trim_ascii_start_mut(&mut self) {
         let string = self.as_str().trim_ascii_start();
         let ptr = NonNull::new(string.as_ptr().cast_mut()).unwrap();
         let len = string.len();
