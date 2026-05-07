@@ -81,7 +81,7 @@ const HEADERS: &str = "\
 use std::slice;
 
 use crate::error::DecodeError;
-use crate::message::DecodePayload;
+use crate::message::{DecodePayload, EncodePayload};
 
 const fn roundup4(value: u16) -> u16 {
     (value + 3) & (u16::MAX << 2)
@@ -211,7 +211,7 @@ impl Op {
 
         let mod_name = ModName::new(&self.name);
         let struct_name = CamelCase(&self.name);
-        let is_zero_size = encodable_count == 0;
+        // let is_zero_size = encodable_count == 0;
         let is_fd = fd_count > 0;
         let is_dynamic = dynamic_count > 0;
         let dtor = self.destructor;
@@ -219,16 +219,16 @@ impl Op {
 
         let lf = or_empty!(is_dynamic, "<'a>");
         let dtor_doc = or_empty!(dtor, ", type \"destructor\"");
-        let enc_fd_doc = or_empty!(is_fd, "{P2}/// Require fd.\n{P2}///\n");
+        // let enc_fd_doc = or_empty!(is_fd, "{P2}/// Require fd.\n{P2}///\n");
         let dec_fd_doc = or_empty!(is_fd, "{P2}/// Fd available.\n");
         let const_size_fmt = or_empty!(!is_dynamic, "{P2}pub const SIZE: u16 = {const_size};\n");
-        let unsafe_fn = or_empty!(!is_zero_size, "unsafe ");
-        let safety_doc = or_empty!(
-            !is_zero_size,
-            "{P2}/// # Safety\n\
-            {P2}///\n\
-            {P2}/// Given pointer must be valid for write until required length.\n"
-        );
+        // let unsafe_fn = or_empty!(!is_zero_size, "unsafe ");
+        // let safety_doc = or_empty!(
+        //     !is_zero_size,
+        //     "{P2}/// # Safety\n\
+        //     {P2}///\n\
+        //     {P2}/// Given pointer must be valid for write until required length.\n"
+        // );
         let fields = self.fmt_encodables(|_, arg, f| {
             let name = &arg.name;
             let rust_ty = arg.to_rust_type(true);
@@ -244,48 +244,48 @@ impl Op {
             }
             write!(f, "{name}, ")
         });
-        let size_args = self.fmt_dynamic_sizes(|i, arg, f|{
-            let name = &arg.name;
-            let new_id = arg.is_implicit_new_id();
-            let sep = or_empty!(i != 0, ", ");
-            let suffix = or_empty!(new_id, "_name_len");
-            let rust_ty = if new_id { "u16" } else { arg.to_rust_type(false) };
-            write!(f, "{sep}{name}{suffix}: {rust_ty}")
-        });
+        // let size_args = self.fmt_dynamic_sizes(|i, arg, f|{
+        //     let name = &arg.name;
+        //     let new_id = arg.is_implicit_new_id();
+        //     let sep = or_empty!(i != 0, ", ");
+        //     let suffix = or_empty!(new_id, "_name_len");
+        //     let rust_ty = if new_id { "u16" } else { arg.to_rust_type(false) };
+        //     write!(f, "{sep}{name}{suffix}: {rust_ty}")
+        // });
         let dyn_sizes = self.fmt_dynamic_sizes(|_, arg, f|{
             let name = &arg.name;
             match arg.ty {
-                Type::Array => write!(f, " + {name}.len() as u16"),
+                Type::Array => write!(f, " + self.{name}.len() as u16"),
                 Type::String => if arg.allow_null {
-                    write!(f, " + {name}.map(|s|s.len() as u16 + 1).unwrap_or(0)")
+                    write!(f, " + self.{name}.map(|s|s.len() as u16 + 1).unwrap_or(0)")
                 } else {
-                    write!(f, " + {name}.len() as u16 + 1")
+                    write!(f, " + self.{name}.len() as u16 + 1")
                 },
                 _ => if arg.is_implicit_new_id() {
-                    write!(f, " + {name}_name_len")
+                    write!(f, " + self.{name}_name.len() as u16")
                 } else {
                     Ok(())
                 },
             }
         });
-        let ptr_id = match encodable_count {
-            0 => format_args!("_"),
-            1 => format_args!("ptr"),
-            _ => format_args!("mut ptr"),
-        };
-        let encode_args = self.fmt_encodables(|_, arg, f|{
-            let name = &arg.name;
-            let rust_ty = arg.to_rust_type(false);
-            if arg.is_implicit_new_id() {
-                write!(f, "encoded_{name}: &[u8], ")?;
-            }
-            write!(f, "{name}: {rust_ty}, ")
-        });
+        // let ptr_id = match encodable_count {
+        //     0 => format_args!("_"),
+        //     1 => format_args!("ptr"),
+        //     _ => format_args!("mut ptr"),
+        // };
+        // let encode_args = self.fmt_encodables(|_, arg, f|{
+        //     let name = &arg.name;
+        //     let rust_ty = arg.to_rust_type(false);
+        //     if arg.is_implicit_new_id() {
+        //         write!(f, "encoded_{name}: &[u8], ")?;
+        //     }
+        //     write!(f, "{name}: {rust_ty}, ")
+        // });
         let encode_body = self.fmt_encodables(|i, arg, f| {
             ArgEncode {
                 arg,
                 is_last: i as u32 == encodable_count - 1,
-                p: P3,
+                p: P4,
             }
             .fmt(f)
         });
@@ -316,23 +316,30 @@ impl Op {
             {P1}    pub struct {struct_name}{lf} {{\n\
             {fields}\
             {P1}    }}\n\n\
+            {P1}    impl{lf} EncodePayload for {struct_name}{lf} {{\n\
+            {P1}        const OPCODE: u16 = {opcode};\n\n\
+            {P1}        fn encoded_size(&self) -> u16 {{\n\
+            {P1}            {const_size}{dyn_sizes}\n\
+            {P1}        }}\n\n\
+            {P1}        unsafe fn encode_raw(&self, mut ptr: *mut u8) {{\n\
+            {encode_body}\
+            {P1}        }}\n\
+            {P1}    }}\n\n\
             {P1}    impl<'a> DecodePayload<'a> for {struct_name}{lf} {{\n\
             {P1}        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {{\n\
             {decode}\
             {P1}            Ok({struct_name} {{ {construct_fields}}})\n\
             {P1}        }}\n\
             {P1}    }}\n\n\
-            {P1}    pub fn size({size_args}) -> u16 {{\n\
-            {P1}        {const_size}{dyn_sizes}\n\
-            {P1}    }}\n\n\
-            {enc_fd_doc}\
-            {safety_doc}\
-            {P1}    pub {unsafe_fn}fn encode({encode_args}{ptr_id}: *mut u8) {{\n\
-            {encode_body}\
-            {P1}    }}\n\n\
             {P1}}}\n\
             "
         );
+            // {P1}    pub fn size({size_args}) -> u16 {{\n\
+            // {P1}    }}\n\n\
+            // {enc_fd_doc}\
+            // {safety_doc}\
+            // {P1}    pub {unsafe_fn}fn encode({encode_args}{ptr_id}: *mut u8) {{\n\
+            // {P1}    }}\n\n\
     }
 }
 
@@ -516,8 +523,6 @@ impl std::fmt::Display for ArgDecode<'_> {
     }
 }
 
-// TODO: encode roundup
-
 struct ArgEncode<'a> {
     arg: &'a Arg,
     is_last: bool,
@@ -534,42 +539,49 @@ impl std::fmt::Display for ArgEncode<'_> {
         let adv = match self.ty {
             Type::Int | Type::Uint | Type::Object => {
                 let ty = self.to_rust_type(false);
-                writeln!(f, "{p}ptr.cast::<{ty}>().write({name});")?;
+                writeln!(f, "{p}ptr.cast::<{ty}>().write(self.{name});")?;
                 format_args!("{p}ptr = ptr.add(4);\n")
             },
             Type::Fixed => {
-                writeln!(f, "{p}ptr.cast::<i32>().write(({name} * 256.0).round() as i32);")?;
+                writeln!(f, "{p}ptr.cast::<i32>().write((self.{name} * 256.0).round() as i32);")?;
                 format_args!("{p}ptr = ptr.add(4);\n")
             },
             Type::Fd => format_args!(""),
             Type::Array => {
                 writeln!(
                     f,
-                    "{p}let len = {name}.len() as u16;\n\
+                    "{p}let len = self.{name}.len() as u16;\n\
                     {p}ptr.cast::<u32>().write(len as u32);\n\
-                    {p}ptr.add(4).copy_from_nonoverlapping({name}.as_ptr(), len as usize);"
+                    {p}ptr.add(4).copy_from_nonoverlapping(self.{name}.as_ptr(), len as usize);"
                 )?;
                 format_args!("{P4}ptr = ptr.add((4 + roundup4(len)) as usize);\n")
             },
             Type::NewId => if self.is_implicit_new_id() {
-                writeln!(
+                write!(
                     f,
-                    "{p}ptr.copy_from_nonoverlapping(encoded_{name}.as_ptr(), encoded_{name}.len());\n\
-                    {p}ptr.add(encoded_{name}.len()).cast::<u32>().write({name});"
+                    "\
+                    {p}ptr.cast::<u32>().write(self.{name}_name.len() as u32);\n\
+                    {p}ptr.add(4).copy_from_nonoverlapping(self.{name}_name.as_ptr(), self.{name}_name.len());\n\
+                    {p}ptr.add(4 + self.{name}_name.len()).write(0);\n\
+                    {p}let {name}_pad_len = roundup4(self.{name}_name.len() as u16 + 1);\n\
+                    {p}ptr = ptr.add((4 + {name}_pad_len) as usize);\n\
+                    {p}ptr.cast::<u32>().write(self.{name}_version);\n\
+                    {p}ptr.add(4).cast::<u32>().write(self.{name});\n\
+                    "
                 )?;
-                format_args!("{p}ptr = ptr.add(encoded_{name}.len() + 4);\n")
+                format_args!("{p}ptr = ptr.add(8);\n")
             } else {
-                writeln!(f, "{p}ptr.cast::<u32>().write({name});")?;
+                writeln!(f, "{p}ptr.cast::<u32>().write(self.{name});")?;
                 format_args!("{p}ptr = ptr.add(4);\n")
             }
             Type::String => {
                 if self.allow_null {
-                    let write = if is_last { "_" } else { "write" };
+                    let let_write = if is_last { "" } else { "let write = " };
                     let some_len = or_empty!(!is_last, "{p}    4 + roundup4(len + 1)\n");
                     let none_len = or_empty!(!is_last, "{p}    4\n");
                     writeln!(
                         f,
-                        "{p}let {write} = match {name} {{\n\
+                        "{p}{let_write}match self.{name} {{\n\
                         {p}    Some(s) => {{\n\
                         {p}        let len = s.len() as u16;\n\
                         {p}        ptr.cast::<u32>().write((len + 1) as u32);\n\
@@ -587,9 +599,9 @@ impl std::fmt::Display for ArgEncode<'_> {
                 } else {
                     writeln!(
                         f,
-                        "{p}let len = {name}.len() as u16;\n\
+                        "{p}let len = self.{name}.len() as u16;\n\
                         {p}ptr.cast::<u32>().write((len + 1) as u32);\n\
-                        {p}ptr.add(4).copy_from_nonoverlapping({name}.as_ptr(), len as usize);\n\
+                        {p}ptr.add(4).copy_from_nonoverlapping(self.{name}.as_ptr(), len as usize);\n\
                         {p}ptr.add((4 + len) as usize).write(0);"
                     )?;
                     format_args!("{p}ptr = ptr.add((4 + roundup4(len + 1)) as usize);\n")
