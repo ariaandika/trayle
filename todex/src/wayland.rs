@@ -1,6 +1,7 @@
 //! wayland
 //!
 //! # Copyright
+//!
 //! Copyright © 2008-2011 Kristian Høgsberg
 //! Copyright © 2010-2011 Intel Corporation
 //! Copyright © 2012-2013 Collabora, Ltd.
@@ -108,7 +109,7 @@ pub mod wl_display {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            12 + self.message.len() as u16 + 1
+            12 + roundup4(self.message.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -209,13 +210,13 @@ pub mod wl_registry {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            16 + self.id_name.len() as u16
+            16 + roundup4(self.id_name.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
             ptr.cast::<u32>().write(self.name);
             ptr = ptr.add(4);
-            ptr.cast::<u32>().write(self.id_name.len() as u32);
+            ptr.cast::<u32>().write(self.id_name.len() as u32 + 1);
             ptr.add(4).copy_from_nonoverlapping(self.id_name.as_ptr(), self.id_name.len());
             ptr.add(4 + self.id_name.len()).write(0);
             let id_pad_len = roundup4(self.id_name.len() as u16 + 1);
@@ -266,7 +267,7 @@ pub mod wl_registry {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            12 + self.interface.len() as u16 + 1
+            12 + roundup4(self.interface.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -903,7 +904,7 @@ pub mod wl_data_offer {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            8 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
+            8 + self.mime_type.map(|s|roundup4(s.len() as u16 + 1)).unwrap_or(0)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -965,7 +966,7 @@ pub mod wl_data_offer {
         const OPCODE: u16 = 1;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.mime_type.len() as u16 + 1
+            4 + roundup4(self.mime_type.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -1035,7 +1036,7 @@ pub mod wl_data_offer {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.mime_type.len() as u16 + 1
+            4 + roundup4(self.mime_type.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -1206,7 +1207,7 @@ pub mod wl_data_source {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.mime_type.len() as u16 + 1
+            4 + roundup4(self.mime_type.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -1276,7 +1277,7 @@ pub mod wl_data_source {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
+            4 + self.mime_type.map(|s|roundup4(s.len() as u16 + 1)).unwrap_or(0)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -1334,7 +1335,7 @@ pub mod wl_data_source {
         const OPCODE: u16 = 1;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.mime_type.len() as u16 + 1
+            4 + roundup4(self.mime_type.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -2265,7 +2266,7 @@ pub mod wl_shell_surface {
         const OPCODE: u16 = 8;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.title.len() as u16 + 1
+            4 + roundup4(self.title.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -2311,7 +2312,7 @@ pub mod wl_shell_surface {
         const OPCODE: u16 = 9;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.class_.len() as u16 + 1
+            4 + roundup4(self.class_.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -3064,7 +3065,7 @@ pub mod wl_seat {
         const OPCODE: u16 = 1;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.name.len() as u16 + 1
+            4 + roundup4(self.name.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -3659,7 +3660,7 @@ pub mod wl_keyboard {
         const OPCODE: u16 = 1;
 
         fn encoded_size(&self) -> u16 {
-            12 + self.keys.len() as u16
+            12 + roundup4(self.keys.len() as u16)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -4211,7 +4212,7 @@ pub mod wl_output {
         const OPCODE: u16 = 0;
 
         fn encoded_size(&self) -> u16 {
-            32 + self.make.len() as u16 + 1 + self.model.len() as u16 + 1
+            32 + roundup4(self.make.len() as u16 + 1) + roundup4(self.model.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -4426,7 +4427,7 @@ pub mod wl_output {
         const OPCODE: u16 = 4;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.name.len() as u16 + 1
+            4 + roundup4(self.name.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {
@@ -4472,7 +4473,7 @@ pub mod wl_output {
         const OPCODE: u16 = 5;
 
         fn encoded_size(&self) -> u16 {
-            4 + self.description.len() as u16 + 1
+            4 + roundup4(self.description.len() as u16 + 1)
         }
 
         unsafe fn encode_raw(&self, mut ptr: *mut u8) {

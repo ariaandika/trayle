@@ -221,14 +221,14 @@ impl Op<'_> {
         let dyn_sizes = self.fmt_dynamic_sizes(|_, arg, f|{
             let name = &arg.name;
             match arg.ty {
-                Type::Array => write!(f, " + self.{name}.len() as u16"),
+                Type::Array => write!(f, " + roundup4(self.{name}.len() as u16)"),
                 Type::String => if arg.allow_null {
-                    write!(f, " + self.{name}.map(|s|s.len() as u16 + 1).unwrap_or(0)")
+                    write!(f, " + self.{name}.map(|s|roundup4(s.len() as u16 + 1)).unwrap_or(0)")
                 } else {
-                    write!(f, " + self.{name}.len() as u16 + 1")
+                    write!(f, " + roundup4(self.{name}.len() as u16 + 1)")
                 },
                 _ => if arg.is_implicit_new_id() {
-                    write!(f, " + self.{name}_name.len() as u16")
+                    write!(f, " + roundup4(self.{name}_name.len() as u16 + 1)")
                 } else {
                     Ok(())
                 },
@@ -501,7 +501,7 @@ impl std::fmt::Display for ArgEncode<'_> {
                 write!(
                     f,
                     "\
-                    {p}ptr.cast::<u32>().write(self.{name}_name.len() as u32);\n\
+                    {p}ptr.cast::<u32>().write(self.{name}_name.len() as u32 + 1);\n\
                     {p}ptr.add(4).copy_from_nonoverlapping(self.{name}_name.as_ptr(), self.{name}_name.len());\n\
                     {p}ptr.add(4 + self.{name}_name.len()).write(0);\n\
                     {p}let {name}_pad_len = roundup4(self.{name}_name.len() as u16 + 1);\n\
