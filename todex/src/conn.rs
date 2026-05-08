@@ -1,6 +1,8 @@
 use std::os::unix::net::UnixStream;
 use std::{env, io};
 
+use tcio::bytes::Buf;
+
 use crate::Id;
 use crate::error::BoxError;
 use crate::message::{EncodePayload, Message};
@@ -54,28 +56,8 @@ impl WaylandSocket {
                 self.socket.read()?;
                 continue;
             }
-            // read_buffer.advance(header.len() as usize);
-            // break Ok(header);
-            todo!()
-        }
-    }
-
-    pub fn try_poll_message(&mut self) -> Result<Option<Message>, BoxError> {
-        loop {
-            let read_buffer = self.socket.read_buffer();
-            let Some(header) = read_buffer.first_chunk::<8>() else {
-                return Ok(None);
-            };
-
-            let header = Message::new(header.as_ptr());
-
-            if read_buffer.len() < header.len() as usize {
-                self.socket.read()?;
-                continue;
-            }
-            // read_buffer.advance(header.len() as usize);
-            // break Ok(Some(header));
-            todo!()
+            self.socket.read_buffer_mut().advance(header.len() as usize);
+            break Ok(header);
         }
     }
 

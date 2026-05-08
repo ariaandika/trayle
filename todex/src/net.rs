@@ -38,15 +38,15 @@ impl Socket {
 }
 
 impl Socket {
-    /// Returns writable memory until `len`.
+    /// Returns writable `len` sized memory.
     ///
     /// # Safety
     ///
-    /// Caller must ensure `len` data from the returned pointer are initialized.
+    /// Caller must initialize `len` data from the returned pointer.
     pub unsafe fn spare(&mut self, len: usize) -> *mut u8 {
         self.write_buffer.reserve(len);
         let ptr = self.write_buffer.spare_capacity_mut().as_mut_ptr().cast();
-        // SAFETY: caller ensure that `len` additional data is initialized
+        // SAFETY: caller ensure that `len` additional data will be initialized
         unsafe { self.write_buffer.set_len(self.write_buffer.len() + len) };
         ptr
     }
@@ -69,15 +69,12 @@ impl Socket {
 
     /// Flush write buffer.
     pub fn flush(&mut self) -> Result<()> {
-        let write = sendmsg(
-            self.io.as_raw_fd(),
-            &mut self.sendmsg_buffer,
+        sendmsg(
             &self.write_buffer,
             &self.send_fds,
+            &mut self.sendmsg_buffer,
+            self.io.as_raw_fd(),
         )?;
-        if write != self.write_buffer.len() {
-            todo!("partial write")
-        }
         self.sendmsg_buffer.clear();
         self.write_buffer.clear();
         self.send_fds.clear();
@@ -85,52 +82,85 @@ impl Socket {
     }
 }
 
-fn sendmsg(socket_fd: RawFd, buffer: &mut Vec<u8>, msg: &[u8], fds: &[RawFd]) -> Result<usize> {
+// ===== syscall =====
+
+fn sendmsg(msg: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd,) -> Result<()> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
 
-    let (buf_ptr, buf_len) = if fds.is_empty() {
-        (std::ptr::null_mut(), 0)
+    let (cmsg_ptr, cmsg_len) = if fds.is_empty() {
+        (ptr::null_mut(), 0)
     } else {
-        let cmsg_size = unsafe { CMSG_SPACE(size_of_val(fds) as u32) };
-        buffer.reserve(cmsg_size as usize);
-        (
-            buffer.spare_capacity_mut().as_mut_ptr().cast(),
-            cmsg_size as usize,
-        )
+        let fd_size = size_of_val(fds) as u32;
+
+        // CMSG_SPACE used when calculating required allocation of ancillary data
+        let cmsg_space = unsafe { CMSG_SPACE(fd_size) };
+        cmsg_buffer.reserve(cmsg_space as usize);
+
+        // CMSG_LEN used when calculating exact length of ancillary data
+        let cmsg_len = unsafe { CMSG_LEN(fd_size) };
+        let cmsg_ptr = cmsg_buffer.spare_capacity_mut().as_mut_ptr().cast();
+        (cmsg_ptr, cmsg_len)
     };
 
-    let mut iov = iovec {
-        iov_base: msg.as_ptr() as *mut c_void,
-        iov_len: msg.len(),
-    };
+    // https://linux.die.net/man/3/cmsg
+
     let msghdr = msghdr {
         msg_name: std::ptr::null_mut(),
         msg_namelen: 0,
-        msg_iov: &mut iov,
+        msg_iov: &mut iovec {
+            iov_base: msg.as_ptr() as *mut c_void,
+            iov_len: msg.len(),
+        },
         msg_iovlen: 1,
-        msg_control: buf_ptr,
-        msg_controllen: buf_len,
+        msg_control: cmsg_ptr,
+        msg_controllen: cmsg_len as usize,
         msg_flags: 0,
     };
 
-    unsafe {
-        if !fds.is_empty() {
-            let cmsg_size = CMSG_SPACE(size_of_val(fds) as u32);
-            let cmsg = CMSG_FIRSTHDR(&msghdr);
-            let cmsg = cmsg.as_mut().expect("CMSG_FIRSTHDR returns null pointer");
+    if !fds.is_empty() {
+        unsafe {
+            let cmsg = &mut *CMSG_FIRSTHDR(&msghdr);
+            cmsg.cmsg_len = cmsg_len as usize;
             cmsg.cmsg_level = SOL_SOCKET;
             cmsg.cmsg_type = SCM_RIGHTS;
-            cmsg.cmsg_len = CMSG_LEN(cmsg_size) as usize;
 
-            let ptr = CMSG_DATA(cmsg).cast::<RawFd>();
-            ptr::copy_nonoverlapping(fds.as_ptr(), ptr, fds.len());
-        }
-
-        let result = libc::sendmsg(socket_fd, &msghdr, 0);
-        match usize::try_from(result) {
-            Ok(write) => Ok(write),
-            Err(_) => Err(std::io::Error::last_os_error()),
+            // initialize the payload
+            let fdptr = CMSG_DATA(cmsg).cast::<RawFd>();
+            fdptr.copy_from_nonoverlapping(fds.as_ptr(), fds.len());
         }
     }
+
+    let mut rem = msg.len();
+    let mut msghdr = msghdr;
+    loop {
+        let result = unsafe { libc::sendmsg(socket, &msghdr, 0) };
+        let Ok(write) = usize::try_from(result) else {
+            return Err(std::io::Error::last_os_error());
+        };
+        if rem == write {
+            break;
+        }
+        if write == 0 {
+            return Err(std::io::ErrorKind::WriteZero.into());
+        }
+        rem -= write;
+
+        unsafe {
+            // `advance` the message buffer
+            let iov_mut = &mut *msghdr.msg_iov;
+            iov_mut.iov_base = iov_mut.iov_base.add(write);
+            iov_mut.iov_len = rem;
+
+            // Ancillary data is received as if it were queued along with the first normal data octet in
+            // the segment (if any).
+            //
+            // - https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+            //
+            // unset the ancillary data
+            msghdr.msg_control = ptr::null_mut();
+            msghdr.msg_controllen = 0;
+        }
+    }
+    Ok(())
 }
