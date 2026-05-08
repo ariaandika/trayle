@@ -25,6 +25,10 @@ impl WaylandSocket {
             socket: Socket::new(io),
         })
     }
+
+    pub fn recv_fds_mut(&mut self) -> &mut Vec<std::os::fd::RawFd> {
+        self.socket.recv_fds_mut()
+    }
 }
 
 impl WaylandSocket {

@@ -9,9 +9,9 @@ pub struct Socket {
     stream: UnixStream,
     read_buffer: BytesMut,
     write_buffer: Vec<u8>,
-    sendmsg_buffer: Vec<u8>,
     send_fds: Vec<RawFd>,
     recv_fds: Vec<RawFd>,
+    cmsg_buffer: Vec<u8>,
 }
 
 impl Socket {
@@ -20,9 +20,9 @@ impl Socket {
             stream,
             read_buffer: BytesMut::with_capacity(1024),
             write_buffer: Vec::with_capacity(1024),
-            sendmsg_buffer: Vec::with_capacity(512),
-            send_fds: vec![],
-            recv_fds: vec![],
+            send_fds: Vec::with_capacity(8),
+            recv_fds: Vec::with_capacity(8),
+            cmsg_buffer: Vec::with_capacity(512),
         }
     }
 
@@ -32,6 +32,10 @@ impl Socket {
 
     pub fn read_buffer_mut(&mut self) -> &mut BytesMut {
         &mut self.read_buffer
+    }
+
+    pub fn recv_fds_mut(&mut self) -> &mut Vec<RawFd> {
+        &mut self.recv_fds
     }
 }
 
@@ -54,7 +58,7 @@ impl Socket {
         if self.read_buffer.capacity() == self.read_buffer.len() {
             self.read_buffer.reserve(64);
         }
-        recvmsg(&mut self.read_buffer, &mut self.recv_fds, self.stream.as_raw_fd())
+        recvmsg(&mut self.read_buffer, &mut self.recv_fds, &mut self.cmsg_buffer, self.stream.as_raw_fd())
     }
 
     /// Flush write buffer.
@@ -62,10 +66,10 @@ impl Socket {
         sendmsg(
             &self.write_buffer,
             &self.send_fds,
-            &mut self.sendmsg_buffer,
+            &mut self.cmsg_buffer,
             self.stream.as_raw_fd(),
         )?;
-        self.sendmsg_buffer.clear();
+        self.cmsg_buffer.clear();
         self.write_buffer.clear();
         self.send_fds.clear();
         Ok(())
@@ -158,14 +162,25 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
 fn recvmsg(
     buffer: &mut BytesMut,
     fds_buffer: &mut Vec<RawFd>,
+    cmsg_buffer: &mut Vec<u8>,
     socket: RawFd,
 ) -> Result<()> {
-    use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_NXTHDR};
+    use libc::{CMSG_DATA, CMSG_SPACE, CMSG_FIRSTHDR, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
     use std::ptr::NonNull;
 
     let buffer_spare = buffer.spare_capacity_mut();
-    let cmsg_spare = fds_buffer.spare_capacity_mut();
+    let cmsg_spare = {
+        let cmsg_space = unsafe { CMSG_SPACE(size_of::<RawFd>() as u32 * 8) };
+        cmsg_buffer.reserve((cmsg_space / 8) as usize);
+        let cmsg_spare = cmsg_buffer.spare_capacity_mut();
+        unsafe {
+            std::slice::from_raw_parts_mut(
+                cmsg_spare.as_mut_ptr().cast::<u8>(),
+                cmsg_space as usize
+            )
+        }
+    };
 
     let mut iov = iovec {
         iov_base: buffer_spare.as_mut_ptr().cast(),
@@ -198,12 +213,13 @@ fn recvmsg(
             };
 
             let fds = CMSG_DATA(cmsg);
-            let dst = fds_buffer.as_mut_ptr().cast();
-            println!("CMSG: {:?}", cmsg);
-            // IDK WHICH BUFFER IS WHAT
-            //
-            // so idk is it not overlapping
-            fds.copy_to(dst, cmsg.cmsg_len);
+            let dst = fds_buffer.spare_capacity_mut().as_mut_ptr().cast();
+            fds.copy_to_nonoverlapping(dst, cmsg.cmsg_len);
+
+            fds_buffer.set_len(fds_buffer.len() + cmsg.cmsg_len / size_of::<RawFd>());
+
+            println!("CMSG: {:?}({fds:?}->{dst:?})", cmsg);
+
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }
     }

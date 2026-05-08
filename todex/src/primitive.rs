@@ -25,7 +25,7 @@ use std::num::NonZeroU32;
 pub struct Id(NonZeroU32);
 
 impl Id {
-    pub(crate) fn new(id: u32) -> Option<Self> {
+    pub fn new(id: u32) -> Option<Self> {
         NonZeroU32::new(id).map(Self)
     }
 
