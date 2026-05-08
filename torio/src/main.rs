@@ -14,16 +14,17 @@ fn main() -> Result<(), BoxError> {
     let registry_id = 2;
     let callback_id = 3;
 
-    socket.send_request(Id::wl_display(), GetRegistry {
+    socket.send(Id::wl_display(), GetRegistry {
         registry: registry_id,
     });
-    socket.send_request(Id::wl_display(), wl_display::Sync {
+    socket.send(Id::wl_display(), wl_display::Sync {
         callback: callback_id
     });
     socket.flush()?;
     println!("Send ok");
 
-    while let Some(msg) = socket.poll_message()? {
+    loop {
+        let msg = socket.poll_message()?;
         let id = msg.object_id();
         let opcode = msg.opcode();
         print!("{id}::{opcode} = ");
