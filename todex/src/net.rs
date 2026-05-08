@@ -165,7 +165,7 @@ fn recvmsg(
     cmsg_buffer: &mut Vec<u8>,
     socket: RawFd,
 ) -> Result<()> {
-    use libc::{CMSG_DATA, CMSG_SPACE, CMSG_FIRSTHDR, CMSG_NXTHDR};
+    use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
     use std::ptr::NonNull;
 
@@ -212,13 +212,15 @@ fn recvmsg(
                 break;
             };
 
-            let fds = CMSG_DATA(cmsg);
+            let nfds = (cmsg.cmsg_len - CMSG_LEN(0) as usize) / size_of::<RawFd>();
+
+            println!("CMSG: {cmsg:?}(header: {}), {nfds} fd(s)", CMSG_LEN(0));
+
+            let fds = CMSG_DATA(cmsg).cast::<RawFd>();
             let dst = fds_buffer.spare_capacity_mut().as_mut_ptr().cast();
-            fds.copy_to_nonoverlapping(dst, cmsg.cmsg_len);
+            fds.copy_to_nonoverlapping(dst, nfds);
 
-            fds_buffer.set_len(fds_buffer.len() + cmsg.cmsg_len / size_of::<RawFd>());
-
-            println!("CMSG: {:?}({fds:?}->{dst:?})", cmsg);
+            fds_buffer.set_len(fds_buffer.len() + nfds);
 
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }

@@ -96,7 +96,8 @@ fn main() -> Result<(), BoxError> {
             unsafe {
                 let send = wl_data_source::Send::decode_raw(msg.as_ptr())?;
                 println!("{send:?}");
-                let mut file = <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(socket.recv_fds_mut()[0]);
+                let fd = socket.recv_fds_mut().pop().unwrap();
+                let mut file = <std::fs::File as std::os::fd::FromRawFd>::from_raw_fd(fd);
                 std::io::Write::write_all(&mut file, b"lmao")?;
                 std::thread::sleep(std::time::Duration::from_millis(500));
                 std::io::Write::write_all(&mut file, b" lmao")?;
