@@ -59,6 +59,9 @@ fn main() {
 
     parse_protocol(&mut parser, &mut output);
 
+    let mut args = Vec::with_capacity(8);
+    let mut entries = Vec::with_capacity(8);
+
     while parse_interface(&mut parser, &mut output) {
         let mut request_opcode = 0;
         let mut event_opcode = 0;
@@ -76,14 +79,13 @@ fn main() {
                     ("event", OpKind::Event)
                 },
                 b"enum" => {
-                    parse_enum(&mut parser, &mut output);
+                    parse_enum(&mut entries, &mut parser, &mut output);
                     continue;
                 },
                 _ => break,
             };
-            parse_operation(name, kind, opcode, &mut parser, &mut output);
+            parse_operation(name, kind, opcode, &mut args, &mut parser, &mut output);
         }
-
         parser.next_closing_tag("interface");
         Interface::generate_trailer(&mut output);
     }
@@ -159,6 +161,7 @@ fn parse_operation(
     tag_name: &str,
     kind: element::OpKind,
     opcode: u16,
+    args: &mut Vec<Arg>,
     parser: &mut Parser,
     output: &mut impl Write,
 ) {
@@ -187,7 +190,6 @@ fn parse_operation(
     let description = parse_description(parser);
 
     // ===== Arguments =====
-    let mut args = Vec::with_capacity(8);
 
     while let Some((tag, _)) = parser.next_tag_if("arg") {
         // <!ELEMENT arg (description?)>
@@ -247,9 +249,10 @@ fn parse_operation(
         description,
         args,
     }.generate(opcode, output);
+    args.clear();
 }
 
-fn parse_enum(parser: &mut Parser, output: &mut impl Write) {
+fn parse_enum(entries: &mut Vec<Entry>, parser: &mut Parser, output: &mut impl Write) {
     // <!ELEMENT enum (description?,entry*)>
     //   <!ATTLIST enum name CDATA #REQUIRED>
     //   <!ATTLIST enum since CDATA #IMPLIED>
@@ -267,7 +270,6 @@ fn parse_enum(parser: &mut Parser, output: &mut impl Write) {
     let bitfield = bitfield.map(|e|e.parse().expect("invalid `bitfield`")).unwrap_or(false);
 
     let description = parse_description(parser);
-    let mut entries = vec![];
     while let Some((tag, _)) = parser.next_tag_if("entry") {
         // <!ELEMENT entry (description?)>
         //   <!ATTLIST entry name CDATA #REQUIRED>
@@ -308,6 +310,12 @@ fn parse_enum(parser: &mut Parser, output: &mut impl Write) {
         entries,
     };
     write!(output, "{enum_}");
+
+    if entries.len() > 16 {
+        *entries = Vec::with_capacity(8);
+    } else {
+        entries.clear();
+    }
 }
 
 // ===== Util =====

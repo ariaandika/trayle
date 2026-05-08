@@ -26,13 +26,13 @@ pub enum OpKind {
     Event,
 }
 
-pub struct Op {
+pub struct Op<'a> {
     pub kind: OpKind,
     pub name: Str,
     pub destructor: bool,
     pub since: Option<u32>,
     pub deprecated_since: Option<u32>,
-    pub args: Vec<Arg>,
+    pub args: &'a [Arg],
     pub description: Option<Description>,
 }
 
@@ -57,11 +57,11 @@ pub struct Arg {
     pub description: Option<Description>,
 }
 
-pub struct Enum {
+pub struct Enum<'a> {
     pub name: Str,
     pub since: Option<u32>,
     pub bitfield: bool,
-    pub entries: Vec<Entry>,
+    pub entries: &'a [Entry],
     pub description: Option<Description>,
 }
 

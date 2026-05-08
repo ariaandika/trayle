@@ -5,9 +5,9 @@ use crate::Write;
 use crate::element::*;
 
 macro_rules! deref {
-    ($me:ident$(<$lf:lifetime>)?,$t:ident$(<$lf2:lifetime>)?,$id:tt) => {
+    ($me:ident$(<$lf:lifetime>)?,$t:ty,$id:tt) => {
         impl$(<$lf>)? std::ops::Deref for $me $(<$lf>)? {
-            type Target = $t $(<$lf2>)?;
+            type Target = $t /* $(<$lf2>)? */;
 
             fn deref(&self) -> &Self::Target {
                 &self.$id
@@ -27,7 +27,7 @@ macro_rules! deref {
 
 /// `from_fn` uses `Fn` trait, not practical as a function
 macro_rules! iter_fmt {
-    ($iter: expr, |$arg:pat_param, $f:pat_param|$e:expr) => {
+    ($iter:expr, |$arg:pat_param, $f:pat_param|$e:expr) => {
         from_fn(|$f|{
             for $arg in $iter {
                 $e
@@ -39,25 +39,11 @@ macro_rules! iter_fmt {
 
 /// `format_args` lifetime are a bit monkey, not practical as a function
 macro_rules! or_empty {
-    ($b:ident, $($tt:tt)*) => {
-        if $b {
-            format_args!($($tt)*)
-        } else {
-            format_args!("")
-        }
-    };
-    (let $b:ident, $($tt:tt)*) => {
-        // `format_args` lifetime is lmao when using pattern matching
-        if $b.is_some() {
-            format_args!($($tt)*,$b.unwrap())
-        } else {
-            format_args!("")
-        }
-    };
     ($fmt:tt, $o:ident $(, $tt:tt)*) => {
         // `format_args` lifetime is lmao when using pattern matching
         if $o.is_some() {
-            format_args!($($tt)*,$b.unwrap())
+            #[allow(clippy::unnecessary_unwrap)]
+            { format_args!($fmt,$o.unwrap() $($tt)*) }
         } else {
             format_args!("")
         }
@@ -95,17 +81,16 @@ impl Protocol {
     pub fn generate_header(&self, o: &mut impl Write) {
         let Self { name, copyright, .. } = self;
         let cp = some_fmt(copyright.as_ref(), |cp, f| {
-            let cp = iter_fmt!(cp.as_str().lines().map(str::trim_start), |line, f| {
+            let cp = iter_fmt!(cp.lines().map(str::trim_start), |line, f| {
                 let sp = if line.is_empty() { "" } else { " " };
                 writeln!(f, "//!{sp}{line}")?;
             });
             write!(
                 f,
                 "//!\n\
-                //! ===== COPYRIGHT =====\n\
-                {cp}
-                //! ===== COPYRIGHT =====\n\
-                "
+                //! # Copyright\n\
+                //!\n\
+                {cp}"
             )
         });
         write!(o, "//! {name}\n{cp}{HEADERS}");
@@ -143,16 +128,16 @@ pub mod {mod_name} {{
     }
 }
 
-impl std::fmt::Display for Enum {
+impl std::fmt::Display for Enum<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let Self { name, since, bitfield, entries, .. } = self;
+        let Self { ref name, since, bitfield, entries, .. } = *self;
         let name = CamelCase(name);
-        let since = or_empty!(let since, "    /// since: {}\n");
+        let since = or_empty!("    /// since: {}\n", since);
         let entries = iter_fmt!(entries, |e @ Entry { name, value, since, .. }, f|{
             let dep_since = e.deprecated_since;
             let name = CamelCase(name);
-            let since = or_empty!(let since, "{P2}/// since: {}\n");
-            let dep_since = or_empty!(let dep_since, "{P2}/// deprecated-since: {}\n");
+            let since = or_empty!("{P2}/// since: {}\n", since);
+            let dep_since = or_empty!("{P2}/// deprecated-since: {}\n", dep_since);
             writeln!(f, "{since}{dep_since}{P2}{name} = {value},")?;
         });
         write!(
@@ -160,7 +145,7 @@ impl std::fmt::Display for Enum {
             "\n\
             {since}\
             {P1}/// bitfield: {bitfield}\n\
-            {P1}pub enum {name} {{\n\
+            {P1}pub enum {name}Enum {{\n\
             {entries}\
             {P1}}}\n\
             "
@@ -173,7 +158,7 @@ impl std::fmt::Display for Enum {
 /// - [`OpFallibleDecode`]
 /// - [`ArgDecode`]
 /// - [`ArgEncode`]
-impl Op {
+impl Op<'_> {
     pub fn generate(&self, opcode: u16, o: &mut impl Write) {
         // separate kind of message
         //
@@ -209,9 +194,7 @@ impl Op {
             encodable_count += 1;
         }
 
-        let mod_name = ModName::new(&self.name);
         let struct_name = CamelCase(&self.name);
-        // let is_zero_size = encodable_count == 0;
         let is_fd = fd_count > 0;
         let is_dynamic = dynamic_count > 0;
         let dtor = self.destructor;
@@ -219,23 +202,14 @@ impl Op {
 
         let lf = or_empty!(is_dynamic, "<'a>");
         let dtor_doc = or_empty!(dtor, ", type \"destructor\"");
-        // let enc_fd_doc = or_empty!(is_fd, "{P2}/// Require fd.\n{P2}///\n");
-        let dec_fd_doc = or_empty!(is_fd, "{P2}/// Fd available.\n");
-        let const_size_fmt = or_empty!(!is_dynamic, "{P2}pub const SIZE: u16 = {const_size};\n");
-        // let unsafe_fn = or_empty!(!is_zero_size, "unsafe ");
-        // let safety_doc = or_empty!(
-        //     !is_zero_size,
-        //     "{P2}/// # Safety\n\
-        //     {P2}///\n\
-        //     {P2}/// Given pointer must be valid for write until required length.\n"
-        // );
+        let fd_doc = or_empty!(is_fd, ", contains fd");
         let fields = self.fmt_encodables(|_, arg, f| {
             let name = &arg.name;
             let rust_ty = arg.to_rust_type(true);
             if arg.is_implicit_new_id() {
-                writeln!(f, "{P3}pub {name}_name: &'a str,\n{P3}pub {name}_version: u32,")?;
+                writeln!(f, "{P2}pub {name}_name: &'a str,\n{P2}pub {name}_version: u32,")?;
             }
-            writeln!(f, "{P3}pub {name}: {rust_ty},")
+            writeln!(f, "{P2}pub {name}: {rust_ty},")
         });
         let construct_fields = self.fmt_encodables(|_, arg, f| {
             let name = &arg.name;
@@ -244,14 +218,6 @@ impl Op {
             }
             write!(f, "{name}, ")
         });
-        // let size_args = self.fmt_dynamic_sizes(|i, arg, f|{
-        //     let name = &arg.name;
-        //     let new_id = arg.is_implicit_new_id();
-        //     let sep = or_empty!(i != 0, ", ");
-        //     let suffix = or_empty!(new_id, "_name_len");
-        //     let rust_ty = if new_id { "u16" } else { arg.to_rust_type(false) };
-        //     write!(f, "{sep}{name}{suffix}: {rust_ty}")
-        // });
         let dyn_sizes = self.fmt_dynamic_sizes(|_, arg, f|{
             let name = &arg.name;
             match arg.ty {
@@ -268,37 +234,24 @@ impl Op {
                 },
             }
         });
-        // let ptr_id = match encodable_count {
-        //     0 => format_args!("_"),
-        //     1 => format_args!("ptr"),
-        //     _ => format_args!("mut ptr"),
-        // };
-        // let encode_args = self.fmt_encodables(|_, arg, f|{
-        //     let name = &arg.name;
-        //     let rust_ty = arg.to_rust_type(false);
-        //     if arg.is_implicit_new_id() {
-        //         write!(f, "encoded_{name}: &[u8], ")?;
-        //     }
-        //     write!(f, "{name}: {rust_ty}, ")
-        // });
         let encode_body = self.fmt_encodables(|i, arg, f| {
             ArgEncode {
                 arg,
                 is_last: i as u32 == encodable_count - 1,
-                p: P4,
+                p: P3,
             }
             .fmt(f)
         });
         let decode: &dyn Display = if dynamic_count == 0 {
             &OpInfallibleDecode {
                 encodable_count,
-                p: P4,
+                p: P3,
                 op: self,
             }
         } else {
             &OpFallibleDecode {
                 encodable_count,
-                p: P4,
+                p: P3,
                 op: self,
             }
         };
@@ -306,51 +259,38 @@ impl Op {
         write!(
             o,
             "\n\
-            {P1}/// {kind}, opcode `{opcode}`{dtor_doc}\n\
-            {P1}pub mod {mod_name} {{\n\
-            {P1}    use super::*;\n\
-            {P1}    pub const OPCODE: u16 = {opcode};\n\
-            {P1}    pub const IS_DESTRUCTOR: bool = {dtor};\n\
-            {const_size_fmt}\n\
-            {dec_fd_doc}\
-            {P1}    #[derive(Debug)]\n\
-            {P1}    pub struct {struct_name}{lf} {{\n\
+            {P1}/// {kind}, opcode `{opcode}`{fd_doc}{dtor_doc}\n\
+            {P1}#[derive(Debug)]\n\
+            {P1}pub struct {struct_name}{lf} {{\n\
             {fields}\
+            {P1}}}\n\n\
+            {P1}impl{lf} EncodePayload for {struct_name}{lf} {{\n\
+            {P1}    const OPCODE: u16 = {opcode};\n\n\
+            {P1}    fn encoded_size(&self) -> u16 {{\n\
+            {P1}        {const_size}{dyn_sizes}\n\
             {P1}    }}\n\n\
-            {P1}    impl{lf} EncodePayload for {struct_name}{lf} {{\n\
-            {P1}        const OPCODE: u16 = {opcode};\n\n\
-            {P1}        fn encoded_size(&self) -> u16 {{\n\
-            {P1}            {const_size}{dyn_sizes}\n\
-            {P1}        }}\n\n\
-            {P1}        unsafe fn encode_raw(&self, mut ptr: *mut u8) {{\n\
+            {P1}    unsafe fn encode_raw(&self, mut ptr: *mut u8) {{\n\
             {encode_body}\
-            {P1}        }}\n\
-            {P1}    }}\n\n\
-            {P1}    impl<'a> DecodePayload<'a> for {struct_name}{lf} {{\n\
-            {P1}        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {{\n\
+            {P1}    }}\n\
+            {P1}}}\n\n\
+            {P1}impl<'a> DecodePayload<'a> for {struct_name}{lf} {{\n\
+            {P1}    unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {{\n\
             {decode}\
-            {P1}            Ok({struct_name} {{ {construct_fields}}})\n\
-            {P1}        }}\n\
-            {P1}    }}\n\n\
-            {P1}}}\n\
+            {P1}        Ok({struct_name} {{ {construct_fields}}})\n\
+            {P1}    }}\n\
+            {P1}}}\n\n\
             "
         );
-            // {P1}    pub fn size({size_args}) -> u16 {{\n\
-            // {P1}    }}\n\n\
-            // {enc_fd_doc}\
-            // {safety_doc}\
-            // {P1}    pub {unsafe_fn}fn encode({encode_args}{ptr_id}: *mut u8) {{\n\
-            // {P1}    }}\n\n\
     }
 }
 
 struct OpInfallibleDecode<'a> {
     encodable_count: u32,
     p: &'static str,
-    op: &'a Op,
+    op: &'a Op<'a>,
 }
 
-deref!(OpInfallibleDecode<'a>, Op, op);
+deref!(OpInfallibleDecode<'a>, Op<'a>, op);
 
 impl<'a> Display for OpInfallibleDecode<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -369,10 +309,10 @@ impl<'a> Display for OpInfallibleDecode<'a> {
 struct OpFallibleDecode<'a> {
     encodable_count: u32,
     p: &'static str,
-    op: &'a Op,
+    op: &'a Op<'a>,
 }
 
-deref!(OpFallibleDecode<'a>, Op, op);
+deref!(OpFallibleDecode<'a>, Op<'a>, op);
 
 impl<'a> Display for OpFallibleDecode<'a> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -618,7 +558,7 @@ impl std::fmt::Display for ArgEncode<'_> {
 
 // ===== subtypes =====
 
-deref!(Op, Vec<Arg>, args);
+deref!(Op<'a>, [Arg], args);
 
 impl Arg {
     fn is_fd(&self) -> bool {
@@ -740,7 +680,7 @@ trait ArgExt {
     }
 }
 
-impl ArgExt for Vec<Arg> {
+impl ArgExt for [Arg] {
     fn encodables(&self) -> impl Iterator<Item = &Arg> {
         self.iter().filter(|e| !e.is_fd())
     }

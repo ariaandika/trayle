@@ -1,6 +1,6 @@
 //! wayland
 //!
-//! ===== COPYRIGHT =====
+//! # Copyright
 //! Copyright © 2008-2011 Kristian Høgsberg
 //! Copyright © 2010-2011 Intel Corporation
 //! Copyright © 2012-2013 Collabora, Ltd.
@@ -25,8 +25,6 @@
 //! ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
 //! CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 //! SOFTWARE.
-
-                //! ===== COPYRIGHT =====
 #![allow(unsafe_op_in_unsafe_fn)]
 use std::slice;
 
@@ -45,137 +43,117 @@ pub mod wl_display {
     pub static NEW_ID: [u8; 20] = *b"\x0b\x00\x00\x00wl_display\0\0\x01\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod sync {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Sync {
-            pub callback: u32,
-        }
-
-        impl EncodePayload for Sync {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.callback);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Sync {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let callback = *ptr.cast::<u32>();
-                Ok(Sync { callback, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Sync {
+        pub callback: u32,
     }
+
+    impl EncodePayload for Sync {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.callback);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Sync {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let callback = *ptr.cast::<u32>();
+            Ok(Sync { callback, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod get_registry {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GetRegistry {
-            pub registry: u32,
-        }
-
-        impl EncodePayload for GetRegistry {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.registry);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetRegistry {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let registry = *ptr.cast::<u32>();
-                Ok(GetRegistry { registry, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetRegistry {
+        pub registry: u32,
     }
+
+    impl EncodePayload for GetRegistry {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.registry);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetRegistry {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let registry = *ptr.cast::<u32>();
+            Ok(GetRegistry { registry, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod error {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Error<'a> {
-            pub object_id: u32,
-            pub code: u32,
-            pub message: &'a str,
-        }
-
-        impl<'a> EncodePayload for Error<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                12 + self.message.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.object_id);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.code);
-                ptr = ptr.add(4);
-                let len = self.message.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.message.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Error<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 12 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 12;
-                let message_len = *ptr.add(8).cast::<u32>();
-                let message_pad_len = roundup4(message_len as u16);
-                if rem < message_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= message_pad_len;
-                let object_id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let code = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let [message @ .., 0] = slice::from_raw_parts(ptr.add(4), message_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(message) = str::from_utf8(message) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Error { object_id, code, message, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Error<'a> {
+        pub object_id: u32,
+        pub code: u32,
+        pub message: &'a str,
     }
 
+    impl<'a> EncodePayload for Error<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            12 + self.message.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.object_id);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.code);
+            ptr = ptr.add(4);
+            let len = self.message.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.message.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Error<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 12 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 12;
+            let message_len = *ptr.add(8).cast::<u32>();
+            let message_pad_len = roundup4(message_len as u16);
+            if rem < message_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= message_pad_len;
+            let object_id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let code = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let [message @ .., 0] = slice::from_raw_parts(ptr.add(4), message_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(message) = str::from_utf8(message) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Error { object_id, code, message, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidObject = 0,
         InvalidMethod = 1,
         NoMemory = 2,
@@ -183,38 +161,31 @@ pub mod wl_display {
     }
 
     /// event, opcode `1`
-    pub mod delete_id {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct DeleteId {
-            pub id: u32,
-        }
-
-        impl EncodePayload for DeleteId {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DeleteId {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(DeleteId { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DeleteId {
+        pub id: u32,
     }
+
+    impl EncodePayload for DeleteId {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DeleteId {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(DeleteId { id, })
+        }
+    }
+
 }
 
 
@@ -226,164 +197,145 @@ pub mod wl_registry {
     pub static NEW_ID: [u8; 20] = *b"\x0c\x00\x00\x00wl_registry\0\x01\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod bind {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Bind<'a> {
-            pub name: u32,
-            pub id_name: &'a str,
-            pub id_version: u32,
-            pub id: u32,
-        }
-
-        impl<'a> EncodePayload for Bind<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                16 + self.id_name.len() as u16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.name);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.id_name.len() as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.id_name.as_ptr(), self.id_name.len());
-                ptr.add(4 + self.id_name.len()).write(0);
-                let id_pad_len = roundup4(self.id_name.len() as u16 + 1);
-                ptr = ptr.add((4 + id_pad_len) as usize);
-                ptr.cast::<u32>().write(self.id_version);
-                ptr.add(4).cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Bind<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 8 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 8;
-                let id_len = *ptr.add(4).cast::<u32>();
-                let id_pad_len = roundup4(id_len as u16);
-                if rem < id_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= id_pad_len;
-                let name = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let [id_name @ .., 0] = slice::from_raw_parts(ptr.add(4), id_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(id_name) = str::from_utf8(id_name) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                let id_version = *ptr.add((4 + id_pad_len) as usize).cast::<u32>();
-                let id = *ptr.add((8 + id_pad_len) as usize).cast::<u32>();
-                Ok(Bind { name, id_name, id_version, id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Bind<'a> {
+        pub name: u32,
+        pub id_name: &'a str,
+        pub id_version: u32,
+        pub id: u32,
     }
+
+    impl<'a> EncodePayload for Bind<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            16 + self.id_name.len() as u16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.name);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.id_name.len() as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.id_name.as_ptr(), self.id_name.len());
+            ptr.add(4 + self.id_name.len()).write(0);
+            let id_pad_len = roundup4(self.id_name.len() as u16 + 1);
+            ptr = ptr.add((4 + id_pad_len) as usize);
+            ptr.cast::<u32>().write(self.id_version);
+            ptr.add(4).cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Bind<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 8 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 8;
+            let id_len = *ptr.add(4).cast::<u32>();
+            let id_pad_len = roundup4(id_len as u16);
+            if rem < id_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= id_pad_len;
+            let name = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let [id_name @ .., 0] = slice::from_raw_parts(ptr.add(4), id_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(id_name) = str::from_utf8(id_name) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            let id_version = *ptr.add((4 + id_pad_len) as usize).cast::<u32>();
+            let id = *ptr.add((8 + id_pad_len) as usize).cast::<u32>();
+            Ok(Bind { name, id_name, id_version, id, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod global {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Global<'a> {
-            pub name: u32,
-            pub interface: &'a str,
-            pub version: u32,
-        }
-
-        impl<'a> EncodePayload for Global<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                12 + self.interface.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.name);
-                ptr = ptr.add(4);
-                let len = self.interface.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.interface.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-                ptr = ptr.add((4 + roundup4(len + 1)) as usize);
-                ptr.cast::<u32>().write(self.version);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Global<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 8 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 8;
-                let interface_len = *ptr.add(4).cast::<u32>();
-                let interface_pad_len = roundup4(interface_len as u16);
-                if rem < interface_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= interface_pad_len;
-                let name = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let [interface @ .., 0] = slice::from_raw_parts(ptr.add(4), interface_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(interface) = str::from_utf8(interface) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                ptr = ptr.add((4 + interface_pad_len) as usize);
-                let version = *ptr.cast::<u32>();
-                Ok(Global { name, interface, version, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Global<'a> {
+        pub name: u32,
+        pub interface: &'a str,
+        pub version: u32,
     }
+
+    impl<'a> EncodePayload for Global<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            12 + self.interface.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.name);
+            ptr = ptr.add(4);
+            let len = self.interface.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.interface.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+            ptr = ptr.add((4 + roundup4(len + 1)) as usize);
+            ptr.cast::<u32>().write(self.version);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Global<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 8 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 8;
+            let interface_len = *ptr.add(4).cast::<u32>();
+            let interface_pad_len = roundup4(interface_len as u16);
+            if rem < interface_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= interface_pad_len;
+            let name = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let [interface @ .., 0] = slice::from_raw_parts(ptr.add(4), interface_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(interface) = str::from_utf8(interface) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            ptr = ptr.add((4 + interface_pad_len) as usize);
+            let version = *ptr.cast::<u32>();
+            Ok(Global { name, interface, version, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod global_remove {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GlobalRemove {
-            pub name: u32,
-        }
-
-        impl EncodePayload for GlobalRemove {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.name);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GlobalRemove {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let name = *ptr.cast::<u32>();
-                Ok(GlobalRemove { name, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GlobalRemove {
+        pub name: u32,
     }
+
+    impl EncodePayload for GlobalRemove {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.name);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GlobalRemove {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let name = *ptr.cast::<u32>();
+            Ok(GlobalRemove { name, })
+        }
+    }
+
 }
 
 
@@ -395,38 +347,31 @@ pub mod wl_callback {
     pub static NEW_ID: [u8; 20] = *b"\x0c\x00\x00\x00wl_callback\0\x01\x00\x00\x00";
 
     /// event, opcode `0`, type "destructor"
-    pub mod done {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Done {
-            pub callback_data: u32,
-        }
-
-        impl EncodePayload for Done {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.callback_data);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Done {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let callback_data = *ptr.cast::<u32>();
-                Ok(Done { callback_data, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Done {
+        pub callback_data: u32,
     }
+
+    impl EncodePayload for Done {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.callback_data);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Done {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let callback_data = *ptr.cast::<u32>();
+            Ok(Done { callback_data, })
+        }
+    }
+
 }
 
 
@@ -438,103 +383,82 @@ pub mod wl_compositor {
     pub static NEW_ID: [u8; 24] = *b"\x0e\x00\x00\x00wl_compositor\0\0\0\x07\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod create_surface {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct CreateSurface {
-            pub id: u32,
-        }
-
-        impl EncodePayload for CreateSurface {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for CreateSurface {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(CreateSurface { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct CreateSurface {
+        pub id: u32,
     }
+
+    impl EncodePayload for CreateSurface {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for CreateSurface {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(CreateSurface { id, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod create_region {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct CreateRegion {
-            pub id: u32,
-        }
-
-        impl EncodePayload for CreateRegion {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for CreateRegion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(CreateRegion { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct CreateRegion {
+        pub id: u32,
     }
+
+    impl EncodePayload for CreateRegion {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for CreateRegion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(CreateRegion { id, })
+        }
+    }
+
 
     /// request, opcode `2`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -546,128 +470,107 @@ pub mod wl_shm_pool {
     pub static NEW_ID: [u8; 20] = *b"\x0c\x00\x00\x00wl_shm_pool\0\x02\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod create_buffer {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 24;
-
-        #[derive(Debug)]
-        pub struct CreateBuffer {
-            pub id: u32,
-            pub offset: i32,
-            pub width: i32,
-            pub height: i32,
-            pub stride: i32,
-            pub format: u32,
-        }
-
-        impl EncodePayload for CreateBuffer {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                24
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.offset);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.stride);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.format);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for CreateBuffer {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let offset = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let stride = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let format = *ptr.cast::<u32>();
-                Ok(CreateBuffer { id, offset, width, height, stride, format, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct CreateBuffer {
+        pub id: u32,
+        pub offset: i32,
+        pub width: i32,
+        pub height: i32,
+        pub stride: i32,
+        pub format: u32,
     }
+
+    impl EncodePayload for CreateBuffer {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            24
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.offset);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.stride);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.format);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for CreateBuffer {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let offset = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let stride = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let format = *ptr.cast::<u32>();
+            Ok(CreateBuffer { id, offset, width, height, stride, format, })
+        }
+    }
+
 
     /// request, opcode `1`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod resize {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Resize {
-            pub size: i32,
-        }
-
-        impl EncodePayload for Resize {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.size);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Resize {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let size = *ptr.cast::<i32>();
-                Ok(Resize { size, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Resize {
+        pub size: i32,
     }
+
+    impl EncodePayload for Resize {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.size);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Resize {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let size = *ptr.cast::<i32>();
+            Ok(Resize { size, })
+        }
+    }
+
 }
 
 
@@ -679,14 +582,14 @@ pub mod wl_shm {
     pub static NEW_ID: [u8; 16] = *b"\x07\x00\x00\x00wl_shm\0\0\x02\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidFormat = 0,
         InvalidStride = 1,
         InvalidFd = 2,
     }
 
     /// bitfield: false
-    pub enum Format {
+    pub enum FormatEnum {
         Argb8888 = 0,
         Xrgb8888 = 1,
         C8 = 0x20203843,
@@ -833,108 +736,87 @@ pub mod wl_shm {
     }
 
     /// request, opcode `0`
-    pub mod create_pool {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct CreatePool {
-            pub id: u32,
-            pub size: i32,
-        }
-
-        impl EncodePayload for CreatePool {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.size);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for CreatePool {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let size = *ptr.cast::<i32>();
-                Ok(CreatePool { id, size, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct CreatePool {
+        pub id: u32,
+        pub size: i32,
     }
+
+    impl EncodePayload for CreatePool {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.size);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for CreatePool {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let size = *ptr.cast::<i32>();
+            Ok(CreatePool { id, size, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod format {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Format {
-            pub format: u32,
-        }
-
-        impl EncodePayload for Format {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.format);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Format {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let format = *ptr.cast::<u32>();
-                Ok(Format { format, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Format {
+        pub format: u32,
     }
+
+    impl EncodePayload for Format {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.format);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Format {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let format = *ptr.cast::<u32>();
+            Ok(Format { format, })
+        }
+    }
+
 
     /// request, opcode `1`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -946,66 +828,52 @@ pub mod wl_buffer {
     pub static NEW_ID: [u8; 20] = *b"\x0a\x00\x00\x00wl_buffer\0\0\0\x01\x00\x00\x00";
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -1017,7 +885,7 @@ pub mod wl_data_offer {
     pub static NEW_ID: [u8; 24] = *b"\x0e\x00\x00\x00wl_data_offer\0\0\0\x04\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidFinish = 0,
         InvalidActionMask = 1,
         InvalidAction = 2,
@@ -1025,346 +893,293 @@ pub mod wl_data_offer {
     }
 
     /// request, opcode `0`
-    pub mod accept {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Accept<'a> {
-            pub serial: u32,
-            pub mime_type: Option<&'a str>,
-        }
-
-        impl<'a> EncodePayload for Accept<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                8 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                match self.mime_type {
-                    Some(s) => {
-                        let len = s.len() as u16;
-                        ptr.cast::<u32>().write((len + 1) as u32);
-                        ptr.add(4).copy_from_nonoverlapping(s.as_ptr(), len as usize);
-                        ptr.add((4 + len) as usize).write(0);
-                    }
-                    None => {
-                        ptr.cast::<u32>().write(0);
-                    }
-                };
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Accept<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 8 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 8;
-                let mime_type_len = *ptr.add(4).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let mime_type = if mime_type_len != 0 {
-                    let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
-                        return Err(DecodeError::NoNullTerm);
-                    };
-                    let Ok(mime_type) = str::from_utf8(mime_type) else {
-                        return Err(DecodeError::NonUtf8);
-                    };
-                    Some(mime_type)
-                } else {
-                    None
-                };
-                Ok(Accept { serial, mime_type, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Accept<'a> {
+        pub serial: u32,
+        pub mime_type: Option<&'a str>,
     }
+
+    impl<'a> EncodePayload for Accept<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            8 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            match self.mime_type {
+                Some(s) => {
+                    let len = s.len() as u16;
+                    ptr.cast::<u32>().write((len + 1) as u32);
+                    ptr.add(4).copy_from_nonoverlapping(s.as_ptr(), len as usize);
+                    ptr.add((4 + len) as usize).write(0);
+                }
+                None => {
+                    ptr.cast::<u32>().write(0);
+                }
+            };
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Accept<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 8 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 8;
+            let mime_type_len = *ptr.add(4).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let mime_type = if mime_type_len != 0 {
+                let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
+                    return Err(DecodeError::NoNullTerm);
+                };
+                let Ok(mime_type) = str::from_utf8(mime_type) else {
+                    return Err(DecodeError::NonUtf8);
+                };
+                Some(mime_type)
+            } else {
+                None
+            };
+            Ok(Accept { serial, mime_type, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod receive {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Receive<'a> {
-            pub mime_type: &'a str,
-        }
-
-        impl<'a> EncodePayload for Receive<'a> {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.mime_type.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.mime_type.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Receive<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let mime_type_len = *ptr.add(0).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
-                let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(mime_type) = str::from_utf8(mime_type) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Receive { mime_type, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Receive<'a> {
+        pub mime_type: &'a str,
     }
+
+    impl<'a> EncodePayload for Receive<'a> {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.mime_type.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.mime_type.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Receive<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let mime_type_len = *ptr.add(0).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(mime_type) = str::from_utf8(mime_type) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Receive { mime_type, })
+        }
+    }
+
 
     /// request, opcode `2`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod offer {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Offer<'a> {
-            pub mime_type: &'a str,
-        }
-
-        impl<'a> EncodePayload for Offer<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.mime_type.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.mime_type.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Offer<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let mime_type_len = *ptr.add(0).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
-                let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(mime_type) = str::from_utf8(mime_type) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Offer { mime_type, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Offer<'a> {
+        pub mime_type: &'a str,
     }
+
+    impl<'a> EncodePayload for Offer<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.mime_type.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.mime_type.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Offer<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let mime_type_len = *ptr.add(0).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(mime_type) = str::from_utf8(mime_type) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Offer { mime_type, })
+        }
+    }
+
 
     /// request, opcode `3`
-    pub mod finish {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Finish {
-        }
-
-        impl EncodePayload for Finish {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Finish {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Finish { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Finish {
     }
+
+    impl EncodePayload for Finish {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Finish {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Finish { })
+        }
+    }
+
 
     /// request, opcode `4`
-    pub mod set_actions {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct SetActions {
-            pub dnd_actions: u32,
-            pub preferred_action: u32,
-        }
-
-        impl EncodePayload for SetActions {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.dnd_actions);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.preferred_action);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetActions {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let dnd_actions = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let preferred_action = *ptr.cast::<u32>();
-                Ok(SetActions { dnd_actions, preferred_action, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetActions {
+        pub dnd_actions: u32,
+        pub preferred_action: u32,
     }
+
+    impl EncodePayload for SetActions {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.dnd_actions);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.preferred_action);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetActions {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let dnd_actions = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let preferred_action = *ptr.cast::<u32>();
+            Ok(SetActions { dnd_actions, preferred_action, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod source_actions {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SourceActions {
-            pub source_actions: u32,
-        }
-
-        impl EncodePayload for SourceActions {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.source_actions);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SourceActions {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let source_actions = *ptr.cast::<u32>();
-                Ok(SourceActions { source_actions, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SourceActions {
+        pub source_actions: u32,
     }
+
+    impl EncodePayload for SourceActions {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.source_actions);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SourceActions {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let source_actions = *ptr.cast::<u32>();
+            Ok(SourceActions { source_actions, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod action {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Action {
-            pub dnd_action: u32,
-        }
-
-        impl EncodePayload for Action {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.dnd_action);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Action {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let dnd_action = *ptr.cast::<u32>();
-                Ok(Action { dnd_action, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Action {
+        pub dnd_action: u32,
     }
+
+    impl EncodePayload for Action {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.dnd_action);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Action {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let dnd_action = *ptr.cast::<u32>();
+            Ok(Action { dnd_action, })
+        }
+    }
+
 }
 
 
@@ -1376,370 +1191,310 @@ pub mod wl_data_source {
     pub static NEW_ID: [u8; 24] = *b"\x0f\x00\x00\x00wl_data_source\0\0\x04\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidActionMask = 0,
         InvalidSource = 1,
     }
 
     /// request, opcode `0`
-    pub mod offer {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Offer<'a> {
-            pub mime_type: &'a str,
-        }
-
-        impl<'a> EncodePayload for Offer<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.mime_type.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.mime_type.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Offer<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let mime_type_len = *ptr.add(0).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
-                let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(mime_type) = str::from_utf8(mime_type) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Offer { mime_type, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Offer<'a> {
+        pub mime_type: &'a str,
     }
+
+    impl<'a> EncodePayload for Offer<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.mime_type.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.mime_type.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Offer<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let mime_type_len = *ptr.add(0).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(mime_type) = str::from_utf8(mime_type) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Offer { mime_type, })
+        }
+    }
+
 
     /// request, opcode `1`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod target {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Target<'a> {
-            pub mime_type: Option<&'a str>,
-        }
-
-        impl<'a> EncodePayload for Target<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                match self.mime_type {
-                    Some(s) => {
-                        let len = s.len() as u16;
-                        ptr.cast::<u32>().write((len + 1) as u32);
-                        ptr.add(4).copy_from_nonoverlapping(s.as_ptr(), len as usize);
-                        ptr.add((4 + len) as usize).write(0);
-                    }
-                    None => {
-                        ptr.cast::<u32>().write(0);
-                    }
-                };
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Target<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let mime_type_len = *ptr.add(0).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
-                let mime_type = if mime_type_len != 0 {
-                    let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
-                        return Err(DecodeError::NoNullTerm);
-                    };
-                    let Ok(mime_type) = str::from_utf8(mime_type) else {
-                        return Err(DecodeError::NonUtf8);
-                    };
-                    Some(mime_type)
-                } else {
-                    None
-                };
-                Ok(Target { mime_type, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Target<'a> {
+        pub mime_type: Option<&'a str>,
     }
 
-    /// event, opcode `1`
-    pub mod send {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
+    impl<'a> EncodePayload for Target<'a> {
+        const OPCODE: u16 = 0;
 
-        #[derive(Debug)]
-        pub struct Send<'a> {
-            pub mime_type: &'a str,
+        fn encoded_size(&self) -> u16 {
+            4 + self.mime_type.map(|s|s.len() as u16 + 1).unwrap_or(0)
         }
 
-        impl<'a> EncodePayload for Send<'a> {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.mime_type.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.mime_type.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            match self.mime_type {
+                Some(s) => {
+                    let len = s.len() as u16;
+                    ptr.cast::<u32>().write((len + 1) as u32);
+                    ptr.add(4).copy_from_nonoverlapping(s.as_ptr(), len as usize);
+                    ptr.add((4 + len) as usize).write(0);
+                }
+                None => {
+                    ptr.cast::<u32>().write(0);
+                }
+            };
         }
+    }
 
-        impl<'a> DecodePayload<'a> for Send<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let mime_type_len = *ptr.add(0).cast::<u32>();
-                let mime_type_pad_len = roundup4(mime_type_len as u16);
-                if rem < mime_type_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= mime_type_pad_len;
+    impl<'a> DecodePayload<'a> for Target<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let mime_type_len = *ptr.add(0).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let mime_type = if mime_type_len != 0 {
                 let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
                     return Err(DecodeError::NoNullTerm);
                 };
                 let Ok(mime_type) = str::from_utf8(mime_type) else {
                     return Err(DecodeError::NonUtf8);
                 };
-                Ok(Send { mime_type, })
-            }
+                Some(mime_type)
+            } else {
+                None
+            };
+            Ok(Target { mime_type, })
+        }
+    }
+
+
+    /// event, opcode `1`
+    #[derive(Debug)]
+    pub struct Send<'a> {
+        pub mime_type: &'a str,
+    }
+
+    impl<'a> EncodePayload for Send<'a> {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.mime_type.len() as u16 + 1
         }
 
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.mime_type.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.mime_type.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
     }
+
+    impl<'a> DecodePayload<'a> for Send<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let mime_type_len = *ptr.add(0).cast::<u32>();
+            let mime_type_pad_len = roundup4(mime_type_len as u16);
+            if rem < mime_type_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= mime_type_pad_len;
+            let [mime_type @ .., 0] = slice::from_raw_parts(ptr.add(4), mime_type_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(mime_type) = str::from_utf8(mime_type) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Send { mime_type, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod cancelled {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Cancelled {
-        }
-
-        impl EncodePayload for Cancelled {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Cancelled {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Cancelled { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Cancelled {
     }
+
+    impl EncodePayload for Cancelled {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Cancelled {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Cancelled { })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod set_actions {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetActions {
-            pub dnd_actions: u32,
-        }
-
-        impl EncodePayload for SetActions {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.dnd_actions);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetActions {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let dnd_actions = *ptr.cast::<u32>();
-                Ok(SetActions { dnd_actions, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetActions {
+        pub dnd_actions: u32,
     }
+
+    impl EncodePayload for SetActions {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.dnd_actions);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetActions {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let dnd_actions = *ptr.cast::<u32>();
+            Ok(SetActions { dnd_actions, })
+        }
+    }
+
 
     /// event, opcode `3`
-    pub mod dnd_drop_performed {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct DndDropPerformed {
-        }
-
-        impl EncodePayload for DndDropPerformed {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DndDropPerformed {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(DndDropPerformed { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DndDropPerformed {
     }
+
+    impl EncodePayload for DndDropPerformed {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DndDropPerformed {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(DndDropPerformed { })
+        }
+    }
+
 
     /// event, opcode `4`
-    pub mod dnd_finished {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct DndFinished {
-        }
-
-        impl EncodePayload for DndFinished {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DndFinished {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(DndFinished { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DndFinished {
     }
+
+    impl EncodePayload for DndFinished {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DndFinished {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(DndFinished { })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod action {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Action {
-            pub dnd_action: u32,
-        }
-
-        impl EncodePayload for Action {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.dnd_action);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Action {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let dnd_action = *ptr.cast::<u32>();
-                Ok(Action { dnd_action, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Action {
+        pub dnd_action: u32,
     }
+
+    impl EncodePayload for Action {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.dnd_action);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Action {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let dnd_action = *ptr.cast::<u32>();
+            Ok(Action { dnd_action, })
+        }
+    }
+
 }
 
 
@@ -1751,357 +1506,294 @@ pub mod wl_data_device {
     pub static NEW_ID: [u8; 24] = *b"\x0f\x00\x00\x00wl_data_device\0\0\x04\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         Role = 0,
         UsedSource = 1,
     }
 
     /// request, opcode `0`
-    pub mod start_drag {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct StartDrag {
-            pub source: u32,
-            pub origin: u32,
-            pub icon: u32,
-            pub serial: u32,
-        }
-
-        impl EncodePayload for StartDrag {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.source);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.origin);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.icon);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.serial);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for StartDrag {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let source = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let origin = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let icon = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let serial = *ptr.cast::<u32>();
-                Ok(StartDrag { source, origin, icon, serial, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct StartDrag {
+        pub source: u32,
+        pub origin: u32,
+        pub icon: u32,
+        pub serial: u32,
     }
+
+    impl EncodePayload for StartDrag {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.source);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.origin);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.icon);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.serial);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for StartDrag {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let source = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let origin = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let icon = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let serial = *ptr.cast::<u32>();
+            Ok(StartDrag { source, origin, icon, serial, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod set_selection {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct SetSelection {
-            pub source: u32,
-            pub serial: u32,
-        }
-
-        impl EncodePayload for SetSelection {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.source);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.serial);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetSelection {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let source = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let serial = *ptr.cast::<u32>();
-                Ok(SetSelection { source, serial, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetSelection {
+        pub source: u32,
+        pub serial: u32,
     }
+
+    impl EncodePayload for SetSelection {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.source);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.serial);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetSelection {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let source = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let serial = *ptr.cast::<u32>();
+            Ok(SetSelection { source, serial, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod data_offer {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct DataOffer {
-            pub id: u32,
-        }
-
-        impl EncodePayload for DataOffer {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DataOffer {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(DataOffer { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DataOffer {
+        pub id: u32,
     }
+
+    impl EncodePayload for DataOffer {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DataOffer {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(DataOffer { id, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod enter {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 20;
-
-        #[derive(Debug)]
-        pub struct Enter {
-            pub serial: u32,
-            pub surface: u32,
-            pub x: f32,
-            pub y: f32,
-            pub id: u32,
-        }
-
-        impl EncodePayload for Enter {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                20
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Enter {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let id = *ptr.cast::<u32>();
-                Ok(Enter { serial, surface, x, y, id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Enter {
+        pub serial: u32,
+        pub surface: u32,
+        pub x: f32,
+        pub y: f32,
+        pub id: u32,
     }
+
+    impl EncodePayload for Enter {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            20
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Enter {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let id = *ptr.cast::<u32>();
+            Ok(Enter { serial, surface, x, y, id, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod leave {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Leave {
-        }
-
-        impl EncodePayload for Leave {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Leave {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Leave { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Leave {
     }
+
+    impl EncodePayload for Leave {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Leave {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Leave { })
+        }
+    }
+
 
     /// event, opcode `3`
-    pub mod motion {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Motion {
-            pub time: u32,
-            pub x: f32,
-            pub y: f32,
-        }
-
-        impl EncodePayload for Motion {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Motion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Motion { time, x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Motion {
+        pub time: u32,
+        pub x: f32,
+        pub y: f32,
     }
+
+    impl EncodePayload for Motion {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Motion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Motion { time, x, y, })
+        }
+    }
+
 
     /// event, opcode `4`
-    pub mod drop {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Drop {
-        }
-
-        impl EncodePayload for Drop {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Drop {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Drop { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Drop {
     }
+
+    impl EncodePayload for Drop {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Drop {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Drop { })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod selection {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Selection {
-            pub id: u32,
-        }
-
-        impl EncodePayload for Selection {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Selection {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(Selection { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Selection {
+        pub id: u32,
     }
+
+    impl EncodePayload for Selection {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Selection {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(Selection { id, })
+        }
+    }
+
 
     /// request, opcode `2`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -2113,81 +1805,67 @@ pub mod wl_data_device_manager {
     pub static NEW_ID: [u8; 32] = *b"\x17\x00\x00\x00wl_data_device_manager\0\0\x04\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod create_data_source {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct CreateDataSource {
-            pub id: u32,
-        }
-
-        impl EncodePayload for CreateDataSource {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for CreateDataSource {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(CreateDataSource { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct CreateDataSource {
+        pub id: u32,
     }
+
+    impl EncodePayload for CreateDataSource {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for CreateDataSource {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(CreateDataSource { id, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod get_data_device {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct GetDataDevice {
-            pub id: u32,
-            pub seat: u32,
-        }
-
-        impl EncodePayload for GetDataDevice {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.seat);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetDataDevice {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let seat = *ptr.cast::<u32>();
-                Ok(GetDataDevice { id, seat, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetDataDevice {
+        pub id: u32,
+        pub seat: u32,
     }
+
+    impl EncodePayload for GetDataDevice {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.seat);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetDataDevice {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let seat = *ptr.cast::<u32>();
+            Ok(GetDataDevice { id, seat, })
+        }
+    }
+
 
     /// since: 3
     /// bitfield: true
-    pub enum DndAction {
+    pub enum DndActionEnum {
         None = 0,
         Copy = 1,
         Move = 2,
@@ -2195,35 +1873,28 @@ pub mod wl_data_device_manager {
     }
 
     /// request, opcode `2`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -2235,48 +1906,41 @@ pub mod wl_shell {
     pub static NEW_ID: [u8; 20] = *b"\x09\x00\x00\x00wl_shell\0\0\0\0\x01\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         Role = 0,
     }
 
     /// request, opcode `0`
-    pub mod get_shell_surface {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct GetShellSurface {
-            pub id: u32,
-            pub surface: u32,
-        }
-
-        impl EncodePayload for GetShellSurface {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetShellSurface {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                Ok(GetShellSurface { id, surface, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetShellSurface {
+        pub id: u32,
+        pub surface: u32,
     }
+
+    impl EncodePayload for GetShellSurface {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetShellSurface {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            Ok(GetShellSurface { id, surface, })
+        }
+    }
+
 }
 
 
@@ -2288,80 +1952,66 @@ pub mod wl_shell_surface {
     pub static NEW_ID: [u8; 28] = *b"\x11\x00\x00\x00wl_shell_surface\0\0\0\0\x01\x00\x00\x00";
 
     /// request, opcode `0`
-    pub mod pong {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Pong {
-            pub serial: u32,
-        }
-
-        impl EncodePayload for Pong {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Pong {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                Ok(Pong { serial, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Pong {
+        pub serial: u32,
     }
+
+    impl EncodePayload for Pong {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Pong {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            Ok(Pong { serial, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod r#move {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Move {
-            pub seat: u32,
-            pub serial: u32,
-        }
-
-        impl EncodePayload for Move {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.seat);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.serial);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Move {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let seat = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let serial = *ptr.cast::<u32>();
-                Ok(Move { seat, serial, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Move {
+        pub seat: u32,
+        pub serial: u32,
     }
 
+    impl EncodePayload for Move {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.seat);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.serial);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Move {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let seat = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let serial = *ptr.cast::<u32>();
+            Ok(Move { seat, serial, })
+        }
+    }
+
+
     /// bitfield: true
-    pub enum Resize {
+    pub enum ResizeEnum {
         None = 0,
         Top = 1,
         Bottom = 2,
@@ -2374,136 +2024,115 @@ pub mod wl_shell_surface {
     }
 
     /// request, opcode `2`
-    pub mod resize {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Resize {
-            pub seat: u32,
-            pub serial: u32,
-            pub edges: u32,
-        }
-
-        impl EncodePayload for Resize {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.seat);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.edges);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Resize {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let seat = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let edges = *ptr.cast::<u32>();
-                Ok(Resize { seat, serial, edges, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Resize {
+        pub seat: u32,
+        pub serial: u32,
+        pub edges: u32,
     }
+
+    impl EncodePayload for Resize {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.seat);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.edges);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Resize {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let seat = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let edges = *ptr.cast::<u32>();
+            Ok(Resize { seat, serial, edges, })
+        }
+    }
+
 
     /// request, opcode `3`
-    pub mod set_toplevel {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct SetToplevel {
-        }
-
-        impl EncodePayload for SetToplevel {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetToplevel {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(SetToplevel { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetToplevel {
     }
 
+    impl EncodePayload for SetToplevel {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetToplevel {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(SetToplevel { })
+        }
+    }
+
+
     /// bitfield: true
-    pub enum Transient {
+    pub enum TransientEnum {
         Inactive = 0x1,
     }
 
     /// request, opcode `4`
-    pub mod set_transient {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct SetTransient {
-            pub parent: u32,
-            pub x: i32,
-            pub y: i32,
-            pub flags: u32,
-        }
-
-        impl EncodePayload for SetTransient {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.parent);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.flags);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetTransient {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let parent = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let flags = *ptr.cast::<u32>();
-                Ok(SetTransient { parent, x, y, flags, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetTransient {
+        pub parent: u32,
+        pub x: i32,
+        pub y: i32,
+        pub flags: u32,
     }
 
+    impl EncodePayload for SetTransient {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.parent);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.flags);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetTransient {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let parent = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let flags = *ptr.cast::<u32>();
+            Ok(SetTransient { parent, x, y, flags, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum FullscreenMethod {
+    pub enum FullscreenMethodEnum {
         Default = 0,
         Scale = 1,
         Driver = 2,
@@ -2511,354 +2140,300 @@ pub mod wl_shell_surface {
     }
 
     /// request, opcode `5`
-    pub mod set_fullscreen {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct SetFullscreen {
-            pub method: u32,
-            pub framerate: u32,
-            pub output: u32,
-        }
-
-        impl EncodePayload for SetFullscreen {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.method);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.framerate);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.output);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetFullscreen {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let method = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let framerate = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let output = *ptr.cast::<u32>();
-                Ok(SetFullscreen { method, framerate, output, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetFullscreen {
+        pub method: u32,
+        pub framerate: u32,
+        pub output: u32,
     }
+
+    impl EncodePayload for SetFullscreen {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.method);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.framerate);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.output);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetFullscreen {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let method = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let framerate = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let output = *ptr.cast::<u32>();
+            Ok(SetFullscreen { method, framerate, output, })
+        }
+    }
+
 
     /// request, opcode `6`
-    pub mod set_popup {
-        use super::*;
-        pub const OPCODE: u16 = 6;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 24;
-
-        #[derive(Debug)]
-        pub struct SetPopup {
-            pub seat: u32,
-            pub serial: u32,
-            pub parent: u32,
-            pub x: i32,
-            pub y: i32,
-            pub flags: u32,
-        }
-
-        impl EncodePayload for SetPopup {
-            const OPCODE: u16 = 6;
-
-            fn encoded_size(&self) -> u16 {
-                24
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.seat);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.parent);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.flags);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetPopup {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let seat = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let parent = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let flags = *ptr.cast::<u32>();
-                Ok(SetPopup { seat, serial, parent, x, y, flags, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetPopup {
+        pub seat: u32,
+        pub serial: u32,
+        pub parent: u32,
+        pub x: i32,
+        pub y: i32,
+        pub flags: u32,
     }
+
+    impl EncodePayload for SetPopup {
+        const OPCODE: u16 = 6;
+
+        fn encoded_size(&self) -> u16 {
+            24
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.seat);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.parent);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.flags);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetPopup {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let seat = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let parent = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let flags = *ptr.cast::<u32>();
+            Ok(SetPopup { seat, serial, parent, x, y, flags, })
+        }
+    }
+
 
     /// request, opcode `7`
-    pub mod set_maximized {
-        use super::*;
-        pub const OPCODE: u16 = 7;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetMaximized {
-            pub output: u32,
-        }
-
-        impl EncodePayload for SetMaximized {
-            const OPCODE: u16 = 7;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.output);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetMaximized {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let output = *ptr.cast::<u32>();
-                Ok(SetMaximized { output, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetMaximized {
+        pub output: u32,
     }
+
+    impl EncodePayload for SetMaximized {
+        const OPCODE: u16 = 7;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.output);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetMaximized {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let output = *ptr.cast::<u32>();
+            Ok(SetMaximized { output, })
+        }
+    }
+
 
     /// request, opcode `8`
-    pub mod set_title {
-        use super::*;
-        pub const OPCODE: u16 = 8;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct SetTitle<'a> {
-            pub title: &'a str,
-        }
-
-        impl<'a> EncodePayload for SetTitle<'a> {
-            const OPCODE: u16 = 8;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.title.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.title.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.title.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetTitle<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let title_len = *ptr.add(0).cast::<u32>();
-                let title_pad_len = roundup4(title_len as u16);
-                if rem < title_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= title_pad_len;
-                let [title @ .., 0] = slice::from_raw_parts(ptr.add(4), title_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(title) = str::from_utf8(title) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(SetTitle { title, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetTitle<'a> {
+        pub title: &'a str,
     }
+
+    impl<'a> EncodePayload for SetTitle<'a> {
+        const OPCODE: u16 = 8;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.title.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.title.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.title.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetTitle<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let title_len = *ptr.add(0).cast::<u32>();
+            let title_pad_len = roundup4(title_len as u16);
+            if rem < title_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= title_pad_len;
+            let [title @ .., 0] = slice::from_raw_parts(ptr.add(4), title_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(title) = str::from_utf8(title) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(SetTitle { title, })
+        }
+    }
+
 
     /// request, opcode `9`
-    pub mod set_class {
-        use super::*;
-        pub const OPCODE: u16 = 9;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct SetClass<'a> {
-            pub class_: &'a str,
-        }
-
-        impl<'a> EncodePayload for SetClass<'a> {
-            const OPCODE: u16 = 9;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.class_.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.class_.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.class_.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetClass<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let class__len = *ptr.add(0).cast::<u32>();
-                let class__pad_len = roundup4(class__len as u16);
-                if rem < class__pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= class__pad_len;
-                let [class_ @ .., 0] = slice::from_raw_parts(ptr.add(4), class__len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(class_) = str::from_utf8(class_) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(SetClass { class_, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetClass<'a> {
+        pub class_: &'a str,
     }
+
+    impl<'a> EncodePayload for SetClass<'a> {
+        const OPCODE: u16 = 9;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.class_.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.class_.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.class_.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetClass<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let class__len = *ptr.add(0).cast::<u32>();
+            let class__pad_len = roundup4(class__len as u16);
+            if rem < class__pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= class__pad_len;
+            let [class_ @ .., 0] = slice::from_raw_parts(ptr.add(4), class__len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(class_) = str::from_utf8(class_) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(SetClass { class_, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod ping {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Ping {
-            pub serial: u32,
-        }
-
-        impl EncodePayload for Ping {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Ping {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                Ok(Ping { serial, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Ping {
+        pub serial: u32,
     }
+
+    impl EncodePayload for Ping {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Ping {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            Ok(Ping { serial, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod configure {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Configure {
-            pub edges: u32,
-            pub width: i32,
-            pub height: i32,
-        }
-
-        impl EncodePayload for Configure {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.edges);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Configure {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let edges = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                Ok(Configure { edges, width, height, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Configure {
+        pub edges: u32,
+        pub width: i32,
+        pub height: i32,
     }
+
+    impl EncodePayload for Configure {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.edges);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Configure {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let edges = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            Ok(Configure { edges, width, height, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod popup_done {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct PopupDone {
-        }
-
-        impl EncodePayload for PopupDone {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for PopupDone {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(PopupDone { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct PopupDone {
     }
+
+    impl EncodePayload for PopupDone {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for PopupDone {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(PopupDone { })
+        }
+    }
+
 }
 
 
@@ -2870,7 +2445,7 @@ pub mod wl_surface {
     pub static NEW_ID: [u8; 20] = *b"\x0b\x00\x00\x00wl_surface\0\0\x07\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidScale = 0,
         InvalidTransform = 1,
         InvalidSize = 2,
@@ -2880,587 +2455,475 @@ pub mod wl_surface {
     }
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod attach {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Attach {
-            pub buffer: u32,
-            pub x: i32,
-            pub y: i32,
-        }
-
-        impl EncodePayload for Attach {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.buffer);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Attach {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let buffer = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                Ok(Attach { buffer, x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Attach {
+        pub buffer: u32,
+        pub x: i32,
+        pub y: i32,
     }
+
+    impl EncodePayload for Attach {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.buffer);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Attach {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let buffer = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            Ok(Attach { buffer, x, y, })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod damage {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Damage {
-            pub x: i32,
-            pub y: i32,
-            pub width: i32,
-            pub height: i32,
-        }
-
-        impl EncodePayload for Damage {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Damage {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                Ok(Damage { x, y, width, height, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Damage {
+        pub x: i32,
+        pub y: i32,
+        pub width: i32,
+        pub height: i32,
     }
+
+    impl EncodePayload for Damage {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Damage {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            Ok(Damage { x, y, width, height, })
+        }
+    }
+
 
     /// request, opcode `3`
-    pub mod frame {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Frame {
-            pub callback: u32,
-        }
-
-        impl EncodePayload for Frame {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.callback);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Frame {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let callback = *ptr.cast::<u32>();
-                Ok(Frame { callback, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Frame {
+        pub callback: u32,
     }
+
+    impl EncodePayload for Frame {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.callback);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Frame {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let callback = *ptr.cast::<u32>();
+            Ok(Frame { callback, })
+        }
+    }
+
 
     /// request, opcode `4`
-    pub mod set_opaque_region {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetOpaqueRegion {
-            pub region: u32,
-        }
-
-        impl EncodePayload for SetOpaqueRegion {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.region);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetOpaqueRegion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let region = *ptr.cast::<u32>();
-                Ok(SetOpaqueRegion { region, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetOpaqueRegion {
+        pub region: u32,
     }
+
+    impl EncodePayload for SetOpaqueRegion {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.region);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetOpaqueRegion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let region = *ptr.cast::<u32>();
+            Ok(SetOpaqueRegion { region, })
+        }
+    }
+
 
     /// request, opcode `5`
-    pub mod set_input_region {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetInputRegion {
-            pub region: u32,
-        }
-
-        impl EncodePayload for SetInputRegion {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.region);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetInputRegion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let region = *ptr.cast::<u32>();
-                Ok(SetInputRegion { region, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetInputRegion {
+        pub region: u32,
     }
+
+    impl EncodePayload for SetInputRegion {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.region);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetInputRegion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let region = *ptr.cast::<u32>();
+            Ok(SetInputRegion { region, })
+        }
+    }
+
 
     /// request, opcode `6`
-    pub mod commit {
-        use super::*;
-        pub const OPCODE: u16 = 6;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Commit {
-        }
-
-        impl EncodePayload for Commit {
-            const OPCODE: u16 = 6;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Commit {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Commit { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Commit {
     }
+
+    impl EncodePayload for Commit {
+        const OPCODE: u16 = 6;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Commit {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Commit { })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod enter {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Enter {
-            pub output: u32,
-        }
-
-        impl EncodePayload for Enter {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.output);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Enter {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let output = *ptr.cast::<u32>();
-                Ok(Enter { output, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Enter {
+        pub output: u32,
     }
+
+    impl EncodePayload for Enter {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.output);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Enter {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let output = *ptr.cast::<u32>();
+            Ok(Enter { output, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod leave {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Leave {
-            pub output: u32,
-        }
-
-        impl EncodePayload for Leave {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.output);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Leave {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let output = *ptr.cast::<u32>();
-                Ok(Leave { output, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Leave {
+        pub output: u32,
     }
+
+    impl EncodePayload for Leave {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.output);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Leave {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let output = *ptr.cast::<u32>();
+            Ok(Leave { output, })
+        }
+    }
+
 
     /// request, opcode `7`
-    pub mod set_buffer_transform {
-        use super::*;
-        pub const OPCODE: u16 = 7;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetBufferTransform {
-            pub transform: i32,
-        }
-
-        impl EncodePayload for SetBufferTransform {
-            const OPCODE: u16 = 7;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.transform);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetBufferTransform {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let transform = *ptr.cast::<i32>();
-                Ok(SetBufferTransform { transform, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetBufferTransform {
+        pub transform: i32,
     }
+
+    impl EncodePayload for SetBufferTransform {
+        const OPCODE: u16 = 7;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.transform);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetBufferTransform {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let transform = *ptr.cast::<i32>();
+            Ok(SetBufferTransform { transform, })
+        }
+    }
+
 
     /// request, opcode `8`
-    pub mod set_buffer_scale {
-        use super::*;
-        pub const OPCODE: u16 = 8;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct SetBufferScale {
-            pub scale: i32,
-        }
-
-        impl EncodePayload for SetBufferScale {
-            const OPCODE: u16 = 8;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.scale);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetBufferScale {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let scale = *ptr.cast::<i32>();
-                Ok(SetBufferScale { scale, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetBufferScale {
+        pub scale: i32,
     }
+
+    impl EncodePayload for SetBufferScale {
+        const OPCODE: u16 = 8;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.scale);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetBufferScale {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let scale = *ptr.cast::<i32>();
+            Ok(SetBufferScale { scale, })
+        }
+    }
+
 
     /// request, opcode `9`
-    pub mod damage_buffer {
-        use super::*;
-        pub const OPCODE: u16 = 9;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct DamageBuffer {
-            pub x: i32,
-            pub y: i32,
-            pub width: i32,
-            pub height: i32,
-        }
-
-        impl EncodePayload for DamageBuffer {
-            const OPCODE: u16 = 9;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DamageBuffer {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                Ok(DamageBuffer { x, y, width, height, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DamageBuffer {
+        pub x: i32,
+        pub y: i32,
+        pub width: i32,
+        pub height: i32,
     }
+
+    impl EncodePayload for DamageBuffer {
+        const OPCODE: u16 = 9;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DamageBuffer {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            Ok(DamageBuffer { x, y, width, height, })
+        }
+    }
+
 
     /// request, opcode `10`
-    pub mod offset {
-        use super::*;
-        pub const OPCODE: u16 = 10;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Offset {
-            pub x: i32,
-            pub y: i32,
-        }
-
-        impl EncodePayload for Offset {
-            const OPCODE: u16 = 10;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Offset {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                Ok(Offset { x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Offset {
+        pub x: i32,
+        pub y: i32,
     }
+
+    impl EncodePayload for Offset {
+        const OPCODE: u16 = 10;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Offset {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            Ok(Offset { x, y, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod preferred_buffer_scale {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct PreferredBufferScale {
-            pub factor: i32,
-        }
-
-        impl EncodePayload for PreferredBufferScale {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.factor);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for PreferredBufferScale {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let factor = *ptr.cast::<i32>();
-                Ok(PreferredBufferScale { factor, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct PreferredBufferScale {
+        pub factor: i32,
     }
+
+    impl EncodePayload for PreferredBufferScale {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.factor);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for PreferredBufferScale {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let factor = *ptr.cast::<i32>();
+            Ok(PreferredBufferScale { factor, })
+        }
+    }
+
 
     /// event, opcode `3`
-    pub mod preferred_buffer_transform {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct PreferredBufferTransform {
-            pub transform: u32,
-        }
-
-        impl EncodePayload for PreferredBufferTransform {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.transform);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for PreferredBufferTransform {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let transform = *ptr.cast::<u32>();
-                Ok(PreferredBufferTransform { transform, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct PreferredBufferTransform {
+        pub transform: u32,
     }
+
+    impl EncodePayload for PreferredBufferTransform {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.transform);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for PreferredBufferTransform {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let transform = *ptr.cast::<u32>();
+            Ok(PreferredBufferTransform { transform, })
+        }
+    }
+
 
     /// request, opcode `11`
-    pub mod get_release {
-        use super::*;
-        pub const OPCODE: u16 = 11;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GetRelease {
-            pub callback: u32,
-        }
-
-        impl EncodePayload for GetRelease {
-            const OPCODE: u16 = 11;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.callback);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetRelease {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let callback = *ptr.cast::<u32>();
-                Ok(GetRelease { callback, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetRelease {
+        pub callback: u32,
     }
+
+    impl EncodePayload for GetRelease {
+        const OPCODE: u16 = 11;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.callback);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetRelease {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let callback = *ptr.cast::<u32>();
+            Ok(GetRelease { callback, })
+        }
+    }
+
 }
 
 
@@ -3472,235 +2935,194 @@ pub mod wl_seat {
     pub static NEW_ID: [u8; 16] = *b"\x08\x00\x00\x00wl_seat\0\x0a\x00\x00\x00";
 
     /// bitfield: true
-    pub enum Capability {
+    pub enum CapabilityEnum {
         Pointer = 1,
         Keyboard = 2,
         Touch = 4,
     }
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         MissingCapability = 0,
     }
 
     /// event, opcode `0`
-    pub mod capabilities {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Capabilities {
-            pub capabilities: u32,
-        }
-
-        impl EncodePayload for Capabilities {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.capabilities);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Capabilities {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let capabilities = *ptr.cast::<u32>();
-                Ok(Capabilities { capabilities, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Capabilities {
+        pub capabilities: u32,
     }
+
+    impl EncodePayload for Capabilities {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.capabilities);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Capabilities {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let capabilities = *ptr.cast::<u32>();
+            Ok(Capabilities { capabilities, })
+        }
+    }
+
 
     /// request, opcode `0`
-    pub mod get_pointer {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GetPointer {
-            pub id: u32,
-        }
-
-        impl EncodePayload for GetPointer {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetPointer {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(GetPointer { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetPointer {
+        pub id: u32,
     }
+
+    impl EncodePayload for GetPointer {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetPointer {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(GetPointer { id, })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod get_keyboard {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GetKeyboard {
-            pub id: u32,
-        }
-
-        impl EncodePayload for GetKeyboard {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetKeyboard {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(GetKeyboard { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetKeyboard {
+        pub id: u32,
     }
+
+    impl EncodePayload for GetKeyboard {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetKeyboard {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(GetKeyboard { id, })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod get_touch {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct GetTouch {
-            pub id: u32,
-        }
-
-        impl EncodePayload for GetTouch {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetTouch {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                Ok(GetTouch { id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetTouch {
+        pub id: u32,
     }
+
+    impl EncodePayload for GetTouch {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetTouch {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            Ok(GetTouch { id, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod name {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Name<'a> {
-            pub name: &'a str,
-        }
-
-        impl<'a> EncodePayload for Name<'a> {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.name.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.name.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.name.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Name<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let name_len = *ptr.add(0).cast::<u32>();
-                let name_pad_len = roundup4(name_len as u16);
-                if rem < name_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= name_pad_len;
-                let [name @ .., 0] = slice::from_raw_parts(ptr.add(4), name_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(name) = str::from_utf8(name) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Name { name, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Name<'a> {
+        pub name: &'a str,
     }
+
+    impl<'a> EncodePayload for Name<'a> {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.name.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.name.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.name.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Name<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let name_len = *ptr.add(0).cast::<u32>();
+            let name_pad_len = roundup4(name_len as u16);
+            if rem < name_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= name_pad_len;
+            let [name @ .., 0] = slice::from_raw_parts(ptr.add(4), name_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(name) = str::from_utf8(name) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Name { name, })
+        }
+    }
+
 
     /// request, opcode `3`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 }
 
 
@@ -3712,360 +3134,304 @@ pub mod wl_pointer {
     pub static NEW_ID: [u8; 20] = *b"\x0b\x00\x00\x00wl_pointer\0\0\x0a\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         Role = 0,
     }
 
     /// request, opcode `0`
-    pub mod set_cursor {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct SetCursor {
-            pub serial: u32,
-            pub surface: u32,
-            pub hotspot_x: i32,
-            pub hotspot_y: i32,
-        }
-
-        impl EncodePayload for SetCursor {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.hotspot_x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.hotspot_y);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetCursor {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let hotspot_x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let hotspot_y = *ptr.cast::<i32>();
-                Ok(SetCursor { serial, surface, hotspot_x, hotspot_y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetCursor {
+        pub serial: u32,
+        pub surface: u32,
+        pub hotspot_x: i32,
+        pub hotspot_y: i32,
     }
+
+    impl EncodePayload for SetCursor {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.hotspot_x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.hotspot_y);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetCursor {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let hotspot_x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let hotspot_y = *ptr.cast::<i32>();
+            Ok(SetCursor { serial, surface, hotspot_x, hotspot_y, })
+        }
+    }
+
 
     /// event, opcode `0`
-    pub mod enter {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Enter {
-            pub serial: u32,
-            pub surface: u32,
-            pub surface_x: f32,
-            pub surface_y: f32,
-        }
-
-        impl EncodePayload for Enter {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.surface_x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.surface_y * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Enter {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface_x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let surface_y = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Enter { serial, surface, surface_x, surface_y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Enter {
+        pub serial: u32,
+        pub surface: u32,
+        pub surface_x: f32,
+        pub surface_y: f32,
     }
+
+    impl EncodePayload for Enter {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.surface_x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.surface_y * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Enter {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface_x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let surface_y = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Enter { serial, surface, surface_x, surface_y, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod leave {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Leave {
-            pub serial: u32,
-            pub surface: u32,
-        }
-
-        impl EncodePayload for Leave {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Leave {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                Ok(Leave { serial, surface, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Leave {
+        pub serial: u32,
+        pub surface: u32,
     }
+
+    impl EncodePayload for Leave {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Leave {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            Ok(Leave { serial, surface, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod motion {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Motion {
-            pub time: u32,
-            pub surface_x: f32,
-            pub surface_y: f32,
-        }
-
-        impl EncodePayload for Motion {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.surface_x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.surface_y * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Motion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface_x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let surface_y = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Motion { time, surface_x, surface_y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Motion {
+        pub time: u32,
+        pub surface_x: f32,
+        pub surface_y: f32,
     }
 
+    impl EncodePayload for Motion {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.surface_x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.surface_y * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Motion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface_x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let surface_y = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Motion { time, surface_x, surface_y, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum ButtonState {
+    pub enum ButtonStateEnum {
         Released = 0,
         Pressed = 1,
     }
 
     /// event, opcode `3`
-    pub mod button {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Button {
-            pub serial: u32,
-            pub time: u32,
-            pub button: u32,
-            pub state: u32,
-        }
-
-        impl EncodePayload for Button {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.button);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.state);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Button {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let button = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let state = *ptr.cast::<u32>();
-                Ok(Button { serial, time, button, state, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Button {
+        pub serial: u32,
+        pub time: u32,
+        pub button: u32,
+        pub state: u32,
     }
 
+    impl EncodePayload for Button {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.button);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.state);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Button {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let button = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let state = *ptr.cast::<u32>();
+            Ok(Button { serial, time, button, state, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum Axis {
+    pub enum AxisEnum {
         VerticalScroll = 0,
         HorizontalScroll = 1,
     }
 
     /// event, opcode `4`
-    pub mod axis {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Axis {
-            pub time: u32,
-            pub axis: u32,
-            pub value: f32,
-        }
-
-        impl EncodePayload for Axis {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.axis);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.value * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Axis {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let axis = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let value = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Axis { time, axis, value, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Axis {
+        pub time: u32,
+        pub axis: u32,
+        pub value: f32,
     }
+
+    impl EncodePayload for Axis {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.axis);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.value * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Axis {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let axis = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let value = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Axis { time, axis, value, })
+        }
+    }
+
 
     /// request, opcode `1`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod frame {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Frame {
-        }
-
-        impl EncodePayload for Frame {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Frame {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Frame { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Frame {
     }
 
+    impl EncodePayload for Frame {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Frame {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Frame { })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum AxisSource {
+    pub enum AxisSourceEnum {
         Wheel = 0,
         Finger = 1,
         Continuous = 2,
@@ -4074,200 +3440,165 @@ pub mod wl_pointer {
     }
 
     /// event, opcode `6`
-    pub mod axis_source {
-        use super::*;
-        pub const OPCODE: u16 = 6;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct AxisSource {
-            pub axis_source: u32,
-        }
-
-        impl EncodePayload for AxisSource {
-            const OPCODE: u16 = 6;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.axis_source);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AxisSource {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let axis_source = *ptr.cast::<u32>();
-                Ok(AxisSource { axis_source, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AxisSource {
+        pub axis_source: u32,
     }
+
+    impl EncodePayload for AxisSource {
+        const OPCODE: u16 = 6;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.axis_source);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AxisSource {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let axis_source = *ptr.cast::<u32>();
+            Ok(AxisSource { axis_source, })
+        }
+    }
+
 
     /// event, opcode `7`
-    pub mod axis_stop {
-        use super::*;
-        pub const OPCODE: u16 = 7;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct AxisStop {
-            pub time: u32,
-            pub axis: u32,
-        }
-
-        impl EncodePayload for AxisStop {
-            const OPCODE: u16 = 7;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.axis);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AxisStop {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let axis = *ptr.cast::<u32>();
-                Ok(AxisStop { time, axis, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AxisStop {
+        pub time: u32,
+        pub axis: u32,
     }
+
+    impl EncodePayload for AxisStop {
+        const OPCODE: u16 = 7;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.axis);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AxisStop {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let axis = *ptr.cast::<u32>();
+            Ok(AxisStop { time, axis, })
+        }
+    }
+
 
     /// event, opcode `8`
-    pub mod axis_discrete {
-        use super::*;
-        pub const OPCODE: u16 = 8;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct AxisDiscrete {
-            pub axis: u32,
-            pub discrete: i32,
-        }
-
-        impl EncodePayload for AxisDiscrete {
-            const OPCODE: u16 = 8;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.axis);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.discrete);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AxisDiscrete {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let axis = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let discrete = *ptr.cast::<i32>();
-                Ok(AxisDiscrete { axis, discrete, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AxisDiscrete {
+        pub axis: u32,
+        pub discrete: i32,
     }
+
+    impl EncodePayload for AxisDiscrete {
+        const OPCODE: u16 = 8;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.axis);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.discrete);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AxisDiscrete {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let axis = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let discrete = *ptr.cast::<i32>();
+            Ok(AxisDiscrete { axis, discrete, })
+        }
+    }
+
 
     /// event, opcode `9`
-    pub mod axis_value120 {
-        use super::*;
-        pub const OPCODE: u16 = 9;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct AxisValue120 {
-            pub axis: u32,
-            pub value120: i32,
-        }
-
-        impl EncodePayload for AxisValue120 {
-            const OPCODE: u16 = 9;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.axis);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.value120);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AxisValue120 {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let axis = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let value120 = *ptr.cast::<i32>();
-                Ok(AxisValue120 { axis, value120, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AxisValue120 {
+        pub axis: u32,
+        pub value120: i32,
     }
 
+    impl EncodePayload for AxisValue120 {
+        const OPCODE: u16 = 9;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.axis);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.value120);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AxisValue120 {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let axis = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let value120 = *ptr.cast::<i32>();
+            Ok(AxisValue120 { axis, value120, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum AxisRelativeDirection {
+    pub enum AxisRelativeDirectionEnum {
         Identical = 0,
         Inverted = 1,
     }
 
     /// event, opcode `10`
-    pub mod axis_relative_direction {
-        use super::*;
-        pub const OPCODE: u16 = 10;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct AxisRelativeDirection {
-            pub axis: u32,
-            pub direction: u32,
-        }
-
-        impl EncodePayload for AxisRelativeDirection {
-            const OPCODE: u16 = 10;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.axis);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.direction);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AxisRelativeDirection {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let axis = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let direction = *ptr.cast::<u32>();
-                Ok(AxisRelativeDirection { axis, direction, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AxisRelativeDirection {
+        pub axis: u32,
+        pub direction: u32,
     }
+
+    impl EncodePayload for AxisRelativeDirection {
+        const OPCODE: u16 = 10;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.axis);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.direction);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AxisRelativeDirection {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let axis = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let direction = *ptr.cast::<u32>();
+            Ok(AxisRelativeDirection { axis, direction, })
+        }
+    }
+
 }
 
 
@@ -4279,147 +3610,127 @@ pub mod wl_keyboard {
     pub static NEW_ID: [u8; 20] = *b"\x0c\x00\x00\x00wl_keyboard\0\x0a\x00\x00\x00";
 
     /// bitfield: false
-    pub enum KeymapFormat {
+    pub enum KeymapFormatEnum {
         NoKeymap = 0,
         XkbV1 = 1,
     }
 
     /// event, opcode `0`
-    pub mod keymap {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Keymap {
-            pub format: u32,
-            pub size: u32,
-        }
-
-        impl EncodePayload for Keymap {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.format);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.size);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Keymap {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let format = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let size = *ptr.cast::<u32>();
-                Ok(Keymap { format, size, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Keymap {
+        pub format: u32,
+        pub size: u32,
     }
+
+    impl EncodePayload for Keymap {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.format);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.size);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Keymap {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let format = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let size = *ptr.cast::<u32>();
+            Ok(Keymap { format, size, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod enter {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Enter<'a> {
-            pub serial: u32,
-            pub surface: u32,
-            pub keys: &'a [u8],
-        }
-
-        impl<'a> EncodePayload for Enter<'a> {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                12 + self.keys.len() as u16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                let len = self.keys.len() as u16;
-                ptr.cast::<u32>().write(len as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.keys.as_ptr(), len as usize);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Enter<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 12 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 12;
-                let keys_len = *ptr.add(8).cast::<u32>();
-                let keys_pad_len = roundup4(keys_len as u16);
-                if rem < keys_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= keys_pad_len;
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let keys = slice::from_raw_parts(ptr.add(4), keys_len as usize);
-                Ok(Enter { serial, surface, keys, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Enter<'a> {
+        pub serial: u32,
+        pub surface: u32,
+        pub keys: &'a [u8],
     }
+
+    impl<'a> EncodePayload for Enter<'a> {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            12 + self.keys.len() as u16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            let len = self.keys.len() as u16;
+            ptr.cast::<u32>().write(len as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.keys.as_ptr(), len as usize);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Enter<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 12 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 12;
+            let keys_len = *ptr.add(8).cast::<u32>();
+            let keys_pad_len = roundup4(keys_len as u16);
+            if rem < keys_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= keys_pad_len;
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let keys = slice::from_raw_parts(ptr.add(4), keys_len as usize);
+            Ok(Enter { serial, surface, keys, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod leave {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Leave {
-            pub serial: u32,
-            pub surface: u32,
-        }
-
-        impl EncodePayload for Leave {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Leave {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                Ok(Leave { serial, surface, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Leave {
+        pub serial: u32,
+        pub surface: u32,
     }
 
+    impl EncodePayload for Leave {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Leave {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            Ok(Leave { serial, surface, })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum KeyState {
+    pub enum KeyStateEnum {
         Released = 0,
         Pressed = 1,
         /// since: 10
@@ -4427,177 +3738,149 @@ pub mod wl_keyboard {
     }
 
     /// event, opcode `3`
-    pub mod key {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Key {
-            pub serial: u32,
-            pub time: u32,
-            pub key: u32,
-            pub state: u32,
-        }
-
-        impl EncodePayload for Key {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.key);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.state);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Key {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let key = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let state = *ptr.cast::<u32>();
-                Ok(Key { serial, time, key, state, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Key {
+        pub serial: u32,
+        pub time: u32,
+        pub key: u32,
+        pub state: u32,
     }
+
+    impl EncodePayload for Key {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.key);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.state);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Key {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let key = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let state = *ptr.cast::<u32>();
+            Ok(Key { serial, time, key, state, })
+        }
+    }
+
 
     /// event, opcode `4`
-    pub mod modifiers {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 20;
-
-        #[derive(Debug)]
-        pub struct Modifiers {
-            pub serial: u32,
-            pub mods_depressed: u32,
-            pub mods_latched: u32,
-            pub mods_locked: u32,
-            pub group: u32,
-        }
-
-        impl EncodePayload for Modifiers {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                20
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.mods_depressed);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.mods_latched);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.mods_locked);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.group);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Modifiers {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let mods_depressed = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let mods_latched = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let mods_locked = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let group = *ptr.cast::<u32>();
-                Ok(Modifiers { serial, mods_depressed, mods_latched, mods_locked, group, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Modifiers {
+        pub serial: u32,
+        pub mods_depressed: u32,
+        pub mods_latched: u32,
+        pub mods_locked: u32,
+        pub group: u32,
     }
+
+    impl EncodePayload for Modifiers {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            20
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.mods_depressed);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.mods_latched);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.mods_locked);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.group);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Modifiers {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let mods_depressed = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let mods_latched = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let mods_locked = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let group = *ptr.cast::<u32>();
+            Ok(Modifiers { serial, mods_depressed, mods_latched, mods_locked, group, })
+        }
+    }
+
 
     /// request, opcode `0`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod repeat_info {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct RepeatInfo {
-            pub rate: i32,
-            pub delay: i32,
-        }
-
-        impl EncodePayload for RepeatInfo {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.rate);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.delay);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for RepeatInfo {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let rate = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let delay = *ptr.cast::<i32>();
-                Ok(RepeatInfo { rate, delay, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct RepeatInfo {
+        pub rate: i32,
+        pub delay: i32,
     }
+
+    impl EncodePayload for RepeatInfo {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.rate);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.delay);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for RepeatInfo {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let rate = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let delay = *ptr.cast::<i32>();
+            Ok(RepeatInfo { rate, delay, })
+        }
+    }
+
 }
 
 
@@ -4609,332 +3892,276 @@ pub mod wl_touch {
     pub static NEW_ID: [u8; 20] = *b"\x09\x00\x00\x00wl_touch\0\0\0\0\x0a\x00\x00\x00";
 
     /// event, opcode `0`
-    pub mod down {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 24;
-
-        #[derive(Debug)]
-        pub struct Down {
-            pub serial: u32,
-            pub time: u32,
-            pub surface: u32,
-            pub id: i32,
-            pub x: f32,
-            pub y: f32,
-        }
-
-        impl EncodePayload for Down {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                24
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Down {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let id = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Down { serial, time, surface, id, x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Down {
+        pub serial: u32,
+        pub time: u32,
+        pub surface: u32,
+        pub id: i32,
+        pub x: f32,
+        pub y: f32,
     }
+
+    impl EncodePayload for Down {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            24
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Down {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let id = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Down { serial, time, surface, id, x, y, })
+        }
+    }
+
 
     /// event, opcode `1`
-    pub mod up {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Up {
-            pub serial: u32,
-            pub time: u32,
-            pub id: i32,
-        }
-
-        impl EncodePayload for Up {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.serial);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.id);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Up {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let serial = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let id = *ptr.cast::<i32>();
-                Ok(Up { serial, time, id, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Up {
+        pub serial: u32,
+        pub time: u32,
+        pub id: i32,
     }
+
+    impl EncodePayload for Up {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.serial);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.id);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Up {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let serial = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let id = *ptr.cast::<i32>();
+            Ok(Up { serial, time, id, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod motion {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Motion {
-            pub time: u32,
-            pub id: i32,
-            pub x: f32,
-            pub y: f32,
-        }
-
-        impl EncodePayload for Motion {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.time);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Motion {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let time = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let id = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let x = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Motion { time, id, x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Motion {
+        pub time: u32,
+        pub id: i32,
+        pub x: f32,
+        pub y: f32,
     }
+
+    impl EncodePayload for Motion {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.time);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.x * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.y * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Motion {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let time = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let id = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let x = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Motion { time, id, x, y, })
+        }
+    }
+
 
     /// event, opcode `3`
-    pub mod frame {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Frame {
-        }
-
-        impl EncodePayload for Frame {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Frame {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Frame { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Frame {
     }
+
+    impl EncodePayload for Frame {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Frame {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Frame { })
+        }
+    }
+
 
     /// event, opcode `4`
-    pub mod cancel {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Cancel {
-        }
-
-        impl EncodePayload for Cancel {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Cancel {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Cancel { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Cancel {
     }
+
+    impl EncodePayload for Cancel {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Cancel {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Cancel { })
+        }
+    }
+
 
     /// request, opcode `0`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod shape {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct Shape {
-            pub id: i32,
-            pub major: f32,
-            pub minor: f32,
-        }
-
-        impl EncodePayload for Shape {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.major * 256.0).round() as i32);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.minor * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Shape {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let major = *ptr.cast::<i32>() as f32 / 256.0;
-                ptr = ptr.add(4);
-                let minor = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Shape { id, major, minor, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Shape {
+        pub id: i32,
+        pub major: f32,
+        pub minor: f32,
     }
+
+    impl EncodePayload for Shape {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.major * 256.0).round() as i32);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.minor * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Shape {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let major = *ptr.cast::<i32>() as f32 / 256.0;
+            ptr = ptr.add(4);
+            let minor = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Shape { id, major, minor, })
+        }
+    }
+
 
     /// event, opcode `6`
-    pub mod orientation {
-        use super::*;
-        pub const OPCODE: u16 = 6;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct Orientation {
-            pub id: i32,
-            pub orientation: f32,
-        }
-
-        impl EncodePayload for Orientation {
-            const OPCODE: u16 = 6;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write((self.orientation * 256.0).round() as i32);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Orientation {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let orientation = *ptr.cast::<i32>() as f32 / 256.0;
-                Ok(Orientation { id, orientation, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Orientation {
+        pub id: i32,
+        pub orientation: f32,
     }
+
+    impl EncodePayload for Orientation {
+        const OPCODE: u16 = 6;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write((self.orientation * 256.0).round() as i32);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Orientation {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let orientation = *ptr.cast::<i32>() as f32 / 256.0;
+            Ok(Orientation { id, orientation, })
+        }
+    }
+
 }
 
 
@@ -4946,7 +4173,7 @@ pub mod wl_output {
     pub static NEW_ID: [u8; 20] = *b"\x0a\x00\x00\x00wl_output\0\0\0\x04\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Subpixel {
+    pub enum SubpixelEnum {
         Unknown = 0,
         None = 1,
         HorizontalRgb = 2,
@@ -4956,7 +4183,7 @@ pub mod wl_output {
     }
 
     /// bitfield: false
-    pub enum Transform {
+    pub enum TransformEnum {
         Normal = 0,
         _90 = 1,
         _180 = 2,
@@ -4968,364 +4195,318 @@ pub mod wl_output {
     }
 
     /// event, opcode `0`
-    pub mod geometry {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Geometry<'a> {
-            pub x: i32,
-            pub y: i32,
-            pub physical_width: i32,
-            pub physical_height: i32,
-            pub subpixel: i32,
-            pub make: &'a str,
-            pub model: &'a str,
-            pub transform: i32,
-        }
-
-        impl<'a> EncodePayload for Geometry<'a> {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                32 + self.make.len() as u16 + 1 + self.model.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.physical_width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.physical_height);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.subpixel);
-                ptr = ptr.add(4);
-                let len = self.make.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.make.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-                ptr = ptr.add((4 + roundup4(len + 1)) as usize);
-                let len = self.model.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.model.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-                ptr = ptr.add((4 + roundup4(len + 1)) as usize);
-                ptr.cast::<i32>().write(self.transform);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Geometry<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 24 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 24;
-                let make_len = *ptr.add(20).cast::<u32>();
-                let make_pad_len = roundup4(make_len as u16);
-                if rem < make_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= make_pad_len;
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let model_len = *ptr.add(0).cast::<u32>();
-                let model_pad_len = roundup4(model_len as u16);
-                if rem < model_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= model_pad_len;
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let physical_width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let physical_height = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let subpixel = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let [make @ .., 0] = slice::from_raw_parts(ptr.add(4), make_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(make) = str::from_utf8(make) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                ptr = ptr.add((4 + make_pad_len) as usize);
-                let [model @ .., 0] = slice::from_raw_parts(ptr.add(4), model_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(model) = str::from_utf8(model) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                ptr = ptr.add((4 + model_pad_len) as usize);
-                let transform = *ptr.cast::<i32>();
-                Ok(Geometry { x, y, physical_width, physical_height, subpixel, make, model, transform, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Geometry<'a> {
+        pub x: i32,
+        pub y: i32,
+        pub physical_width: i32,
+        pub physical_height: i32,
+        pub subpixel: i32,
+        pub make: &'a str,
+        pub model: &'a str,
+        pub transform: i32,
     }
 
+    impl<'a> EncodePayload for Geometry<'a> {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            32 + self.make.len() as u16 + 1 + self.model.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.physical_width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.physical_height);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.subpixel);
+            ptr = ptr.add(4);
+            let len = self.make.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.make.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+            ptr = ptr.add((4 + roundup4(len + 1)) as usize);
+            let len = self.model.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.model.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+            ptr = ptr.add((4 + roundup4(len + 1)) as usize);
+            ptr.cast::<i32>().write(self.transform);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Geometry<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 24 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 24;
+            let make_len = *ptr.add(20).cast::<u32>();
+            let make_pad_len = roundup4(make_len as u16);
+            if rem < make_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= make_pad_len;
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let model_len = *ptr.add(0).cast::<u32>();
+            let model_pad_len = roundup4(model_len as u16);
+            if rem < model_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= model_pad_len;
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let physical_width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let physical_height = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let subpixel = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let [make @ .., 0] = slice::from_raw_parts(ptr.add(4), make_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(make) = str::from_utf8(make) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            ptr = ptr.add((4 + make_pad_len) as usize);
+            let [model @ .., 0] = slice::from_raw_parts(ptr.add(4), model_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(model) = str::from_utf8(model) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            ptr = ptr.add((4 + model_pad_len) as usize);
+            let transform = *ptr.cast::<i32>();
+            Ok(Geometry { x, y, physical_width, physical_height, subpixel, make, model, transform, })
+        }
+    }
+
+
     /// bitfield: true
-    pub enum Mode {
+    pub enum ModeEnum {
         Current = 0x1,
         Preferred = 0x2,
     }
 
     /// event, opcode `1`
-    pub mod mode {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Mode {
-            pub flags: u32,
-            pub width: i32,
-            pub height: i32,
-            pub refresh: i32,
-        }
-
-        impl EncodePayload for Mode {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.flags);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.refresh);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Mode {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let flags = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let refresh = *ptr.cast::<i32>();
-                Ok(Mode { flags, width, height, refresh, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Mode {
+        pub flags: u32,
+        pub width: i32,
+        pub height: i32,
+        pub refresh: i32,
     }
+
+    impl EncodePayload for Mode {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.flags);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.refresh);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Mode {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let flags = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let refresh = *ptr.cast::<i32>();
+            Ok(Mode { flags, width, height, refresh, })
+        }
+    }
+
 
     /// event, opcode `2`
-    pub mod done {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Done {
-        }
-
-        impl EncodePayload for Done {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Done {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Done { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Done {
     }
+
+    impl EncodePayload for Done {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Done {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Done { })
+        }
+    }
+
 
     /// event, opcode `3`
-    pub mod scale {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct Scale {
-            pub factor: i32,
-        }
-
-        impl EncodePayload for Scale {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.factor);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Scale {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let factor = *ptr.cast::<i32>();
-                Ok(Scale { factor, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Scale {
+        pub factor: i32,
     }
+
+    impl EncodePayload for Scale {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.factor);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Scale {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let factor = *ptr.cast::<i32>();
+            Ok(Scale { factor, })
+        }
+    }
+
 
     /// request, opcode `0`, type "destructor"
-    pub mod release {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Release {
-        }
-
-        impl EncodePayload for Release {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Release {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Release { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Release {
     }
+
+    impl EncodePayload for Release {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Release {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Release { })
+        }
+    }
+
 
     /// event, opcode `4`
-    pub mod name {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Name<'a> {
-            pub name: &'a str,
-        }
-
-        impl<'a> EncodePayload for Name<'a> {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.name.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.name.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.name.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Name<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let name_len = *ptr.add(0).cast::<u32>();
-                let name_pad_len = roundup4(name_len as u16);
-                if rem < name_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= name_pad_len;
-                let [name @ .., 0] = slice::from_raw_parts(ptr.add(4), name_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(name) = str::from_utf8(name) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Name { name, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Name<'a> {
+        pub name: &'a str,
     }
+
+    impl<'a> EncodePayload for Name<'a> {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.name.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.name.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.name.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Name<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let name_len = *ptr.add(0).cast::<u32>();
+            let name_pad_len = roundup4(name_len as u16);
+            if rem < name_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= name_pad_len;
+            let [name @ .., 0] = slice::from_raw_parts(ptr.add(4), name_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(name) = str::from_utf8(name) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Name { name, })
+        }
+    }
+
 
     /// event, opcode `5`
-    pub mod description {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-
-        #[derive(Debug)]
-        pub struct Description<'a> {
-            pub description: &'a str,
-        }
-
-        impl<'a> EncodePayload for Description<'a> {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                4 + self.description.len() as u16 + 1
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                let len = self.description.len() as u16;
-                ptr.cast::<u32>().write((len + 1) as u32);
-                ptr.add(4).copy_from_nonoverlapping(self.description.as_ptr(), len as usize);
-                ptr.add((4 + len) as usize).write(0);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Description<'a> {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                let mut rem = *ptr.add(6).cast::<u16>();
-                ptr = ptr.add(8);
-                if rem < 4 {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= 4;
-                let description_len = *ptr.add(0).cast::<u32>();
-                let description_pad_len = roundup4(description_len as u16);
-                if rem < description_pad_len {
-                    return Err(DecodeError::Insufficient);
-                }
-                rem -= description_pad_len;
-                let [description @ .., 0] = slice::from_raw_parts(ptr.add(4), description_len as usize) else {
-                    return Err(DecodeError::NoNullTerm);
-                };
-                let Ok(description) = str::from_utf8(description) else {
-                    return Err(DecodeError::NonUtf8);
-                };
-                Ok(Description { description, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Description<'a> {
+        pub description: &'a str,
     }
+
+    impl<'a> EncodePayload for Description<'a> {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            4 + self.description.len() as u16 + 1
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            let len = self.description.len() as u16;
+            ptr.cast::<u32>().write((len + 1) as u32);
+            ptr.add(4).copy_from_nonoverlapping(self.description.as_ptr(), len as usize);
+            ptr.add((4 + len) as usize).write(0);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Description<'a> {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            let mut rem = *ptr.add(6).cast::<u16>();
+            ptr = ptr.add(8);
+            if rem < 4 {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= 4;
+            let description_len = *ptr.add(0).cast::<u32>();
+            let description_pad_len = roundup4(description_len as u16);
+            if rem < description_pad_len {
+                return Err(DecodeError::Insufficient);
+            }
+            rem -= description_pad_len;
+            let [description @ .., 0] = slice::from_raw_parts(ptr.add(4), description_len as usize) else {
+                return Err(DecodeError::NoNullTerm);
+            };
+            let Ok(description) = str::from_utf8(description) else {
+                return Err(DecodeError::NonUtf8);
+            };
+            Ok(Description { description, })
+        }
+    }
+
 }
 
 
@@ -5337,133 +4518,112 @@ pub mod wl_region {
     pub static NEW_ID: [u8; 20] = *b"\x0a\x00\x00\x00wl_region\0\0\0\x07\x00\x00\x00";
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod add {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Add {
-            pub x: i32,
-            pub y: i32,
-            pub width: i32,
-            pub height: i32,
-        }
-
-        impl EncodePayload for Add {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Add {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                Ok(Add { x, y, width, height, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Add {
+        pub x: i32,
+        pub y: i32,
+        pub width: i32,
+        pub height: i32,
     }
+
+    impl EncodePayload for Add {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Add {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            Ok(Add { x, y, width, height, })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod subtract {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 16;
-
-        #[derive(Debug)]
-        pub struct Subtract {
-            pub x: i32,
-            pub y: i32,
-            pub width: i32,
-            pub height: i32,
-        }
-
-        impl EncodePayload for Subtract {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                16
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.width);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.height);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Subtract {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let width = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let height = *ptr.cast::<i32>();
-                Ok(Subtract { x, y, width, height, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Subtract {
+        pub x: i32,
+        pub y: i32,
+        pub width: i32,
+        pub height: i32,
     }
+
+    impl EncodePayload for Subtract {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            16
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.width);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.height);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Subtract {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let width = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let height = *ptr.cast::<i32>();
+            Ok(Subtract { x, y, width, height, })
+        }
+    }
+
 }
 
 
@@ -5475,85 +4635,71 @@ pub mod wl_subcompositor {
     pub static NEW_ID: [u8; 28] = *b"\x11\x00\x00\x00wl_subcompositor\0\0\0\0\x01\x00\x00\x00";
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
 
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         BadSurface = 0,
         BadParent = 1,
     }
 
     /// request, opcode `1`
-    pub mod get_subsurface {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 12;
-
-        #[derive(Debug)]
-        pub struct GetSubsurface {
-            pub id: u32,
-            pub surface: u32,
-            pub parent: u32,
-        }
-
-        impl EncodePayload for GetSubsurface {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                12
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.id);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.surface);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.parent);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for GetSubsurface {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let id = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let surface = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let parent = *ptr.cast::<u32>();
-                Ok(GetSubsurface { id, surface, parent, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct GetSubsurface {
+        pub id: u32,
+        pub surface: u32,
+        pub parent: u32,
     }
+
+    impl EncodePayload for GetSubsurface {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            12
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.id);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.surface);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.parent);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for GetSubsurface {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let id = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let surface = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let parent = *ptr.cast::<u32>();
+            Ok(GetSubsurface { id, surface, parent, })
+        }
+    }
+
 }
 
 
@@ -5565,209 +4711,167 @@ pub mod wl_subsurface {
     pub static NEW_ID: [u8; 24] = *b"\x0e\x00\x00\x00wl_subsurface\0\0\0\x01\x00\x00\x00";
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
 
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
+
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         BadSurface = 0,
     }
 
     /// request, opcode `1`
-    pub mod set_position {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct SetPosition {
-            pub x: i32,
-            pub y: i32,
-        }
-
-        impl EncodePayload for SetPosition {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<i32>().write(self.x);
-                ptr = ptr.add(4);
-                ptr.cast::<i32>().write(self.y);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetPosition {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let x = *ptr.cast::<i32>();
-                ptr = ptr.add(4);
-                let y = *ptr.cast::<i32>();
-                Ok(SetPosition { x, y, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetPosition {
+        pub x: i32,
+        pub y: i32,
     }
+
+    impl EncodePayload for SetPosition {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<i32>().write(self.x);
+            ptr = ptr.add(4);
+            ptr.cast::<i32>().write(self.y);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetPosition {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let x = *ptr.cast::<i32>();
+            ptr = ptr.add(4);
+            let y = *ptr.cast::<i32>();
+            Ok(SetPosition { x, y, })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod place_above {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct PlaceAbove {
-            pub sibling: u32,
-        }
-
-        impl EncodePayload for PlaceAbove {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.sibling);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for PlaceAbove {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let sibling = *ptr.cast::<u32>();
-                Ok(PlaceAbove { sibling, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct PlaceAbove {
+        pub sibling: u32,
     }
+
+    impl EncodePayload for PlaceAbove {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.sibling);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for PlaceAbove {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let sibling = *ptr.cast::<u32>();
+            Ok(PlaceAbove { sibling, })
+        }
+    }
+
 
     /// request, opcode `3`
-    pub mod place_below {
-        use super::*;
-        pub const OPCODE: u16 = 3;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct PlaceBelow {
-            pub sibling: u32,
-        }
-
-        impl EncodePayload for PlaceBelow {
-            const OPCODE: u16 = 3;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.sibling);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for PlaceBelow {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let sibling = *ptr.cast::<u32>();
-                Ok(PlaceBelow { sibling, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct PlaceBelow {
+        pub sibling: u32,
     }
+
+    impl EncodePayload for PlaceBelow {
+        const OPCODE: u16 = 3;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.sibling);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for PlaceBelow {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let sibling = *ptr.cast::<u32>();
+            Ok(PlaceBelow { sibling, })
+        }
+    }
+
 
     /// request, opcode `4`
-    pub mod set_sync {
-        use super::*;
-        pub const OPCODE: u16 = 4;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct SetSync {
-        }
-
-        impl EncodePayload for SetSync {
-            const OPCODE: u16 = 4;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetSync {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(SetSync { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetSync {
     }
+
+    impl EncodePayload for SetSync {
+        const OPCODE: u16 = 4;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetSync {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(SetSync { })
+        }
+    }
+
 
     /// request, opcode `5`
-    pub mod set_desync {
-        use super::*;
-        pub const OPCODE: u16 = 5;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct SetDesync {
-        }
-
-        impl EncodePayload for SetDesync {
-            const OPCODE: u16 = 5;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for SetDesync {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(SetDesync { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct SetDesync {
     }
+
+    impl EncodePayload for SetDesync {
+        const OPCODE: u16 = 5;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for SetDesync {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(SetDesync { })
+        }
+    }
+
 }
 
 
@@ -5779,111 +4883,90 @@ pub mod wl_fixes {
     pub static NEW_ID: [u8; 20] = *b"\x09\x00\x00\x00wl_fixes\0\0\0\0\x02\x00\x00\x00";
 
     /// bitfield: false
-    pub enum Error {
+    pub enum ErrorEnum {
         InvalidAckRemove = 0,
     }
 
     /// request, opcode `0`, type "destructor"
-    pub mod destroy {
-        use super::*;
-        pub const OPCODE: u16 = 0;
-        pub const IS_DESTRUCTOR: bool = true;
-        pub const SIZE: u16 = 0;
-
-        #[derive(Debug)]
-        pub struct Destroy {
-        }
-
-        impl EncodePayload for Destroy {
-            const OPCODE: u16 = 0;
-
-            fn encoded_size(&self) -> u16 {
-                0
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for Destroy {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                Ok(Destroy { })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct Destroy {
     }
+
+    impl EncodePayload for Destroy {
+        const OPCODE: u16 = 0;
+
+        fn encoded_size(&self) -> u16 {
+            0
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for Destroy {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            Ok(Destroy { })
+        }
+    }
+
 
     /// request, opcode `1`
-    pub mod destroy_registry {
-        use super::*;
-        pub const OPCODE: u16 = 1;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 4;
-
-        #[derive(Debug)]
-        pub struct DestroyRegistry {
-            pub registry: u32,
-        }
-
-        impl EncodePayload for DestroyRegistry {
-            const OPCODE: u16 = 1;
-
-            fn encoded_size(&self) -> u16 {
-                4
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.registry);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for DestroyRegistry {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let registry = *ptr.cast::<u32>();
-                Ok(DestroyRegistry { registry, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct DestroyRegistry {
+        pub registry: u32,
     }
+
+    impl EncodePayload for DestroyRegistry {
+        const OPCODE: u16 = 1;
+
+        fn encoded_size(&self) -> u16 {
+            4
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.registry);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for DestroyRegistry {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let registry = *ptr.cast::<u32>();
+            Ok(DestroyRegistry { registry, })
+        }
+    }
+
 
     /// request, opcode `2`
-    pub mod ack_global_remove {
-        use super::*;
-        pub const OPCODE: u16 = 2;
-        pub const IS_DESTRUCTOR: bool = false;
-        pub const SIZE: u16 = 8;
-
-        #[derive(Debug)]
-        pub struct AckGlobalRemove {
-            pub registry: u32,
-            pub name: u32,
-        }
-
-        impl EncodePayload for AckGlobalRemove {
-            const OPCODE: u16 = 2;
-
-            fn encoded_size(&self) -> u16 {
-                8
-            }
-
-            unsafe fn encode_raw(&self, mut ptr: *mut u8) {
-                ptr.cast::<u32>().write(self.registry);
-                ptr = ptr.add(4);
-                ptr.cast::<u32>().write(self.name);
-            }
-        }
-
-        impl<'a> DecodePayload<'a> for AckGlobalRemove {
-            unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
-                ptr = ptr.add(8);
-                let registry = *ptr.cast::<u32>();
-                ptr = ptr.add(4);
-                let name = *ptr.cast::<u32>();
-                Ok(AckGlobalRemove { registry, name, })
-            }
-        }
-
+    #[derive(Debug)]
+    pub struct AckGlobalRemove {
+        pub registry: u32,
+        pub name: u32,
     }
+
+    impl EncodePayload for AckGlobalRemove {
+        const OPCODE: u16 = 2;
+
+        fn encoded_size(&self) -> u16 {
+            8
+        }
+
+        unsafe fn encode_raw(&self, mut ptr: *mut u8) {
+            ptr.cast::<u32>().write(self.registry);
+            ptr = ptr.add(4);
+            ptr.cast::<u32>().write(self.name);
+        }
+    }
+
+    impl<'a> DecodePayload<'a> for AckGlobalRemove {
+        unsafe fn decode_raw(mut ptr: *const u8) -> Result<Self, DecodeError> {
+            ptr = ptr.add(8);
+            let registry = *ptr.cast::<u32>();
+            ptr = ptr.add(4);
+            let name = *ptr.cast::<u32>();
+            Ok(AckGlobalRemove { registry, name, })
+        }
+    }
+
 }
