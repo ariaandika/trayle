@@ -3,14 +3,6 @@ use std::ptr::NonNull;
 use std::rc::Rc;
 use std::{io, slice};
 
-pub struct FileBuffer {
-    shared: Rc<Shared>,
-    file: File,
-    ptr: NonNull<u8>,
-    len: usize,
-    cap: usize,
-}
-
 #[derive(Clone)]
 pub struct Str {
     shared: Rc<Shared>,
@@ -71,6 +63,14 @@ impl Str {
     }
 }
 
+pub struct FileBuffer {
+    shared: Rc<Shared>,
+    file: File,
+    ptr: NonNull<u8>,
+    len: usize,
+    cap: usize,
+}
+
 impl FileBuffer {
     pub fn new(file: File) -> Self {
         let shared = Self::new_shared();
@@ -82,6 +82,14 @@ impl FileBuffer {
             shared,
         }
     }
+
+    // /// Reuse allocation with new file
+    // pub fn reset(&mut self, file: File) {
+    //     self.ptr = self.shared.ptr;
+    //     self.len = 0;
+    //     self.cap = self.shared.cap;
+    //     self.file = file;
+    // }
 
     // utf-8 cannot be enforced because reading file can split utf-8 code point
 

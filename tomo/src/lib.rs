@@ -1,5 +1,3 @@
-//! # Todex
-//!
 //! Wayland protocol decoder and encoder.
 
 // ===== standard =====
@@ -17,7 +15,7 @@ pub use primitive::{Id, Array, NewId};
 
 // ===== logic =====
 
-mod object_manager;
+pub mod object_manager;
 pub mod conn;
 
 // ===== generated code =====

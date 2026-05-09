@@ -3,15 +3,12 @@ use std::ptr::{self, NonNull};
 use crate::Id;
 use crate::lookup::Interfaces;
 
-const DEFAULT_ALLOC: u32 = 512;
-const DEFAULT_ALLOC_LEN: u32 = 512 / OBJECT_SIZE;
+const DEFAULT_ALLOC_SIZE: u32 = 512;
+const DEFAULT_ALLOC_LEN: u32 = DEFAULT_ALLOC_SIZE / OBJECT_SIZE;
 const DEFAULT_CAP_LEN: u32 = DEFAULT_ALLOC_LEN - HEADER_LEN;
-
-const CLIENT_MAX_ID: u32 = 0xfeffffff;
 
 const OBJECT_SIZE: u32 = size_of::<u32>() as u32;
 const HEADER_LEN: u32 = 4;
-const HEADER_SIZE: u32 = size_of::<u32>() as u32 * HEADER_LEN;
 
 /// Wayland Object Manager.
 ///
@@ -91,6 +88,12 @@ impl ObjectManager {
                 None
             }
         }
+    }
+}
+
+impl Default for ObjectManager {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

@@ -1,4 +1,4 @@
 [workspace]
-members = ["codegen", "todex"]
+members = ["codegen", "tomo"]
 resolver = "2"
 

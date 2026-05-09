@@ -44,8 +44,8 @@ macro_rules! parse_attr {
     }
 }
 
-const LOOKUP_OUT: &str = "todex/src/lookup.rs";
-const WAYLAND_CORE_OUT: &str = "todex/src/wayland.rs";
+const LOOKUP_OUT: &str = "tomo/src/lookup.rs";
+const WAYLAND_CORE_OUT: &str = "tomo/src/wayland.rs";
 
 fn open_writable(path: &str) -> File {
     File::options()

@@ -1,9 +1,9 @@
-use todex::Id;
-use todex::conn::WaylandSocket;
-use todex::message::DecodePayload;
-use todex::wayland::wl_display::GetRegistry;
-use todex::wayland::{wl_data_device, wl_data_device_manager, wl_data_source, wl_display};
-use todex::wayland::{wl_callback, wl_registry};
+use tomo::Id;
+use tomo::conn::WaylandSocket;
+use tomo::message::DecodePayload;
+use tomo::wayland::wl_display::GetRegistry;
+use tomo::wayland::{wl_data_device, wl_data_device_manager, wl_data_source, wl_display};
+use tomo::wayland::{wl_callback, wl_registry};
 
 type BoxError = Box<dyn std::error::Error + Send + Sync>;
 

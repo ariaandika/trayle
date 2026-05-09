@@ -49,6 +49,10 @@ impl WaylandSocket {
         }
     }
 
+    pub fn get_id(&mut self, interface: crate::lookup::Interfaces) -> Id {
+        self.objects.insert(interface)
+    }
+
     pub fn poll_message(&mut self) -> Result<Message, BoxError> {
         loop {
             let read_buffer = self.socket.read_buffer();

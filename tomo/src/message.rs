@@ -7,7 +7,6 @@
 //! - [`Writer`]
 //! - [`Payload`]
 #![allow(clippy::len_without_is_empty)]
-use crate::Id;
 use crate::error::DecodeError;
 
 /// Message writer.
@@ -81,9 +80,9 @@ impl Message {
 pub struct MessageHeader([u8; 8]);
 
 impl MessageHeader {
-    pub(crate) fn new(header: [u8; 8]) -> Self {
-        Self(header)
-    }
+    // pub(crate) fn new(header: [u8; 8]) -> Self {
+    //     Self(header)
+    // }
 
     pub fn object_id(&self) -> u32 {
         u32::from_ne_bytes(*self.0.first_chunk().unwrap())

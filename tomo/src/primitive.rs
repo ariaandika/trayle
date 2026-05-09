@@ -54,7 +54,7 @@ impl Id {
 pub struct Array([u8]);
 
 impl Array {
-    pub(crate) const fn new(array: &[u8]) -> &Self {
+    pub const fn new(array: &[u8]) -> &Self {
         unsafe { std::mem::transmute(array) }
     }
 
