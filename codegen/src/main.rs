@@ -1,4 +1,3 @@
-use std::env::args;
 use std::fs::File;
 
 use buffer::FileBuffer;
@@ -43,17 +42,23 @@ macro_rules! parse_attr {
     }
 }
 
-fn main() {
-    let Some(path) = args().nth(1) else {
-        eprintln!("Error: file path argument is required");
-        std::process::exit(1);
-    };
+const WAYLAND_CORE_OUT: &str = "todex/src/wayland.rs";
 
-    let mut file_buffer = FileBuffer::new(File::open(path).unwrap());
+fn main() {
+    let wayland_core = std::env::var("WAYLAND_CORE").expect("cannot get WAYLAND_CORE env variable");
+
+    let mut file_buffer = FileBuffer::new(File::open(wayland_core).unwrap());
     file_buffer.read();
 
     let mut parser = Parser::new(file_buffer);
-    let mut output = std::io::stdout().lock();
+
+    let output = File::options()
+        .create(true)
+        .truncate(true)
+        .write(true)
+        .open(WAYLAND_CORE_OUT)
+        .unwrap();
+    let mut output = std::io::BufWriter::new(output);
 
     parser.assert_prolog("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 
@@ -89,6 +94,8 @@ fn main() {
         parser.next_closing_tag("interface");
         Interface::generate_trailer(&mut output);
     }
+
+    std::io::Write::flush(&mut output).unwrap();
 }
 
 fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
