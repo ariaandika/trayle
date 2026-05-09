@@ -26,15 +26,20 @@ pub struct Id(NonZeroU32);
 
 impl Id {
     pub fn new(id: u32) -> Option<Self> {
-        NonZeroU32::new(id).map(Self)
+        NonZeroU32::new(id).map(Self::new_non_zero)
     }
 
     pub(crate) const fn new_non_zero(id: NonZeroU32) -> Self {
+        debug_assert!(id.get() > 1);
         Self(id)
     }
 
     pub const fn wl_display() -> Id {
         Id(NonZeroU32::new(1).unwrap())
+    }
+
+    pub(crate) const fn sub_2(self) -> u32 {
+        unsafe { self.0.get().unchecked_sub(2) }
     }
 
     /// Returns ID as `u32`.

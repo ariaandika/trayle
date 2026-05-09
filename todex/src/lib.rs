@@ -2,19 +2,25 @@
 //!
 //! Wayland protocol decoder and encoder.
 
+// ===== standard =====
+
 mod net;
+
+// ===== type definitions =====
 
 mod primitive;
 
-pub mod conn;
+pub mod message;
 pub mod error;
 
-pub mod message;
+pub use primitive::{Id, Array, NewId};
 
-// generated code
+// ===== logic =====
+
+mod object_manager;
+pub mod conn;
+
+// ===== generated code =====
 #[allow(warnings)]
 pub mod wayland;
 
-// ===== reexports =====
-
-pub use primitive::{Id, Array, NewId};

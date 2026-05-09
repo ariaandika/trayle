@@ -7,10 +7,12 @@ use crate::Id;
 use crate::error::BoxError;
 use crate::message::{EncodePayload, Message};
 use crate::net::Socket;
+use crate::object_manager::ObjectManager;
 
 #[derive(Debug)]
 pub struct WaylandSocket {
     socket: Socket,
+    objects: ObjectManager,
 }
 
 impl WaylandSocket {
@@ -23,6 +25,7 @@ impl WaylandSocket {
 
         Ok(Self {
             socket: Socket::new(io),
+            objects: ObjectManager::new(),
         })
     }
 
