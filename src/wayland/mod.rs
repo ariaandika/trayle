@@ -1,3 +1,4 @@
+pub use id::Id;
 pub use wl_display::WlDisplay;
 
 mod id;

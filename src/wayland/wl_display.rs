@@ -39,7 +39,7 @@ impl WlDisplay {
             ptr.add(6).cast::<u16>().write(len);
             ptr.add(8).cast::<Id>().write(object_id);
             ptr.add(12).cast::<u32>().write(code);
-            ptr.add(16).cast::<u32>().write(msg_len as u32);
+            ptr.add(16).cast::<u32>().write((msg_len + 1) as u32);
             ptr.add(20).copy_from_nonoverlapping(msg, msg_len as usize);
             ptr.add((20 + msg_len) as usize).write(0);
         }

@@ -30,6 +30,10 @@ impl Id {
         unsafe { Self(NonZeroU32::new_unchecked(ID)) }
     }
 
+    pub const fn wl_display() -> Self {
+        unsafe { Self(NonZeroU32::new_unchecked(1)) }
+    }
+
     /// Returns ID as `u32`.
     pub const fn as_u32(&self) -> u32 {
         self.0.get()
@@ -42,3 +46,8 @@ impl PartialEq<u32> for Id {
     }
 }
 
+impl std::fmt::Display for Id {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "Id({})", self.0)
+    }
+}
