@@ -153,6 +153,52 @@ impl std::fmt::Display for Enum<'_> {
     }
 }
 
+pub struct Lookup<'a> {
+    pub interfaces: &'a [crate::buffer::Str],
+}
+
+impl std::fmt::Display for Lookup<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        const P1: &str = "    ";
+        let len = self.interfaces.len();
+        let variants = from_fn(|f|{
+            for iface in self.interfaces {
+                let iface = CamelCase(iface);
+                writeln!(f, "    {iface},")?;
+            }
+            Ok(())
+        });
+        writeln!(
+            f,
+            "\
+            #[repr(u32)]\n\
+            #[derive(Debug, Clone, Copy)]\n\
+            pub enum Interfaces {{\n\
+                {variants}\
+            }}\n\n\
+            impl Interfaces {{\n\
+            {P1}#[inline]\n\
+            {P1}pub fn from_u32(int: u32) -> Option<Self> {{\n\
+            {P1}    if int < {len} {{\n\
+            {P1}        Some(unsafe {{ Self::from_u32_unchecked(int) }})
+            {P1}    }} else {{\n\
+            {P1}        None\n\
+            {P1}    }}\n\
+            {P1}}}\n\n\
+            {P1}/// # Safety\n\
+            {P1}///\n\
+            {P1}/// `int` must be below `{len}`.\n\
+            {P1}#[inline]\n\
+            {P1}pub unsafe fn from_u32_unchecked(int: u32) -> Self {{\n\
+            {P1}    debug_assert!(int < {len});\n\
+            {P1}    unsafe {{ std::mem::transmute(int) }}\n\
+            {P1}}}\n\
+            }}\
+            "
+        )
+    }
+}
+
 // ===== Request/Event =====
 
 /// - [`OpFallibleDecode`]

@@ -21,6 +21,7 @@ mod object_manager;
 pub mod conn;
 
 // ===== generated code =====
+pub mod lookup;
 #[allow(warnings)]
 pub mod wayland;
 

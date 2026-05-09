@@ -4,6 +4,8 @@ use buffer::FileBuffer;
 use element::*;
 use parser::Parser;
 
+use crate::buffer::Str;
+
 mod buffer;
 mod parser;
 mod element;
@@ -42,32 +44,57 @@ macro_rules! parse_attr {
     }
 }
 
+const LOOKUP_OUT: &str = "todex/src/lookup.rs";
 const WAYLAND_CORE_OUT: &str = "todex/src/wayland.rs";
 
-fn main() {
-    let wayland_core = std::env::var("WAYLAND_CORE").expect("cannot get WAYLAND_CORE env variable");
-
-    let mut file_buffer = FileBuffer::new(File::open(wayland_core).unwrap());
-    file_buffer.read();
-
-    let mut parser = Parser::new(file_buffer);
-
-    let output = File::options()
+fn open_writable(path: &str) -> File {
+    File::options()
         .create(true)
         .truncate(true)
         .write(true)
-        .open(WAYLAND_CORE_OUT)
-        .unwrap();
+        .open(path)
+        .unwrap()
+}
+
+fn main() {
+    let wayland_core = std::env::var("WAYLAND_CORE").expect("cannot get WAYLAND_CORE env variable");
+    let wl_core_file = ||File::open(&wayland_core).unwrap();
+
+    let mut file_buffer = FileBuffer::new(wl_core_file());
+    file_buffer.read();
+    let mut parser = Parser::new(file_buffer);
+
+    let output = open_writable(WAYLAND_CORE_OUT);
     let mut output = std::io::BufWriter::new(output);
 
+    let mut interfaces = Vec::with_capacity(32);
+
+    // generate the encoding logic
+    generate_protocol(&mut interfaces, &mut parser, &mut output);
+    std::io::Write::flush(&mut output).unwrap();
+
+    // generate interface lookup
+    *output.get_mut() = open_writable(LOOKUP_OUT);
+    generate_lookup(&interfaces, &mut output);
+}
+
+fn generate_lookup(interfaces: &[Str], output: &mut impl Write) {
+    let lookup = codegen::Lookup {
+        interfaces
+    };
+    write!(output, "{lookup}");
+}
+
+fn generate_protocol(interfaces: &mut Vec<Str>, parser: &mut Parser, output: &mut impl Write) {
     parser.assert_prolog("<?xml version=\"1.0\" encoding=\"UTF-8\"?>");
 
-    parse_protocol(&mut parser, &mut output);
+    parse_protocol(parser, output);
 
     let mut args = Vec::with_capacity(8);
     let mut entries = Vec::with_capacity(8);
 
-    while parse_interface(&mut parser, &mut output) {
+    while let Some(iface) = parse_interface(parser, output) {
+        interfaces.push(iface);
         let mut request_opcode = 0;
         let mut event_opcode = 0;
         loop {
@@ -84,18 +111,16 @@ fn main() {
                     ("event", OpKind::Event)
                 },
                 b"enum" => {
-                    parse_enum(&mut entries, &mut parser, &mut output);
+                    parse_enum(&mut entries, parser, output);
                     continue;
                 },
                 _ => break,
             };
-            parse_operation(name, kind, opcode, &mut args, &mut parser, &mut output);
+            parse_operation(name, kind, opcode, &mut args, parser, output);
         }
         parser.next_closing_tag("interface");
-        Interface::generate_trailer(&mut output);
+        Interface::generate_trailer(output);
     }
-
-    std::io::Write::flush(&mut output).unwrap();
 }
 
 fn parse_protocol(parser: &mut Parser, output: &mut impl Write) {
@@ -135,14 +160,12 @@ fn parse_description(parser: &mut Parser) -> Option<Description> {
     Some(Description { summary, content })
 }
 
-fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
+fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> Option<Str> {
     // <!ELEMENT interface (description?,(request|event|enum)+)>
     //   <!ATTLIST interface name CDATA #REQUIRED>
     //   <!ATTLIST interface version CDATA #REQUIRED>
     //   <!ATTLIST interface frozen CDATA #IMPLIED>
-    let Some((tag, _)) = parser.next_tag_if("interface") else {
-        return false;
-    };
+    let (tag, _) = parser.next_tag_if("interface")?;
     parse_attr!(parser, tag,
         name "name",
         version "version"
@@ -154,14 +177,14 @@ fn parse_interface(parser: &mut Parser, output: &mut impl Write) -> bool {
     let description = parse_description(parser);
 
     Interface {
-        name,
+        name: name.clone(),
         description,
         version,
         frozen,
     }
     .generate_header(output);
 
-    true
+    Some(name)
 }
 
 fn parse_operation(

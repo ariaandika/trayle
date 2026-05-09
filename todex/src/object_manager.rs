@@ -1,6 +1,7 @@
 use std::ptr::{self, NonNull};
 
 use crate::Id;
+use crate::lookup::Interfaces;
 
 const DEFAULT_ALLOC: u32 = 512;
 const DEFAULT_ALLOC_LEN: u32 = 512 / OBJECT_SIZE;
@@ -53,7 +54,7 @@ impl ObjectManager {
         }
     }
 
-    pub fn insert(&mut self, interface_id: u32) -> Id {
+    pub fn insert(&mut self, interface: Interfaces) -> Id {
         unsafe {
             let ptr = self.ptr.as_ptr();
             let cap = *ptr;
@@ -70,7 +71,7 @@ impl ObjectManager {
             let id = Id::new_non_zero(std::num::NonZeroU32::new_unchecked(id));
 
             // store the object
-            ptr.add((HEADER_LEN + len) as usize).write(interface_id);
+            ptr.add((HEADER_LEN + len) as usize).write(interface as u32);
             // update `len`
             *ptr.add(1) += 1;
 
@@ -79,12 +80,13 @@ impl ObjectManager {
     }
 
     #[inline]
-    pub fn get(&self, object_id: Id) -> Option<u32> {
+    pub fn get(&self, object_id: Id) -> Option<Interfaces> {
         unsafe {
             let len = self.ptr.add(1).read();
             let idx = object_id.sub_2();
             if idx < len {
-                Some(self.ptr.add((HEADER_LEN + idx) as usize).read())
+                let iface = self.ptr.add((HEADER_LEN + idx) as usize).read();
+                Some(Interfaces::from_u32_unchecked(iface))
             } else {
                 None
             }
