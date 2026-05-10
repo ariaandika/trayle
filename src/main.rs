@@ -1,6 +1,7 @@
 use std::io;
 
 use event_loop::{EventKind, EventLoop};
+use error::Result;
 
 mod net;
 mod epoll;
@@ -10,9 +11,15 @@ mod client;
 mod clients;
 mod event_loop;
 
+mod error;
+
 const SOCKET: &str = "/tmp/wayland-2";
 
-fn main() -> io::Result<()> {
+fn main() -> error::Terminate {
+    main2().into()
+}
+
+fn main2() -> Result<()> {
     let mut event_loop = EventLoop::new(SOCKET)?;
 
     while let Some(event) = event_loop.next_event()? {
@@ -42,6 +49,5 @@ fn main() -> io::Result<()> {
         }
     }
 
-    println!("closing");
     Ok(())
 }
