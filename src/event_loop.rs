@@ -85,7 +85,9 @@ impl EventLoop {
                 key => {
                     if interest.is_close() {
                         let stream = self.streams.swap_remove((key - KEY_OFFSET) as usize);
-                        self.epoll.remove_interest(&stream)?;
+                        if let Err(err) = self.epoll.remove_interest(&stream) {
+                            eprintln!("cannot remove epoll interest: {err}");
+                        }
                         break Ok(Some(EventKind::Close(stream, interest)));
                     } else {
                         let stream = &mut self.streams[(key - KEY_OFFSET) as usize];

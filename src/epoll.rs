@@ -101,16 +101,24 @@ impl Epoll {
 
     pub fn wait(&mut self) -> io::Result<()> {
         let spare = self.events.spare_capacity_mut();
-        let nfds = syscall!(
-            usize,
-            epoll_wait,
-            self.fd.as_raw_fd(),
-            spare.as_mut_ptr().cast(),
-            spare.len() as i32,
-            -1,
-        )?;
-        unsafe { self.events.set_len(self.events.len() + nfds) };
-        Ok(())
+        let result = unsafe {
+            libc::epoll_wait(
+                self.fd.as_raw_fd(),
+                spare.as_mut_ptr().cast(),
+                spare.len() as i32,
+                -1,
+            )
+        };
+        match usize::try_from(result) {
+            Ok(nfds) => unsafe {
+                self.events.set_len(self.events.len() + nfds);
+                Ok(())
+            },
+            Err(_) => match result {
+                libc::EINTR => Ok(()),
+                _ => Err(io::Error::last_os_error()),
+            },
+        }
     }
 
     pub fn next_event(&mut self) -> Option<(u64, Interest)> {
