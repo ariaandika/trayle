@@ -5,9 +5,7 @@ use todex::event_loop::{EventKind, EventLoop};
 const SOCKET: &str = "/tmp/wayland-2";
 
 fn main() -> io::Result<()> {
-    let _guard = SocketGuard;
-
-    let mut event_loop = EventLoop::new(SOCKET)?;
+    let mut event_loop = EventLoop::new(SOCKET.into())?;
 
     while let Some(event) = event_loop.next_event()? {
         match event {
@@ -38,12 +36,4 @@ fn main() -> io::Result<()> {
 
     println!("closing");
     Ok(())
-}
-
-struct SocketGuard;
-
-impl Drop for SocketGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(SOCKET);
-    }
 }
