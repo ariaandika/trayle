@@ -6,4 +6,6 @@ mod sigfd;
 pub mod wayland;
 
 pub mod client;
+pub mod clients;
+
 pub mod event_loop;
