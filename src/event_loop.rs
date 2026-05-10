@@ -5,7 +5,6 @@ use crate::epoll::{Epoll, Interest};
 use crate::sigfd::Sigfd;
 
 pub struct EventLoop {
-    path: String,
     epoll: Epoll,
     sigfd: Sigfd,
     listener: UnixListener,
@@ -25,13 +24,19 @@ const KEY_OFFSET: u64 = 2;
 
 impl Drop for EventLoop {
     fn drop(&mut self) {
-        let _ = std::fs::remove_file(&self.path);
+        let Ok(addr) = self.listener.local_addr() else {
+            return;
+        };
+        let Some(path) = addr.as_pathname() else {
+            return;
+        };
+        let _ = std::fs::remove_file(path);
     }
 }
 
 impl EventLoop {
-    pub fn new(path: String) -> io::Result<Self> {
-        let listener = UnixListener::bind(&path)?;
+    pub fn new(path: &str) -> io::Result<Self> {
+        let listener = UnixListener::bind(path)?;
         listener.set_nonblocking(true)?;
 
         let sigfd = Sigfd::new()?;
@@ -41,7 +46,6 @@ impl EventLoop {
         epoll.add_read_interest(SIGFD_KEY, &sigfd)?;
 
         Ok(Self {
-            path,
             epoll,
             sigfd,
             listener,
