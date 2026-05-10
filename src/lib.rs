@@ -1,5 +1,7 @@
 #![allow(clippy::new_without_default)]
-pub mod net;
+mod net;
+mod epoll;
+mod sigfd;
 
 pub mod wayland;
 

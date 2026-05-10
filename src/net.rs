@@ -29,13 +29,13 @@ impl Socket {
         &self.read_buffer
     }
 
-    pub fn read_buffer_mut(&mut self) -> &mut Vec<u8> {
-        &mut self.read_buffer
-    }
-
-    pub fn recv_fds_mut(&mut self) -> &mut Vec<RawFd> {
-        &mut self.recv_fds
-    }
+    // pub fn read_buffer_mut(&mut self) -> &mut Vec<u8> {
+    //     &mut self.read_buffer
+    // }
+    //
+    // pub fn recv_fds_mut(&mut self) -> &mut Vec<RawFd> {
+    //     &mut self.recv_fds
+    // }
 }
 
 impl Socket {
