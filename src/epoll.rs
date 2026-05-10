@@ -1,17 +1,8 @@
 use std::io;
-use std::os::fd::RawFd;
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd};
+use std::mem::MaybeUninit;
+use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 
 macro_rules! syscall {
-    (usize, $f:ident, $($tt:tt)*) => {
-        {
-            let result = unsafe { libc::$f($($tt)*) };
-            match usize::try_from(result) {
-                Ok(ok) => Ok(ok),
-                Err(_) => Err(io::Error::last_os_error()),
-            }
-        }
-    };
     ($f:ident, $($tt:tt)*) => {
         {
             #[allow(unused_unsafe)]
@@ -50,22 +41,24 @@ impl Interest {
     }
 }
 
+const EVENT_BUF_CAP: usize = 128;
+
 pub struct Epoll {
     fd: OwnedFd,
-    events: Vec<libc::epoll_event>,
-    offset: usize,
+    events: Box<[MaybeUninit<libc::epoll_event>; EVENT_BUF_CAP]>,
+    len: u16,
+    offset: u16,
 }
 
 impl Epoll {
     pub fn new() -> io::Result<Self> {
-        unsafe {
-            let fd = syscall!(epoll_create1, 0)?;
-            Ok(Self {
-                fd: OwnedFd::from_raw_fd(fd),
-                events: Vec::with_capacity(32),
-                offset: 0,
-            })
-        }
+        let fd = unsafe { OwnedFd::from_raw_fd(syscall!(epoll_create1, 0)?) };
+        Ok(Self {
+            fd,
+            events: Box::new([MaybeUninit::uninit(); 128]),
+            len: 0,
+            offset: 0,
+        })
     }
 
     pub fn add_read_interest<F: AsRawFd>(&self, key: u64, fd: &F) -> io::Result<()> {
@@ -99,19 +92,23 @@ impl Epoll {
         Ok(())
     }
 
+    /// Note that this will overwrite unread event.
+    ///
+    /// Should only be called if [`Epoll::next_event`] returns `None`,
     pub fn wait(&mut self) -> io::Result<()> {
-        let spare = self.events.spare_capacity_mut();
+        self.len = 0;
+        self.offset = 0;
         let result = unsafe {
             libc::epoll_wait(
                 self.fd.as_raw_fd(),
-                spare.as_mut_ptr().cast(),
-                spare.len() as i32,
+                self.events.as_mut_ptr().cast(),
+                EVENT_BUF_CAP as i32,
                 -1,
             )
         };
         match usize::try_from(result) {
-            Ok(nfds) => unsafe {
-                self.events.set_len(self.events.len() + nfds);
+            Ok(nfds) => {
+                self.len = nfds as u16;
                 Ok(())
             },
             Err(_) => match result {
@@ -122,10 +119,13 @@ impl Epoll {
     }
 
     pub fn next_event(&mut self) -> Option<(u64, Interest)> {
-        let Some(event) = self.events.get(self.offset) else {
-            unsafe { self.events.set_len(0) };
-            self.offset = 0;
+        if self.len == self.offset {
             return None;
+        }
+        let event = unsafe {
+            self.events
+                .get_unchecked(self.offset as usize)
+                .assume_init()
         };
         self.offset += 1;
         Some((event.u64, Interest(event.events as i32)))
