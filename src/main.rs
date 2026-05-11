@@ -1,12 +1,11 @@
 use std::io;
-use std::os::unix::net::UnixListener;
+use std::task::Poll::*;
 
-use epoll::Epoll;
+use epoll::{Epoll, EpollBuf};
 use error::Result;
-use sigfd::Sigfd;
+use listener::{Listener, SocketPath};
 use macros::try_block;
-
-use crate::epoll::EpollBuf;
+use sigfd::Sigfd;
 
 // === shared ===
 mod macros;
@@ -14,13 +13,14 @@ mod error;
 // === standard ===
 mod epoll;
 mod sigfd;
+mod listener;
 mod net;
 // === logic ===
 mod wayland;
 mod client;
 mod clients;
 
-const SOCKET: &str = "/tmp/wayland-2";
+const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
 const LISTENER_KEY: u64 = 0;
 const SIGFD_KEY: u64 = 1;
@@ -33,12 +33,10 @@ fn main() -> error::Terminate {
 fn event_loop() -> Result<()> {
     // ===== setup =====
 
-    let _guard = DropGuard;
-    let listener = UnixListener::bind(SOCKET)?;
+    let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let mut epoll = Epoll::new()?;
 
-    listener.set_nonblocking(true)?;
     epoll.add_read_interest(LISTENER_KEY, &listener)?;
     epoll.add_read_interest(SIGFD_KEY, &sigfd)?;
 
@@ -56,21 +54,23 @@ fn event_loop() -> Result<()> {
         };
         match key {
             LISTENER_KEY => {
-                let result = match listener.accept() {
-                    Ok((stream, _)) => try_block! {
-                        stream.set_nonblocking(true)?;
-                        epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)?;
-                        streams.push(stream);
-                        Ok(())
+                let stream = match listener.poll_accept() {
+                    Ready(Ok(ok)) => ok,
+                    Ready(Err(err)) => {
+                        eprintln!("[CLIENT] cannot connect: {err}");
+                        continue;
                     },
-                    Err(err) => match err.kind() {
-                        io::ErrorKind::WouldBlock => continue,
-                        _ => Err(err),
-                    },
+                    Pending => continue,
+                };
+                let result = try_block! {
+                    stream.set_nonblocking(true)?;
+                    epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)?;
+                    streams.push(stream);
+                    Ok::<_, io::Error>(())
                 };
                 match result {
-                    Ok(()) => println!("[CLIENT] new"),
-                    Err(err) => eprintln!("[CLIENT] cannot create: {err}"),
+                    Ok(()) => println!("[CLIENT] connected"),
+                    Err(err) => eprintln!("[CLIENT] cannot connect: {err}"),
                 }
             }
             SIGFD_KEY => {
@@ -95,12 +95,4 @@ fn event_loop() -> Result<()> {
     }
 
     Ok(())
-}
-
-struct DropGuard;
-
-impl Drop for DropGuard {
-    fn drop(&mut self) {
-        let _ = std::fs::remove_file(SOCKET);
-    }
 }

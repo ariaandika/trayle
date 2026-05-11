@@ -25,7 +25,7 @@ macro_rules! syscall {
             if result >= 0 {
                 Ok(result)
             } else {
-                Err(io::Error::last_os_error())
+                Err(std::io::Error::last_os_error())
             }
         }
     };
