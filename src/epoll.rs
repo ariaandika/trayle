@@ -1,6 +1,7 @@
+use std::ffi::c_int;
 use std::io;
 use std::mem::MaybeUninit;
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::unix::io::{AsRawFd, RawFd};
 
 use crate::macros::syscall;
 
@@ -31,19 +32,34 @@ impl Interest {
 
 const EVENT_BUF_CAP: usize = 128;
 
+pub struct EpollBuf([MaybeUninit<libc::epoll_event>; EVENT_BUF_CAP]);
+
+impl EpollBuf {
+    #[inline]
+    pub fn new() -> Self {
+        Self([MaybeUninit::uninit(); EVENT_BUF_CAP])
+    }
+}
+
 pub struct Epoll {
-    fd: OwnedFd,
-    events: Box<[MaybeUninit<libc::epoll_event>; EVENT_BUF_CAP]>,
+    fd: c_int,
     len: u16,
     offset: u16,
 }
 
+impl Drop for Epoll {
+    fn drop(&mut self) {
+        if let Err(err) = syscall!(close, self.fd) {
+            eprintln!("cannot close epoll fd: {err}");
+        }
+    }
+}
+
 impl Epoll {
     pub fn new() -> io::Result<Self> {
-        let fd = unsafe { OwnedFd::from_raw_fd(syscall!(epoll_create1, 0)?) };
+        let fd = syscall!(epoll_create1, 0)?;
         Ok(Self {
             fd,
-            events: Box::new([MaybeUninit::uninit(); 128]),
             len: 0,
             offset: 0,
         })
@@ -61,7 +77,7 @@ impl Epoll {
         let event = libc::epoll_event { events, u64: key };
         syscall!(
             epoll_ctl,
-            self.fd.as_raw_fd(),
+            self.fd,
             libc::EPOLL_CTL_ADD,
             fd,
             std::ptr::from_ref(&event).cast_mut()
@@ -72,7 +88,7 @@ impl Epoll {
     pub fn remove_interest<F: AsRawFd>(&self, fd: &F) -> io::Result<()> {
         syscall!(
             epoll_ctl,
-            self.fd.as_raw_fd(),
+            self.fd,
             libc::EPOLL_CTL_DEL,
             fd.as_raw_fd(),
             std::ptr::dangling_mut(),
@@ -83,13 +99,13 @@ impl Epoll {
     /// Note that this will overwrite unread event.
     ///
     /// Should only be called if [`Epoll::next_event`] returns `None`,
-    pub fn wait(&mut self) -> io::Result<()> {
+    pub fn wait(&mut self, buf: &mut EpollBuf) -> io::Result<()> {
         self.len = 0;
         self.offset = 0;
         let result = syscall!(
             epoll_wait usize,
-            self.fd.as_raw_fd(),
-            self.events.as_mut_ptr().cast(),
+            self.fd,
+            buf.0.as_mut_ptr().cast(),
             EVENT_BUF_CAP as i32,
             -1,
         );
@@ -105,15 +121,11 @@ impl Epoll {
         }
     }
 
-    pub fn next_event(&mut self) -> Option<(u64, Interest)> {
+    pub fn next_event(&mut self, buf: &EpollBuf) -> Option<(u64, Interest)> {
         if self.len == self.offset {
             return None;
         }
-        let event = unsafe {
-            self.events
-                .get_unchecked(self.offset as usize)
-                .assume_init()
-        };
+        let event = unsafe { buf.0.get_unchecked(self.offset as usize).assume_init() };
         self.offset += 1;
         Some((event.u64, Interest(event.events as i32)))
     }

@@ -6,15 +6,19 @@ use error::Result;
 use sigfd::Sigfd;
 use macros::try_block;
 
+use crate::epoll::EpollBuf;
+
+// === shared ===
 mod macros;
-mod net;
+mod error;
+// === standard ===
 mod epoll;
 mod sigfd;
+mod net;
+// === logic ===
 mod wayland;
 mod client;
 mod clients;
-
-mod error;
 
 const SOCKET: &str = "/tmp/wayland-2";
 
@@ -38,14 +42,15 @@ fn event_loop() -> Result<()> {
     epoll.add_read_interest(LISTENER_KEY, &listener)?;
     epoll.add_read_interest(SIGFD_KEY, &sigfd)?;
 
+    let mut epoll_buf = EpollBuf::new();
     let mut streams = Vec::with_capacity(8);
 
     // ===== event loop =====
 
     loop {
-        let Some((key, interest)) = epoll.next_event() else {
+        let Some((key, interest)) = epoll.next_event(&epoll_buf) else {
             eprintln!("[EPOLL] blocking");
-            epoll.wait()?;
+            epoll.wait(&mut epoll_buf)?;
             eprintln!("[EPOLL] complete");
             continue;
         };
