@@ -2,28 +2,7 @@ use std::io;
 use std::mem::MaybeUninit;
 use std::os::unix::io::{RawFd, AsRawFd, FromRawFd, OwnedFd};
 
-macro_rules! syscall {
-    (usize, $f:ident, $($tt:tt)*) => {
-        {
-            let result = unsafe { libc::$f($($tt)*) };
-            match usize::try_from(result) {
-                Ok(ok) => Ok(ok),
-                Err(_) => Err(io::Error::last_os_error()),
-            }
-        }
-    };
-    ($f:ident, $($tt:tt)*) => {
-        {
-            #[allow(unused_unsafe)]
-            let result = unsafe { libc::$f($($tt)*) };
-            if result >= 0 {
-                Ok(result)
-            } else {
-                Err(io::Error::last_os_error())
-            }
-        }
-    };
-}
+use crate::macros::syscall;
 
 // https://man7.org/linux/man-pages/man2/signalfd.2.html
 
@@ -59,8 +38,7 @@ impl Sigfd {
     pub fn read(&self) -> io::Result<()> {
         let mut fdsi = MaybeUninit::<libc::signalfd_siginfo>::uninit();
         let len = syscall!(
-            usize,
-            read,
+            read usize,
             self.fd.as_raw_fd(),
             fdsi.as_mut_ptr().cast(),
             size_of::<libc::signalfd_siginfo>()

@@ -1,11 +1,12 @@
 use std::io;
-use std::os::unix::net::{UnixListener, UnixStream};
-use std::task::Poll::{self, *};
+use std::os::unix::net::UnixListener;
 
 use epoll::Epoll;
 use error::Result;
 use sigfd::Sigfd;
+use macros::try_block;
 
+mod macros;
 mod net;
 mod epoll;
 mod sigfd;
@@ -29,7 +30,7 @@ fn event_loop() -> Result<()> {
     // ===== setup =====
 
     let _guard = DropGuard;
-    let mut listener = UnixListener::bind(SOCKET)?;
+    let listener = UnixListener::bind(SOCKET)?;
     let sigfd = Sigfd::new()?;
     let mut epoll = Epoll::new()?;
 
@@ -49,11 +50,24 @@ fn event_loop() -> Result<()> {
             continue;
         };
         match key {
-            LISTENER_KEY => match new_client(&mut listener, &mut streams, &epoll) {
-                Ready(Ok(())) => println!("[CLIENT] new"),
-                Ready(Err(err)) => eprintln!("[CLIENT] cannot create: {err}"),
-                Pending => {}
-            },
+            LISTENER_KEY => {
+                let result = match listener.accept() {
+                    Ok((stream, _)) => try_block! {
+                        stream.set_nonblocking(true)?;
+                        epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)?;
+                        streams.push(stream);
+                        Ok(())
+                    },
+                    Err(err) => match err.kind() {
+                        io::ErrorKind::WouldBlock => continue,
+                        _ => Err(err),
+                    },
+                };
+                match result {
+                    Ok(()) => println!("[CLIENT] new"),
+                    Err(err) => eprintln!("[CLIENT] cannot create: {err}"),
+                }
+            }
             SIGFD_KEY => {
                 sigfd.read()?;
                 break;
@@ -76,28 +90,6 @@ fn event_loop() -> Result<()> {
     }
 
     Ok(())
-}
-
-fn new_client(
-    listener: &mut UnixListener,
-    streams: &mut Vec<UnixStream>,
-    epoll: &Epoll,
-) -> Poll<Result<()>> {
-    let stream = match listener.accept() {
-        Ok((stream, _)) => stream,
-        Err(err) => {
-            return match err.kind() {
-                io::ErrorKind::WouldBlock => Pending,
-                _ => return Ready(Err(err.into())),
-            };
-        }
-    };
-
-    stream.set_nonblocking(true)?;
-    epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)?;
-    streams.push(stream);
-
-    Ready(Ok(()))
 }
 
 struct DropGuard;

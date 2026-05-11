@@ -2,19 +2,7 @@ use std::io;
 use std::mem::MaybeUninit;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 
-macro_rules! syscall {
-    ($f:ident, $($tt:tt)*) => {
-        {
-            #[allow(unused_unsafe)]
-            let result = unsafe { libc::$f($($tt)*) };
-            if result >= 0 {
-                Ok(result)
-            } else {
-                Err(io::Error::last_os_error())
-            }
-        }
-    };
-}
+use crate::macros::syscall;
 
 #[derive(Clone, Copy)]
 pub struct Interest(i32);
@@ -28,13 +16,13 @@ impl Interest {
         self.0 & libc::EPOLLOUT == libc::EPOLLOUT
     }
 
-    pub fn is_shutdown(&self) -> bool {
-        self.0 & libc::EPOLLRDHUP == libc::EPOLLRDHUP
-    }
-
-    pub fn is_hangup(&self) -> bool {
-        self.0 & libc::EPOLLHUP == libc::EPOLLHUP
-    }
+    // pub fn is_shutdown(&self) -> bool {
+    //     self.0 & libc::EPOLLRDHUP == libc::EPOLLRDHUP
+    // }
+    //
+    // pub fn is_hangup(&self) -> bool {
+    //     self.0 & libc::EPOLLHUP == libc::EPOLLHUP
+    // }
 
     pub fn is_close(&self) -> bool {
         self.0 & (libc::EPOLLHUP | libc::EPOLLRDHUP) != 0
@@ -98,22 +86,21 @@ impl Epoll {
     pub fn wait(&mut self) -> io::Result<()> {
         self.len = 0;
         self.offset = 0;
-        let result = unsafe {
-            libc::epoll_wait(
-                self.fd.as_raw_fd(),
-                self.events.as_mut_ptr().cast(),
-                EVENT_BUF_CAP as i32,
-                -1,
-            )
-        };
-        match usize::try_from(result) {
+        let result = syscall!(
+            epoll_wait usize,
+            self.fd.as_raw_fd(),
+            self.events.as_mut_ptr().cast(),
+            EVENT_BUF_CAP as i32,
+            -1,
+        );
+        match result {
             Ok(nfds) => {
                 self.len = nfds as u16;
                 Ok(())
-            },
-            Err(_) => match result {
-                libc::EINTR => Ok(()),
-                _ => Err(io::Error::last_os_error()),
+            }
+            Err(err) => match err.kind() {
+                io::ErrorKind::Interrupted => Ok(()),
+                _ => Err(err),
             },
         }
     }
