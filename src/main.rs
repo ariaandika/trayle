@@ -1,10 +1,8 @@
-use std::io;
 use std::task::Poll::*;
 
 use epoll::{Epoll, EpollBuf};
 use error::Result;
 use listener::{Listener, SocketPath};
-use macros::try_block;
 use sigfd::Sigfd;
 
 // === shared ===
@@ -13,8 +11,8 @@ mod error;
 // === standard ===
 mod epoll;
 mod sigfd;
-mod listener;
 mod net;
+mod listener;
 // === logic ===
 mod wayland;
 mod client;
@@ -54,23 +52,22 @@ fn event_loop() -> Result<()> {
         };
         match key {
             LISTENER_KEY => {
-                let stream = match listener.poll_accept() {
-                    Ready(Ok(ok)) => ok,
-                    Ready(Err(err)) => {
-                        eprintln!("[CLIENT] cannot connect: {err}");
+                while let Ready(result) = listener.poll_accept() {
+                    let stream = match result {
+                        Ok(ok) => ok,
+                        Err(err) => {
+                            eprintln!("[CLIENT] cannot connect: {err}");
+                            continue;
+                        }
+                    };
+                    if let Err(err) =
+                        epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)
+                    {
+                        eprintln!("[CLIENT] cannot add to epoll: {err}");
                         continue;
-                    },
-                    Pending => continue,
-                };
-                let result = try_block! {
-                    stream.set_nonblocking(true)?;
-                    epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)?;
+                    }
                     streams.push(stream);
-                    Ok::<_, io::Error>(())
-                };
-                match result {
-                    Ok(()) => println!("[CLIENT] connected"),
-                    Err(err) => eprintln!("[CLIENT] cannot connect: {err}"),
+                    println!("[CLIENT] connected");
                 }
             }
             SIGFD_KEY => {
@@ -86,9 +83,18 @@ fn event_loop() -> Result<()> {
                     println!("[CLIENT]: close");
                 } else {
                     let stream = &mut streams[(key - KEY_OFFSET) as usize];
-                    let mut buf = [0; 1024];
-                    let len = io::Read::read(stream, &mut buf)?;
-                    println!("[CLIENT]: {:?}", str::from_utf8(&buf[..len]));
+                    while let Ready(result) = stream.poll_read() {
+                        if let Err(err) = result {
+                            eprintln!("[CLIENT] failed to read: {err}");
+                            break;
+                        }
+                        println!("[CLIENT]: {:?}", str::from_utf8(stream.read_buffer()));
+                        unsafe {
+                            let ptr = stream.spare(12);
+                            ptr.copy_from_nonoverlapping(b"Hello World!".as_ptr(), 12);
+                        }
+                        let _ = stream.poll_flush();
+                    }
                 }
             }
         }

@@ -1,11 +1,13 @@
 use std::io::Result;
 use std::os::fd::{AsRawFd, RawFd};
-use std::os::unix::net::UnixStream;
+use std::task::{Poll, ready};
 use std::{io, ptr};
 
+use crate::macros::syscall;
+
 #[derive(Debug)]
-pub struct Socket {
-    stream: UnixStream,
+pub struct Connection {
+    fd: i32,
     read_buffer: Vec<u8>,
     write_buffer: Vec<u8>,
     send_fds: Vec<RawFd>,
@@ -13,10 +15,18 @@ pub struct Socket {
     cmsg_buffer: Vec<u8>,
 }
 
-impl Socket {
-    pub fn new(stream: UnixStream) -> Self {
+impl Drop for Connection {
+    fn drop(&mut self) {
+        if let Err(err) = syscall!(close, self.fd) {
+            eprintln!("cannot close socket: {err}");
+        }
+    }
+}
+
+impl Connection {
+    pub fn from_fd(fd: i32) -> Self {
         Self {
-            stream,
+            fd,
             read_buffer: Vec::with_capacity(1024),
             write_buffer: Vec::with_capacity(1024),
             send_fds: Vec::with_capacity(8),
@@ -28,17 +38,15 @@ impl Socket {
     pub fn read_buffer(&self) -> &[u8] {
         &self.read_buffer
     }
-
-    // pub fn read_buffer_mut(&mut self) -> &mut Vec<u8> {
-    //     &mut self.read_buffer
-    // }
-    //
-    // pub fn recv_fds_mut(&mut self) -> &mut Vec<RawFd> {
-    //     &mut self.recv_fds
-    // }
 }
 
-impl Socket {
+impl AsRawFd for Connection {
+    fn as_raw_fd(&self) -> RawFd {
+        self.fd
+    }
+}
+
+impl Connection {
     /// Returns writable `len` sized memory.
     ///
     /// # Safety
@@ -53,31 +61,31 @@ impl Socket {
     }
 
     /// Read data to the read buffer.
-    pub fn read(&mut self) -> Result<()> {
+    pub fn poll_read(&mut self) -> Poll<Result<()>> {
         if self.read_buffer.capacity() == self.read_buffer.len() {
             self.read_buffer.reserve(64);
         }
-        recvmsg(&mut self.read_buffer, &mut self.recv_fds, &mut self.cmsg_buffer, self.stream.as_raw_fd())
+        recvmsg(&mut self.read_buffer, &mut self.recv_fds, &mut self.cmsg_buffer, self.fd)
     }
 
     /// Flush write buffer.
-    pub fn flush(&mut self) -> Result<()> {
-        sendmsg(
+    pub fn poll_flush(&mut self) -> Poll<Result<()>> {
+        ready!(sendmsg(
             &self.write_buffer,
             &self.send_fds,
             &mut self.cmsg_buffer,
-            self.stream.as_raw_fd(),
-        )?;
+            self.fd,
+        ))?;
         self.cmsg_buffer.clear();
         self.write_buffer.clear();
         self.send_fds.clear();
-        Ok(())
+        Poll::Ready(Ok(()))
     }
 }
 
 // ===== syscall =====
 
-fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Result<()> {
+fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Poll<Result<()>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
 
@@ -127,15 +135,18 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
     let mut rem = buf.len();
     let mut msghdr = msghdr;
     loop {
-        let result = unsafe { libc::sendmsg(socket, &msghdr, 0) };
-        let Ok(write) = usize::try_from(result) else {
-            return Err(std::io::Error::last_os_error());
+        let write = match syscall!(sendmsg(socket, &msghdr, 0)) {
+            Ok(ok) => ok,
+            Err(err) => return match err.kind() {
+                io::ErrorKind::WouldBlock => Poll::Pending,
+                _ => Poll::Ready(Err(err)),
+            },
         };
         if rem == write {
             break;
         }
         if write == 0 {
-            return Err(std::io::ErrorKind::WriteZero.into());
+            return Poll::Ready(Err(std::io::ErrorKind::WriteZero.into()));
         }
         rem -= write;
 
@@ -155,7 +166,7 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
             msghdr.msg_controllen = 0;
         }
     }
-    Ok(())
+    Poll::Ready(Ok(()))
 }
 
 fn recvmsg(
@@ -163,7 +174,7 @@ fn recvmsg(
     fds_buffer: &mut Vec<RawFd>,
     cmsg_buffer: &mut Vec<u8>,
     socket: RawFd,
-) -> Result<()> {
+) -> Poll<Result<()>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
 
@@ -196,12 +207,15 @@ fn recvmsg(
         msg_flags: 0,
     };
 
-    let result = unsafe { libc::recvmsg(socket, &mut msghdr, 0) };
-    let Ok(read) = usize::try_from(result) else {
-        return Err(std::io::Error::last_os_error());
+    let read = match syscall!(recvmsg(socket, &mut msghdr, 0)) {
+        Ok(ok) => ok,
+        Err(err) => return match err.kind() {
+            io::ErrorKind::WouldBlock => Poll::Pending,
+            _ => Poll::Ready(Err(err)),
+        },
     };
     if read == 0 {
-        return Err(io::ErrorKind::ConnectionAborted.into());
+        return Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()));
     }
 
     unsafe {
@@ -224,5 +238,5 @@ fn recvmsg(
     }
 
     unsafe { buffer.set_len(buffer.len() + read) };
-    Ok(())
+    Poll::Ready(Ok(()))
 }

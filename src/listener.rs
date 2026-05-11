@@ -1,10 +1,10 @@
 use std::io;
 use std::mem;
-use std::os::fd::{AsRawFd, FromRawFd};
-use std::os::unix::net::UnixStream;
+use std::os::fd::AsRawFd;
 use std::task::Poll;
 
 use crate::macros::syscall;
+use crate::net::Connection;
 
 // ===== SocketPath =====
 
@@ -80,9 +80,12 @@ impl Listener {
         Ok(Self { fd, path })
     }
 
-    pub fn poll_accept(&self) -> Poll<io::Result<UnixStream>> {
+    pub fn poll_accept(&self) -> Poll<io::Result<Connection>> {
         match syscall!(accept, self.fd, std::ptr::null_mut(), std::ptr::null_mut()) {
-            Ok(fd) => Poll::Ready(Ok(unsafe { UnixStream::from_raw_fd(fd) })),
+            Ok(fd) => {
+                syscall!(ioctl, fd, libc::FIONBIO, &mut true)?;
+                Poll::Ready(Ok(Connection::from_fd(fd)))
+            }
             Err(err) => match err.kind() {
                 io::ErrorKind::WouldBlock => Poll::Pending,
                 _ => Poll::Ready(Err(err)),
