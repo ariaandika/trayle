@@ -1,6 +1,6 @@
 use std::os::unix::net::UnixStream;
 
-use crate::net::Connection;
+use crate::conn::Connection;
 use crate::wayland::{Id, WlDisplay, Write};
 
 #[derive(Debug)]

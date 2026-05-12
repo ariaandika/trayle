@@ -4,7 +4,7 @@ use std::os::fd::AsRawFd;
 use std::task::Poll;
 
 use crate::macros::syscall;
-use crate::net::Connection;
+use crate::conn::Connection;
 
 // ===== SocketPath =====
 

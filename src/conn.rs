@@ -5,7 +5,7 @@ use std::task::Poll;
 use std::{io, ptr, slice};
 
 use crate::macros::syscall;
-use crate::mem::Buffer;
+use crate::buffer::Buffer;
 
 #[derive(Debug)]
 pub struct Connection {

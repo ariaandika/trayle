@@ -1,21 +1,44 @@
+//! Wayland server implementation.
+//!
+//! # Shared
+//!
+//! - [`macros`] utility macros
+//! - [`error`] error types and util
+//!
+//! # Memory Management
+//!
+//! - [`buffer`] bytes buffer and cursor
+//!
+//! # Network
+//!
+//! - [`conn`] client socket connection
+//! - [`listener`] socket listener
+//!
+//! # System
+//!
+//! - [`epoll`] epoll based event loop
+//! - [`sigfd`] handle process signal
+//!
+//! # Wayland
+//!
+//! The [`wayland`] module isolate all wayland specific logic.
+//!
+//! # Binding
 use std::task::Poll::*;
 
 use epoll::{Epoll, EpollBuf};
 use error::Result;
 use listener::{Listener, SocketPath};
-use mem::Buffer;
+use buffer::Buffer;
 use sigfd::Sigfd;
 
-// === shared ===
 mod macros;
 mod error;
-// === standard ===
+mod buffer;
+mod conn;
+mod listener;
 mod epoll;
 mod sigfd;
-mod net;
-mod listener;
-mod mem;
-// === logic ===
 mod wayland;
 mod client;
 mod clients;
