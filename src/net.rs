@@ -1,18 +1,15 @@
 use std::io::Result;
+use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, RawFd};
-use std::task::{Poll, ready};
-use std::{io, ptr};
+use std::task::Poll;
+use std::{io, ptr, slice};
 
 use crate::macros::syscall;
+use crate::mem::Buffer;
 
 #[derive(Debug)]
 pub struct Connection {
     fd: i32,
-    read_buffer: Vec<u8>,
-    write_buffer: Vec<u8>,
-    send_fds: Vec<RawFd>,
-    recv_fds: Vec<RawFd>,
-    cmsg_buffer: Vec<u8>,
 }
 
 impl Drop for Connection {
@@ -25,18 +22,7 @@ impl Drop for Connection {
 
 impl Connection {
     pub fn from_fd(fd: i32) -> Self {
-        Self {
-            fd,
-            read_buffer: Vec::with_capacity(1024),
-            write_buffer: Vec::with_capacity(1024),
-            send_fds: Vec::with_capacity(8),
-            recv_fds: Vec::with_capacity(8),
-            cmsg_buffer: Vec::with_capacity(512),
-        }
-    }
-
-    pub fn read_buffer(&self) -> &[u8] {
-        &self.read_buffer
+        Self { fd }
     }
 }
 
@@ -47,44 +33,15 @@ impl AsRawFd for Connection {
 }
 
 impl Connection {
-    /// Returns writable `len` sized memory.
-    ///
-    /// # Safety
-    ///
-    /// Caller must initialize `len` data from the returned pointer.
-    pub unsafe fn spare(&mut self, len: usize) -> *mut u8 {
-        self.write_buffer.reserve(len);
-        let ptr = self.write_buffer.spare_capacity_mut().as_mut_ptr().cast();
-        // SAFETY: caller ensure that `len` additional data will be initialized
-        unsafe { self.write_buffer.set_len(self.write_buffer.len() + len) };
-        ptr
-    }
-
     /// Read data to the read buffer.
-    pub fn poll_read(&mut self) -> Poll<Result<()>> {
-        if self.read_buffer.capacity() == self.read_buffer.len() {
-            self.read_buffer.reserve(64);
-        }
-        recvmsg(&mut self.read_buffer, &mut self.recv_fds, &mut self.cmsg_buffer, self.fd)
-    }
-
-    /// Flush write buffer.
-    pub fn poll_flush(&mut self) -> Poll<Result<()>> {
-        ready!(sendmsg(
-            &self.write_buffer,
-            &self.send_fds,
-            &mut self.cmsg_buffer,
-            self.fd,
-        ))?;
-        self.cmsg_buffer.clear();
-        self.write_buffer.clear();
-        self.send_fds.clear();
-        Poll::Ready(Ok(()))
+    pub fn poll_read(&mut self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
+        recvmsg(self.fd, buffer, fds)
     }
 }
 
 // ===== syscall =====
 
+#[allow(unused, reason = "todo")]
 fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Poll<Result<()>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
@@ -169,74 +126,76 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(
-    buffer: &mut Vec<u8>,
-    fds_buffer: &mut Vec<RawFd>,
-    cmsg_buffer: &mut Vec<u8>,
-    socket: RawFd,
-) -> Poll<Result<()>> {
+fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
 
-    // FEAT: better fd buffer management
+    const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
 
-    let buffer_spare = buffer.spare_capacity_mut();
-    let cmsg_spare = {
-        const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(size_of::<RawFd>() as u32 * 8) };
-        cmsg_buffer.reserve((CMSG_SPACE / 8) as usize);
-        let cmsg_spare = cmsg_buffer.spare_capacity_mut();
-        unsafe {
-            std::slice::from_raw_parts_mut(
-                cmsg_spare.as_mut_ptr().cast::<u8>(),
-                CMSG_SPACE as usize
-            )
-        }
-    };
+    let spare_buf = buffer.spare_capacity_mut();
 
+    let mut cmsg_buf = [const { MaybeUninit::<u8>::uninit() }; CMSG_SPACE as usize];
     let mut iov = iovec {
-        iov_base: buffer_spare.as_mut_ptr().cast(),
-        iov_len: buffer_spare.len(),
+        iov_base: spare_buf.as_mut_ptr().cast(),
+        iov_len: spare_buf.len(),
     };
     let mut msghdr = msghdr {
         msg_name: std::ptr::null_mut(),
         msg_namelen: 0,
         msg_iov: &mut iov,
         msg_iovlen: 1,
-        msg_control: cmsg_spare.as_mut_ptr().cast(),
-        msg_controllen: cmsg_spare.len(),
+        msg_control: cmsg_buf.as_mut_ptr().cast(),
+        msg_controllen: cmsg_buf.len(),
         msg_flags: 0,
     };
 
     let read = match syscall!(recvmsg(socket, &mut msghdr, 0)) {
         Ok(ok) => ok,
-        Err(err) => return match err.kind() {
-            io::ErrorKind::WouldBlock => Poll::Pending,
-            _ => Poll::Ready(Err(err)),
-        },
+        Err(err) => {
+            return match err.kind() {
+                io::ErrorKind::WouldBlock => Poll::Pending,
+                _ => Poll::Ready(Err(err)),
+            };
+        }
     };
     if read == 0 {
         return Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()));
     }
 
+    if msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC {
+        return Poll::Ready(Err(io::Error::new(
+            io::ErrorKind::QuotaExceeded,
+            "ancillary data truncated",
+        )));
+    }
+
     unsafe {
         let mut cmsg_ptr = CMSG_FIRSTHDR(&msghdr);
-        while let Some(cmsg) = cmsg_ptr.as_ref() {
+        while !cmsg_ptr.is_null() {
+            let cmsg = cmsg_ptr.read_unaligned();
+
             let (SOL_SOCKET, SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
-                break;
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "unexpected ancillary data type",
+                )));
             };
 
-            let nfds = (cmsg.cmsg_len - CMSG_LEN(0) as usize) / size_of::<RawFd>();
+            let bytes_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
+            let bytes = slice::from_raw_parts(CMSG_DATA(&cmsg), bytes_len);
 
-            let fds = CMSG_DATA(cmsg).cast::<RawFd>();
-            let dst = fds_buffer.spare_capacity_mut().as_mut_ptr().cast();
-            fds.copy_to_nonoverlapping(dst, nfds);
-
-            fds_buffer.set_len(fds_buffer.len() + nfds);
+            if !fds.try_extend_from_slice(bytes) {
+                return Poll::Ready(Err(io::Error::new(
+                    io::ErrorKind::QuotaExceeded,
+                    "max file descriptor buffer exceeded",
+                )));
+            }
 
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }
+
+        buffer.advance_mut(read as u32);
     }
 
-    unsafe { buffer.set_len(buffer.len() + read) };
     Poll::Ready(Ok(()))
 }

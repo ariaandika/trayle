@@ -3,6 +3,7 @@ use std::task::Poll::*;
 use epoll::{Epoll, EpollBuf};
 use error::Result;
 use listener::{Listener, SocketPath};
+use mem::Buffer;
 use sigfd::Sigfd;
 
 // === shared ===
@@ -13,6 +14,7 @@ mod epoll;
 mod sigfd;
 mod net;
 mod listener;
+mod mem;
 // === logic ===
 mod wayland;
 mod client;
@@ -23,6 +25,9 @@ const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const LISTENER_KEY: u64 = 0;
 const SIGFD_KEY: u64 = 1;
 const KEY_OFFSET: u64 = 2;
+
+const MAX_FD: u32 = 32;
+const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
 fn main() -> error::Terminate {
     event_loop().into()
@@ -40,6 +45,8 @@ fn event_loop() -> Result<()> {
 
     let mut epoll_buf = EpollBuf::new();
     let mut streams = Vec::with_capacity(8);
+    let mut read_buffer = Buffer::with_capacity(1024);
+    let mut fds_buffer = Buffer::with_capacity(MAX_FD_SIZE);
 
     // ===== event loop =====
 
@@ -83,17 +90,17 @@ fn event_loop() -> Result<()> {
                     println!("[CLIENT]: close");
                 } else {
                     let stream = &mut streams[(key - KEY_OFFSET) as usize];
-                    while let Ready(result) = stream.poll_read() {
-                        if let Err(err) = result {
-                            eprintln!("[CLIENT] failed to read: {err}");
-                            break;
+                    loop {
+                        match stream.poll_read(&mut read_buffer, &mut fds_buffer) {
+                            Ready(Ok(())) => {}
+                            Ready(Err(err)) => {
+                                eprintln!("[CLIENT] failed to read: {err}");
+                                break;
+                            }
+                            Pending => break,
                         }
-                        println!("[CLIENT]: {:?}", str::from_utf8(stream.read_buffer()));
-                        unsafe {
-                            let ptr = stream.spare(12);
-                            ptr.copy_from_nonoverlapping(b"Hello World!".as_ptr(), 12);
-                        }
-                        let _ = stream.poll_flush();
+                        println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
+                        read_buffer.clear();
                     }
                 }
             }
