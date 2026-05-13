@@ -30,21 +30,24 @@ impl Interest {
     }
 }
 
-const EVENT_BUF_CAP: usize = 128;
-
-pub struct EpollBuf([MaybeUninit<libc::epoll_event>; EVENT_BUF_CAP]);
+pub struct EpollBuf {
+    buf: [MaybeUninit<libc::epoll_event>; crate::MAX_EPOLL_EVENT],
+    len: u16,
+    offset: u16,
+}
 
 impl EpollBuf {
-    #[inline]
     pub fn new() -> Self {
-        Self([MaybeUninit::uninit(); EVENT_BUF_CAP])
+        Self {
+            buf: [MaybeUninit::uninit(); crate::MAX_EPOLL_EVENT],
+            len: 0,
+            offset: 0,
+        }
     }
 }
 
 pub struct Epoll {
     fd: c_int,
-    len: u16,
-    offset: u16,
 }
 
 impl Drop for Epoll {
@@ -60,8 +63,6 @@ impl Epoll {
         let fd = syscall!(epoll_create1, 0)?;
         Ok(Self {
             fd,
-            len: 0,
-            offset: 0,
         })
     }
 
@@ -99,19 +100,19 @@ impl Epoll {
     /// Note that this will overwrite unread event.
     ///
     /// Should only be called if [`Epoll::next_event`] returns `None`,
-    pub fn wait(&mut self, buf: &mut EpollBuf) -> io::Result<()> {
-        self.len = 0;
-        self.offset = 0;
+    pub fn wait(&self, buf: &mut EpollBuf) -> io::Result<()> {
+        buf.len = 0;
+        buf.offset = 0;
         let result = syscall!(
             epoll_wait usize,
             self.fd,
-            buf.0.as_mut_ptr().cast(),
-            EVENT_BUF_CAP as i32,
+            buf.buf.as_mut_ptr().cast(),
+            crate::MAX_EPOLL_EVENT as i32,
             -1,
         );
         match result {
             Ok(nfds) => {
-                self.len = nfds as u16;
+                buf.len = nfds as u16;
                 Ok(())
             }
             Err(err) => match err.kind() {
@@ -121,12 +122,12 @@ impl Epoll {
         }
     }
 
-    pub fn next_event(&mut self, buf: &EpollBuf) -> Option<(u64, Interest)> {
-        if self.len == self.offset {
+    pub fn next_event(&self, buf: &mut EpollBuf) -> Option<(u64, Interest)> {
+        if buf.len == buf.offset {
             return None;
         }
-        let event = unsafe { buf.0.get_unchecked(self.offset as usize).assume_init() };
-        self.offset += 1;
+        let event = unsafe { buf.buf.get_unchecked(buf.offset as usize).assume_init() };
+        buf.offset += 1;
         Some((event.u64, Interest(event.events as i32)))
     }
 }

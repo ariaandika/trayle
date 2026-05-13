@@ -32,14 +32,22 @@ use id::{IdManager, Id};
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 
-mod macros;
-mod error;
-mod ptr;
-mod buffer;
+// ===== os =====
+
 mod conn;
 mod listener;
 mod epoll;
 mod sigfd;
+
+// ===== alloc =====
+
+mod ptr;
+mod buffer;
+
+// ===== type =====
+
+mod macros;
+mod error;
 mod id;
 mod wayland;
 
@@ -48,6 +56,7 @@ const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const LISTENER_ID: Id = IdManager::generate_static(0);
 const SIGFD_ID: Id = IdManager::generate_static(1);
 
+const MAX_EPOLL_EVENT: usize = 128;
 const MAX_FD: u32 = 32;
 const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
@@ -56,16 +65,19 @@ fn main() -> error::Terminate {
 }
 
 fn event_loop() -> Result<()> {
-    // ===== setup =====
+
+    // ===== os =====
 
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
-    let mut epoll = Epoll::new()?;
-    let mut id_manager = IdManager::new();
+    let epoll = Epoll::new()?;
 
     epoll.add_read_interest(LISTENER_ID, &listener)?;
     epoll.add_read_interest(SIGFD_ID, &sigfd)?;
 
+    // ===== alloc =====
+
+    let mut id_manager = IdManager::new();
     let mut epoll_buf = EpollBuf::new();
     let mut streams = Vec::with_capacity(8);
     let mut read_buffer = Buffer::with_capacity(1024);
@@ -74,7 +86,7 @@ fn event_loop() -> Result<()> {
     // ===== event loop =====
 
     loop {
-        let Some((key, interest)) = epoll.next_event(&epoll_buf) else {
+        let Some((key, interest)) = epoll.next_event(&mut epoll_buf) else {
             eprintln!("[EPOLL] blocking");
             epoll.wait(&mut epoll_buf)?;
             eprintln!("[EPOLL] complete");
