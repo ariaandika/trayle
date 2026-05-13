@@ -184,12 +184,7 @@ fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<
             let bytes_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
             let bytes = slice::from_raw_parts(CMSG_DATA(&cmsg), bytes_len);
 
-            if !fds.try_extend_from_slice(bytes) {
-                return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::QuotaExceeded,
-                    "max file descriptor buffer exceeded",
-                )));
-            }
+            fds.extend_from_slice(bytes);
 
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }

@@ -34,6 +34,7 @@ use sigfd::Sigfd;
 
 mod macros;
 mod error;
+mod ptr;
 mod buffer;
 mod conn;
 mod listener;
