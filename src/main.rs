@@ -19,17 +19,17 @@
 //! - [`epoll`] epoll based event loop
 //! - [`sigfd`] handle process signal
 //!
-//! # Wayland
+//! # Application
 //!
-//! The [`wayland`] module isolate all wayland specific logic.
-//!
-//! # Binding
+//! - [`id`] client identifiers
+//! - [`wayland`] contains all wayland logic
 use std::task::Poll::*;
 
+use buffer::Buffer;
 use epoll::{Epoll, EpollBuf};
 use error::Result;
+use id::{IdManager, Id};
 use listener::{Listener, SocketPath};
-use buffer::Buffer;
 use sigfd::Sigfd;
 
 mod macros;
@@ -39,15 +39,13 @@ mod conn;
 mod listener;
 mod epoll;
 mod sigfd;
+mod id;
 mod wayland;
-mod client;
-mod clients;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
-const LISTENER_KEY: u64 = 0;
-const SIGFD_KEY: u64 = 1;
-const KEY_OFFSET: u64 = 2;
+const LISTENER_ID: Id = IdManager::generate_static(0);
+const SIGFD_ID: Id = IdManager::generate_static(1);
 
 const MAX_FD: u32 = 32;
 const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
@@ -62,9 +60,10 @@ fn event_loop() -> Result<()> {
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let mut epoll = Epoll::new()?;
+    let mut id_manager = IdManager::new();
 
-    epoll.add_read_interest(LISTENER_KEY, &listener)?;
-    epoll.add_read_interest(SIGFD_KEY, &sigfd)?;
+    epoll.add_read_interest(LISTENER_ID, &listener)?;
+    epoll.add_read_interest(SIGFD_ID, &sigfd)?;
 
     let mut epoll_buf = EpollBuf::new();
     let mut streams = Vec::with_capacity(8);
@@ -80,51 +79,54 @@ fn event_loop() -> Result<()> {
             eprintln!("[EPOLL] complete");
             continue;
         };
-        match key {
-            LISTENER_KEY => {
-                while let Ready(result) = listener.poll_accept() {
-                    let stream = match result {
-                        Ok(ok) => ok,
-                        Err(err) => {
-                            eprintln!("[CLIENT] cannot connect: {err}");
+        let id = Id::from_u64(key);
+        if id.is_static() {
+            match id {
+                LISTENER_ID => {
+                    while let Ready(result) = listener.poll_accept() {
+                        let stream = match result {
+                            Ok(ok) => ok,
+                            Err(err) => {
+                                eprintln!("[CLIENT] cannot connect: {err}");
+                                continue;
+                            }
+                        };
+                        let id_new = id_manager.generate_dynamic(streams.len() as u32);
+                        if let Err(err) = epoll.add_read_interest(id_new, &stream) {
+                            eprintln!("[CLIENT] cannot add to epoll: {err}");
                             continue;
                         }
-                    };
-                    if let Err(err) =
-                        epoll.add_read_interest(streams.len() as u64 + KEY_OFFSET, &stream)
-                    {
-                        eprintln!("[CLIENT] cannot add to epoll: {err}");
-                        continue;
+                        streams.push(stream);
+                        println!("[CLIENT] connected");
                     }
-                    streams.push(stream);
-                    println!("[CLIENT] connected");
                 }
+                SIGFD_ID => {
+                    sigfd.read()?;
+                    break;
+                }
+                _ => eprintln!("[EPOLL] invalid static key")
             }
-            SIGFD_KEY => {
-                sigfd.read()?;
-                break;
-            }
-            key => {
-                if interest.is_close() {
-                    let stream = streams.swap_remove((key - KEY_OFFSET) as usize);
-                    if let Err(err) = epoll.remove_interest(&stream) {
-                        eprintln!("cannot remove epoll interest: {err}");
-                    }
-                    println!("[CLIENT]: close");
-                } else {
-                    let stream = &mut streams[(key - KEY_OFFSET) as usize];
-                    loop {
-                        match stream.poll_read(&mut read_buffer, &mut fds_buffer) {
-                            Ready(Ok(())) => {}
-                            Ready(Err(err)) => {
-                                eprintln!("[CLIENT] failed to read: {err}");
-                                break;
-                            }
-                            Pending => break,
+        } else {
+            let idx = id.value() as usize;
+            if interest.is_close() {
+                let stream = streams.swap_remove(idx);
+                if let Err(err) = epoll.remove_interest(&stream) {
+                    eprintln!("cannot remove epoll interest: {err}");
+                }
+                println!("[CLIENT]: close");
+            } else {
+                let stream = &mut streams[idx];
+                loop {
+                    match stream.poll_read(&mut read_buffer, &mut fds_buffer) {
+                        Ready(Ok(())) => {}
+                        Ready(Err(err)) => {
+                            eprintln!("[CLIENT] failed to read: {err}");
+                            break;
                         }
-                        println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
-                        read_buffer.clear();
+                        Pending => break,
                     }
+                    println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
+                    read_buffer.clear();
                 }
             }
         }

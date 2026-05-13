@@ -65,8 +65,8 @@ impl Epoll {
         })
     }
 
-    pub fn add_read_interest<F: AsRawFd>(&self, key: u64, fd: &F) -> io::Result<()> {
-        self.add_interest(key, (libc::EPOLLIN | libc::EPOLLRDHUP | libc::EPOLLET) as u32, fd.as_raw_fd())
+    pub fn add_read_interest<K: Into<u64>, F: AsRawFd>(&self, key: K, fd: &F) -> io::Result<()> {
+        self.add_interest(key.into(), (libc::EPOLLIN | libc::EPOLLRDHUP | libc::EPOLLET) as u32, fd.as_raw_fd())
     }
 
     // fn add_write_interest<F: AsRawFd>(&self, key: u64, fd: &F) -> io::Result<()> {
