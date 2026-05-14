@@ -26,9 +26,10 @@
 use std::task::Poll::*;
 
 use buffer::Buffer;
+use client::Client;
 use epoll::{Epoll, EpollBuf};
 use error::Result;
-use id::{IdManager, Id};
+use id::{Id, IdManager};
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 
@@ -49,6 +50,7 @@ mod buffer;
 mod macros;
 mod error;
 mod id;
+mod client;
 mod wayland;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
@@ -79,7 +81,7 @@ fn event_loop() -> Result<()> {
 
     let mut id_manager = IdManager::new();
     let mut epoll_buf = EpollBuf::new();
-    let mut streams = Vec::with_capacity(8);
+    let mut conns = Vec::with_capacity(8);
     let mut read_buffer = Buffer::with_capacity(1024);
     let mut fds_buffer = Buffer::with_capacity(MAX_FD_SIZE);
 
@@ -95,23 +97,22 @@ fn event_loop() -> Result<()> {
         let id = Id::from_u64(key);
         if id.is_static() {
             match id {
-                LISTENER_ID => {
-                    while let Ready(result) = listener.poll_accept() {
-                        let stream = match result {
-                            Ok(ok) => ok,
-                            Err(err) => {
-                                eprintln!("[CLIENT] cannot connect: {err}");
-                                continue;
-                            }
-                        };
-                        let id_new = id_manager.generate_dynamic(streams.len() as u32);
-                        if let Err(err) = epoll.add_read_interest(id_new, &stream) {
-                            eprintln!("[CLIENT] cannot add to epoll: {err}");
-                            continue;
-                        }
-                        streams.push(stream);
-                        println!("[CLIENT] connected");
+                LISTENER_ID => loop {
+                    let conn = match listener.poll_accept() {
+                        Ready(Ok(ok)) => ok,
+                        Ready(Err(err)) => {
+                            eprintln!("[CLIENT] cannot connect: {err}");
+                            break;
+                        },
+                        Pending => break,
+                    };
+                    let new_id = id_manager.generate_dynamic(conns.len() as u32);
+                    if let Err(err) = epoll.add_read_interest(new_id, &conn) {
+                        eprintln!("[CLIENT] cannot add to epoll: {err}");
+                        continue;
                     }
+                    conns.push(Client::new(new_id, conn));
+                    println!("[CLIENT] connected");
                 }
                 SIGFD_ID => {
                     match sigfd.read() {
@@ -126,25 +127,25 @@ fn event_loop() -> Result<()> {
         } else {
             let idx = id.value() as usize;
             if interest.is_close() {
-                let stream = streams.swap_remove(idx);
+                let stream = conns.swap_remove(idx);
                 if let Err(err) = epoll.remove_interest(&stream) {
                     eprintln!("cannot remove epoll interest: {err}");
                 }
                 println!("[CLIENT]: close");
-            } else {
-                let stream = &mut streams[idx];
-                loop {
-                    match stream.poll_read(&mut read_buffer, &mut fds_buffer) {
-                        Ready(Ok(())) => {}
-                        Ready(Err(err)) => {
-                            eprintln!("[CLIENT] failed to read: {err}");
-                            break;
-                        }
-                        Pending => break,
+                continue;
+            }
+            let stream = &mut conns[idx];
+            loop {
+                match stream.poll_read(&mut read_buffer, &mut fds_buffer) {
+                    Ready(Ok(())) => {}
+                    Ready(Err(err)) => {
+                        eprintln!("[CLIENT] failed to read: {err}");
+                        break;
                     }
-                    println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
-                    read_buffer.clear();
+                    Pending => break,
                 }
+                println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
+                read_buffer.clear();
             }
         }
     }
