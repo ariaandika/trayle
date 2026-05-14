@@ -114,7 +114,11 @@ fn event_loop() -> Result<()> {
                     }
                 }
                 SIGFD_ID => {
-                    sigfd.read()?;
+                    match sigfd.read() {
+                        Ok(Some(sig)) => eprintln!("[SIGFD] {sig} signal received"),
+                        Ok(None) => eprintln!("[SIGFD] unrecognized signal"),
+                        Err(err) => eprintln!("[SIGFD] error: {err}"),
+                    }
                     break;
                 }
                 _ => eprintln!("[EPOLL] invalid static key")
