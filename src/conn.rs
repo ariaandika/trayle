@@ -1,5 +1,6 @@
 use std::io::Result;
 use std::mem::MaybeUninit;
+use std::num::NonZeroI32;
 use std::os::fd::{AsRawFd, RawFd};
 use std::task::Poll;
 use std::{io, ptr, slice};
@@ -9,33 +10,33 @@ use crate::buffer::Buffer;
 
 #[derive(Debug)]
 pub struct Connection {
-    fd: i32,
+    fd: NonZeroI32,
 }
 
 impl Drop for Connection {
     fn drop(&mut self) {
-        if let Err(err) = syscall!(close, self.fd) {
+        if let Err(err) = syscall!(close, self.fd.get()) {
             eprintln!("cannot close socket: {err}");
         }
     }
 }
 
 impl Connection {
-    pub fn from_fd(fd: i32) -> Self {
+    pub fn from_fd(fd: NonZeroI32) -> Self {
         Self { fd }
     }
 }
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.fd
+        self.fd.get()
     }
 }
 
 impl Connection {
     /// Read data to the read buffer.
-    pub fn poll_read(&mut self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
-        recvmsg(self.fd, buffer, fds)
+    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
+        recvmsg(self.fd.get(), buffer, fds)
     }
 }
 

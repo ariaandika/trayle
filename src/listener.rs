@@ -84,6 +84,12 @@ impl Listener {
         match syscall!(accept, self.fd, std::ptr::null_mut(), std::ptr::null_mut()) {
             Ok(fd) => {
                 syscall!(ioctl, fd, libc::FIONBIO, &mut true)?;
+                let Some(fd) = std::num::NonZeroI32::new(fd) else {
+                    return Poll::Ready(Err(io::Error::new(
+                        io::ErrorKind::InvalidInput,
+                        "zero value fd",
+                    )));
+                };
                 Poll::Ready(Ok(Connection::from_fd(fd)))
             }
             Err(err) => match err.kind() {
