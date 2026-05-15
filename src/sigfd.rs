@@ -26,9 +26,10 @@ impl Sig {
 impl std::fmt::Display for Sig {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Sig::Int => "SIGTERM".fmt(f),
-            Sig::Term => "SIGTERM".fmt(f),
+            Sig::Int => "SIGINT",
+            Sig::Term => "SIGTERM",
         }
+        .fmt(f)
     }
 }
 
