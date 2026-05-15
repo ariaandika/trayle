@@ -1,8 +1,15 @@
 use std::ptr::NonNull;
 
-#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Ptr<T>(NonNull<T>);
+
+impl<T> Copy for Ptr<T> { }
+
+impl<T> Clone for Ptr<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
 
 #[allow(clippy::wrong_self_convention)]
 impl<T> Ptr<T> {
@@ -10,30 +17,54 @@ impl<T> Ptr<T> {
         Self(alloc::allocate(cap))
     }
 
-    pub fn cast<U>(self) -> Ptr<U> {
+    pub fn allocate(cap: u32) -> Ptr<T> {
+        Self(alloc::allocate(cap))
+    }
+
+    pub const fn cast<U>(self) -> Ptr<U> {
         Ptr(self.0.cast())
     }
 
-    pub fn add(self, n: u32) -> Self {
+    pub const fn add(self, n: u32) -> Self {
         unsafe { Ptr(self.0.add(n as usize)) }
     }
 
-    pub fn sub_mut(&mut self, off: u32) {
+    pub const fn sub_mut(&mut self, off: u32) {
         self.0 = unsafe { self.0.sub(off as usize) };
     }
 
-    pub fn as_slice<'a>(self, len: u32) -> &'a [T] {
+    pub const fn as_ref<'a>(self) -> &'a T {
+        unsafe { self.0.as_ref() }
+    }
+
+    pub const fn as_mut<'a>(mut self) -> &'a mut T {
+        unsafe { self.0.as_mut() }
+    }
+
+    pub const fn write(&mut self, val: T) {
+        unsafe { self.0.write(val) };
+    }
+
+    pub const fn replace(&mut self, val: T) -> T {
+        unsafe { self.0.replace(val) }
+    }
+
+    pub const fn as_slice<'a>(self, len: u32) -> &'a [T] {
         unsafe { std::slice::from_raw_parts(self.0.as_ptr(), len as usize) }
     }
 
-    pub fn as_mut_slice<'a>(self, len: u32) -> &'a mut [T] {
+    pub const fn as_mut_slice<'a>(self, len: u32) -> &'a mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.0.as_ptr(), len as usize) }
     }
 
-    pub fn grow(&mut self, old_cap: u32, new_cap: u32) {
+    #[cold]
+    #[inline(never)]
+    pub fn grow(&mut self, old_cap: u32, new_cap: u32) -> u32 {
         let exp_cap = old_cap as usize * 2;
         let new_cap = exp_cap.max(new_cap as usize);
+        assert!(exp_cap < (u32::MAX >> 1) as usize, "max capacity exceeded");
         self.0 = alloc::grow(self.0, old_cap, new_cap);
+        new_cap as u32
     }
 
     pub fn deallocate(self, cap: u32) {

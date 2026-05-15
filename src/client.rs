@@ -4,16 +4,19 @@ use std::task::Poll;
 
 use crate::buffer::Buffer;
 use crate::conn::Connection;
-use crate::id::Id;
 
 pub struct Client {
-    id: Id,
+    id: u64,
     conn: Connection,
 }
 
 impl Client {
-    pub fn new(id: Id, conn: Connection) -> Self {
+    pub const fn new(id: u64, conn: Connection) -> Self {
         Self { id, conn }
+    }
+
+    pub const fn id(&self) -> u64 {
+        self.id
     }
 }
 
