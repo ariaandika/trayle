@@ -27,7 +27,7 @@ use std::task::Poll::*;
 use buffer::Buffer;
 use client::Client;
 use clients::Clients;
-use epoll::{Epoll, EpollBuf};
+use epoll::Epoll;
 use error::Result;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
@@ -69,11 +69,12 @@ fn event_loop() -> Result<()> {
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
 
-    epoll.add_read_interest(LISTENER_ID, &listener)?;
-    epoll.add_read_interest(SIGFD_ID, &sigfd)?;
+    epoll.add_read(LISTENER_ID, &listener)?;
+    epoll.add_read(SIGFD_ID, &sigfd)?;
 
     // ===== alloc =====
-    let mut epoll_buf = EpollBuf::new();
+    let mut events_i = 0;
+    let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
     let mut read_buffer = Buffer::with_capacity(1024);
     let mut fds_buffer = Buffer::with_capacity(MAX_FD_SIZE);
 
@@ -83,12 +84,19 @@ fn event_loop() -> Result<()> {
     // ===== event loop =====
 
     loop {
-        let Some((id, interest)) = epoll.next_event(&mut epoll_buf) else {
+        let Some(event) = events.get(events_i) else {
             eprintln!("[EPOLL] blocking");
-            epoll.wait(&mut epoll_buf)?;
+            events_i = 0;
+            events.clear();
+            let n = epoll.wait(events.spare_capacity_mut(), None)?;
+            unsafe { events.set_len(n) };
             eprintln!("[EPOLL] complete");
             continue;
         };
+        events_i += 1;
+
+        let id = event.key();
+        let interest = event.interest();
 
         if id & STATIC_ID_MASK == STATIC_ID_MASK {
             match id {
@@ -102,7 +110,7 @@ fn event_loop() -> Result<()> {
                         Pending => break,
                     };
                     let new_id = clients.peek_id();
-                    if let Err(err) = epoll.add_read_interest(new_id, &conn) {
+                    if let Err(err) = epoll.add_read(new_id, &conn) {
                         eprintln!("[CLIENT] cannot add to epoll: {err}");
                         continue;
                     }
@@ -127,7 +135,7 @@ fn event_loop() -> Result<()> {
                 eprintln!("[CLIENT] failed to remove client, invalid id from epoll");
                 continue;
             };
-            if let Err(err) = epoll.remove_interest(&client) {
+            if let Err(err) = epoll.remove(&client) {
                 eprintln!("cannot remove epoll interest: {err}");
             }
             println!("[CLIENT] close");
