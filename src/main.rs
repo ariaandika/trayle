@@ -147,8 +147,16 @@ fn event_loop() -> Result<()> {
                 }
                 Pending => break,
             }
-            println!("[CLIENT]: {:?}", str::from_utf8(&read_buffer));
-            read_buffer.clear();
+
+            while let Some((header, rest)) = wayland::split_header(&read_buffer) {
+                let (id, op, len) = header;
+                let Some((body, _rest)) = rest.split_at_checked(len as usize) else {
+                    break;
+                };
+                dbg!((id, op, len));
+                dbg!(body.len());
+                read_buffer.advance((8 + len) as u32);
+            }
         }
     }
 

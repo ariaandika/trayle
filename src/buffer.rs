@@ -29,6 +29,14 @@ impl Buffer {
         self.ptr.as_slice(self.len)
     }
 
+    pub fn advance(&mut self, cnt: u32) {
+        debug_assert!(cnt <= self.len);
+        self.ptr = self.ptr.add(cnt);
+        self.off += cnt;
+        self.len -= cnt;
+        self.cap -= cnt;
+    }
+
     /// # Safety
     ///
     /// `cnt` element after the last element must be initialized.
