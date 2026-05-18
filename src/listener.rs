@@ -3,7 +3,7 @@ use std::task::Poll;
 use std::{mem, ptr};
 
 use crate::conn::Connection;
-use crate::errno::{Result, cvt, ready};
+use crate::errno::{Errno, cvt, ready};
 
 // ===== SocketPath =====
 
@@ -64,7 +64,15 @@ impl AsRawFd for Listener {
 }
 
 impl Listener {
-    pub fn new(path: SocketPath) -> Result<Self> {
+    pub fn new(path: SocketPath) -> Result<Self, BindError> {
+        let path_ptr = path.path;
+        match Self::bind(path) {
+            Ok(ok) => Ok(ok),
+            Err(_) => Err(BindError { path_ptr }),
+        }
+    }
+
+    fn bind(path: SocketPath) -> Result<Self, Errno> {
         let fd = unsafe { cvt(libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0))? };
         let SocketPath { addr, len, path } = path;
 
@@ -83,7 +91,7 @@ impl Listener {
         Ok(Self { fd, path })
     }
 
-    pub fn poll_accept(&self) -> Poll<Result<Connection>> {
+    pub fn poll_accept(&self) -> Poll<Result<Connection, Errno>> {
         let fd = ready!(libc::accept(
             self.fd.as_raw_fd(),
             ptr::null_mut(),
@@ -97,5 +105,25 @@ impl Listener {
             ))?
         };
         Poll::Ready(Ok(Connection::from_fd(fd)))
+    }
+}
+
+// ===== Error =====
+
+#[derive(Debug)]
+pub struct BindError {
+    path_ptr: *const std::ffi::c_char,
+}
+
+impl std::error::Error for BindError { }
+
+impl std::fmt::Display for BindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "failed to bind ")?;
+        match unsafe { std::ffi::CStr::from_ptr(self.path_ptr).to_str() } {
+            Ok(path) => write!(f, "`{path}`: "),
+            Err(_) => write!(f, "`<non-utf8-path>`: "),
+        }?;
+        write!(f, "{}", std::io::Error::last_os_error())
     }
 }
