@@ -1,4 +1,3 @@
-use std::io;
 use std::os::fd::{AsRawFd, RawFd};
 use std::task::Poll;
 
@@ -29,7 +28,7 @@ impl AsRawFd for Client {
 // ===== delegate Connection =====
 
 impl Client {
-    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<io::Result<()>> {
+    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), crate::conn::MsgError>> {
         self.conn.poll_read(buffer, fds)
     }
 }

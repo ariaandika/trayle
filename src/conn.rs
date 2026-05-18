@@ -1,49 +1,37 @@
-use std::io::Result;
 use std::mem::MaybeUninit;
-use std::num::NonZeroI32;
-use std::os::fd::{AsRawFd, RawFd};
+use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::task::Poll;
-use std::{io, ptr, slice};
+use std::{ptr, slice};
 
-use crate::macros::syscall;
 use crate::buffer::Buffer;
+use crate::errno::{self, ready};
 
 #[derive(Debug)]
 pub struct Connection {
-    fd: NonZeroI32,
-}
-
-impl Drop for Connection {
-    fn drop(&mut self) {
-        if let Err(err) = syscall!(close, self.fd.get()) {
-            eprintln!("cannot close socket: {err}");
-        }
-    }
-}
-
-impl Connection {
-    pub fn from_fd(fd: NonZeroI32) -> Self {
-        Self { fd }
-    }
+    fd: OwnedFd,
 }
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.fd.get()
+        self.fd.as_raw_fd()
     }
 }
 
 impl Connection {
+    pub const fn from_fd(fd: OwnedFd) -> Self {
+        Self { fd }
+    }
+
     /// Read data to the read buffer.
-    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
-        recvmsg(self.fd.get(), buffer, fds)
+    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), MsgError>> {
+        recvmsg(self.fd.as_raw_fd(), buffer, fds)
     }
 }
 
 // ===== syscall =====
 
 #[allow(unused, reason = "todo")]
-fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Poll<Result<()>> {
+fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Poll<Result<(), MsgError>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
 
@@ -65,7 +53,7 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
     // https://linux.die.net/man/3/cmsg
 
     let msghdr = msghdr {
-        msg_name: std::ptr::null_mut(),
+        msg_name: ptr::null_mut(),
         msg_namelen: 0,
         msg_iov: &mut iovec {
             iov_base: buf.as_ptr() as *mut c_void,
@@ -93,18 +81,12 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
     let mut rem = buf.len();
     let mut msghdr = msghdr;
     loop {
-        let write = match syscall!(sendmsg(socket, &msghdr, 0)) {
-            Ok(ok) => ok,
-            Err(err) => return match err.kind() {
-                io::ErrorKind::WouldBlock => Poll::Pending,
-                _ => Poll::Ready(Err(err)),
-            },
-        };
-        if rem == write {
+        let write = ready!(libc::sendmsg(socket, &msghdr, 0));
+        if write == rem {
             break;
         }
         if write == 0 {
-            return Poll::Ready(Err(std::io::ErrorKind::WriteZero.into()));
+            return Poll::Ready(Err(MsgError::WriteZero));
         }
         rem -= write;
 
@@ -127,9 +109,10 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<()>> {
+fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), MsgError>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
+    use MsgError as E;
 
     const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
 
@@ -141,7 +124,7 @@ fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<
         iov_len: spare_buf.len(),
     };
     let mut msghdr = msghdr {
-        msg_name: std::ptr::null_mut(),
+        msg_name: ptr::null_mut(),
         msg_namelen: 0,
         msg_iov: &mut iov,
         msg_iovlen: 1,
@@ -150,24 +133,12 @@ fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<
         msg_flags: 0,
     };
 
-    let read = match syscall!(recvmsg(socket, &mut msghdr, 0)) {
-        Ok(ok) => ok,
-        Err(err) => {
-            return match err.kind() {
-                io::ErrorKind::WouldBlock => Poll::Pending,
-                _ => Poll::Ready(Err(err)),
-            };
-        }
-    };
+    let read: usize = ready!(libc::recvmsg(socket, &mut msghdr, 0));
     if read == 0 {
-        return Poll::Ready(Err(io::ErrorKind::ConnectionAborted.into()));
+        return Poll::Ready(Err(E::ConnectionAborted));
     }
-
     if msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC {
-        return Poll::Ready(Err(io::Error::new(
-            io::ErrorKind::QuotaExceeded,
-            "ancillary data truncated",
-        )));
+        return Poll::Ready(Err(E::ControlDataTruncated));
     }
 
     unsafe {
@@ -176,10 +147,7 @@ fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<
             let cmsg = cmsg_ptr.read_unaligned();
 
             let (SOL_SOCKET, SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
-                return Poll::Ready(Err(io::Error::new(
-                    io::ErrorKind::InvalidData,
-                    "unexpected ancillary data type",
-                )));
+                return Poll::Ready(Err(E::ControlDataType));
             };
 
             let bytes_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
@@ -194,4 +162,32 @@ fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<
     }
 
     Poll::Ready(Ok(()))
+}
+
+// ===== MsgError =====
+
+pub enum MsgError {
+    Errno,
+    WriteZero,
+    ControlDataType,
+    ControlDataTruncated,
+    ConnectionAborted,
+}
+
+impl From<errno::Errno> for MsgError {
+    fn from(_: errno::Errno) -> Self {
+        Self::Errno
+    }
+}
+
+impl std::fmt::Display for MsgError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Errno => std::io::Error::last_os_error().fmt(f),
+            Self::WriteZero => std::io::ErrorKind::WriteZero.fmt(f),
+            Self::ControlDataType => "unexpected ancillary data type".fmt(f),
+            Self::ControlDataTruncated => "ancillary data truncated".fmt(f),
+            Self::ConnectionAborted => std::io::ErrorKind::ConnectionAborted.fmt(f),
+        }
+    }
 }

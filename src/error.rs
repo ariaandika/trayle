@@ -25,6 +25,7 @@ pub struct Error {
 #[derive(Debug)]
 enum ErrorRepr {
     Context(String, BoxError),
+    Errno,
     Io(io::Error),
 }
 
@@ -47,7 +48,16 @@ impl std::fmt::Display for Error {
         use ErrorRepr as E;
         match self.inner.as_ref() {
             E::Context(msg, err) => write!(f, "{msg}: {err}"),
+            E::Errno => write!(f, "fatal error: {}", io::Error::last_os_error()),
             E::Io(err) => write!(f, "fatal error: {err}"),
+        }
+    }
+}
+
+impl From<crate::errno::Errno> for Error {
+    fn from(_: crate::errno::Errno) -> Self {
+        Self {
+            inner: Box::new(ErrorRepr::Errno),
         }
     }
 }

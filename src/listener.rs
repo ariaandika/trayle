@@ -1,10 +1,9 @@
-use std::io;
-use std::mem;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsRawFd, OwnedFd};
 use std::task::Poll;
+use std::{mem, ptr};
 
-use crate::macros::syscall;
 use crate::conn::Connection;
+use crate::errno::{Result, cvt, ready};
 
 // ===== SocketPath =====
 
@@ -48,60 +47,55 @@ impl SocketPath {
 // ===== Listener =====
 
 pub struct Listener {
-    fd: i32,
+    fd: OwnedFd,
     path: *const std::os::raw::c_char,
 }
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        if let Err(err) = syscall!(close, self.fd) {
-            eprintln!("cannot close socket: {err}");
-        }
-        if let Err(err) = syscall!(unlink, self.path) {
-            eprintln!("cannot unlink socket: {err}");
-        }
-    }
-}
-
-impl Listener {
-    pub fn new(path: SocketPath) -> io::Result<Self> {
-        let fd = syscall!(socket, libc::AF_UNIX, libc::SOCK_STREAM, 0)?;
-        let SocketPath { addr, len, path } = path;
-
-        /// https://man7.org/linux/man-pages/man2/listen.2.html#NOTES
-        const BACKLOG: i32 = -1;
-
-        syscall!(bind, fd, (&raw const addr) as *const _, len)?;
-        syscall!(listen, fd, BACKLOG)?;
-
-        // there is also using `fnctl`, but its about standard thing
-        syscall!(ioctl, fd, libc::FIONBIO, &mut true)?;
-
-        Ok(Self { fd, path })
-    }
-
-    pub fn poll_accept(&self) -> Poll<io::Result<Connection>> {
-        match syscall!(accept, self.fd, std::ptr::null_mut(), std::ptr::null_mut()) {
-            Ok(fd) => {
-                syscall!(ioctl, fd, libc::FIONBIO, &mut true)?;
-                let Some(fd) = std::num::NonZeroI32::new(fd) else {
-                    return Poll::Ready(Err(io::Error::new(
-                        io::ErrorKind::InvalidInput,
-                        "zero value fd",
-                    )));
-                };
-                Poll::Ready(Ok(Connection::from_fd(fd)))
-            }
-            Err(err) => match err.kind() {
-                io::ErrorKind::WouldBlock => Poll::Pending,
-                _ => Poll::Ready(Err(err)),
-            },
-        }
+        let _ = unsafe { libc::unlink(self.path) };
     }
 }
 
 impl AsRawFd for Listener {
     fn as_raw_fd(&self) -> i32 {
-        self.fd
+        self.fd.as_raw_fd()
+    }
+}
+
+impl Listener {
+    pub fn new(path: SocketPath) -> Result<Self> {
+        let fd = unsafe { cvt(libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0))? };
+        let SocketPath { addr, len, path } = path;
+
+        /// https://man7.org/linux/man-pages/man2/listen.2.html#NOTES
+        const BACKLOG: i32 = -1;
+
+        unsafe {
+            let fd = AsRawFd::as_raw_fd(&fd);
+            cvt::<_, ()>(libc::bind(fd, (&raw const addr) as *const _, len))?;
+            cvt::<_, ()>(libc::listen(fd, BACKLOG))?;
+
+            // there is also using `fnctl`, but its about standard thing
+            cvt::<_, ()>(libc::ioctl(fd, libc::FIONBIO, &mut true))?;
+        }
+
+        Ok(Self { fd, path })
+    }
+
+    pub fn poll_accept(&self) -> Poll<Result<Connection>> {
+        let fd = ready!(libc::accept(
+            self.fd.as_raw_fd(),
+            ptr::null_mut(),
+            ptr::null_mut()
+        ));
+        unsafe {
+            cvt::<_, ()>(libc::ioctl(
+                AsRawFd::as_raw_fd(&fd),
+                libc::FIONBIO,
+                &mut true,
+            ))?
+        };
+        Poll::Ready(Ok(Connection::from_fd(fd)))
     }
 }

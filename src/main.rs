@@ -33,9 +33,9 @@ use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 
 // ===== shared ====
-mod macros;
 mod error;
 // ===== os ========
+mod errno;
 mod conn;
 mod listener;
 mod epoll;
@@ -83,78 +83,38 @@ fn event_loop() -> Result<()> {
 
     // ===== event loop =====
 
-    loop {
-        let Some(event) = events.get(events_i) else {
-            eprintln!("[EPOLL] blocking");
-            events_i = 0;
-            events.clear();
-            let n = epoll.wait(events.spare_capacity_mut(), None)?;
-            unsafe { events.set_len(n) };
-            eprintln!("[EPOLL] complete");
-            continue;
-        };
-        events_i += 1;
-
-        let id = event.key();
-        let interest = event.interest();
-
+    // separate closure to act as a `try` block while capturing all required state
+    //
+    // cope and seeth: https://github.com/rust-lang/rust/issues/31436
+    let mut handle = |id: u64, interest: epoll::Interest| {
         if id & STATIC_ID_MASK == STATIC_ID_MASK {
-            match id {
+            return match id {
                 LISTENER_ID => loop {
-                    let conn = match listener.poll_accept() {
-                        Ready(Ok(ok)) => ok,
-                        Ready(Err(err)) => {
-                            eprintln!("[CLIENT] cannot connect: {err}");
-                            break;
-                        },
-                        Pending => break,
-                    };
+                    let conn = ready!(listener.poll_accept()).cx::<Listener>("accept client")?;
                     let new_id = clients.peek_id();
-                    if let Err(err) = epoll.add_read(new_id, &conn) {
-                        eprintln!("[CLIENT] cannot add to epoll: {err}");
-                        continue;
-                    }
+                    epoll.add_read(new_id, &conn).cx::<Epoll>("add client")?;
                     clients.insert(Client::new(new_id, conn));
                     println!("[CLIENT] connected {:?}", Clients::destruct_id(new_id));
-                }
-                SIGFD_ID => {
-                    match sigfd.read() {
-                        Ok(Some(sig)) => eprintln!("[SIGFD] {sig} signal received"),
-                        Ok(None) => eprintln!("[SIGFD] unrecognized signal"),
-                        Err(err) => eprintln!("[SIGFD] error: {err}"),
-                    }
-                    break;
-                }
-                _ => eprintln!("[EPOLL] invalid static key")
-            }
-            continue;
+                },
+                SIGFD_ID => Ok(Some(sigfd.read())),
+                _ => epoll.err(UnknownKey, "handle event"),
+            };
         }
 
         if interest.is_close() {
             let Some(client) = clients.remove(id) else {
-                eprintln!("[CLIENT] failed to remove client, invalid id from epoll");
-                continue;
+                return clients.err(UnknownId, "remove client");
             };
-            if let Err(err) = epoll.remove(&client) {
-                eprintln!("cannot remove epoll interest: {err}");
-            }
+            epoll.remove(&client).cx::<Epoll>("remove client")?;
             println!("[CLIENT] close");
-            continue;
+            return Ok(None);
         }
 
         let Some(client) = clients.get_mut(id) else {
-            eprintln!("[CLIENT] failed to get client, invalid id from epoll");
-            continue;
+            return clients.err(UnknownId, "get client");
         };
         loop {
-            match client.poll_read(&mut read_buffer, &mut fds_buffer) {
-                Ready(Ok(())) => {}
-                Ready(Err(err)) => {
-                    eprintln!("[CLIENT] failed to read: {err}");
-                    break;
-                }
-                Pending => break,
-            }
+            ready!(client.poll_read(&mut read_buffer, &mut fds_buffer)).cx::<Client>("read socket")?;
 
             while let Some((header, rest)) = wayland::split_header(&read_buffer) {
                 let (id, op, len) = header;
@@ -166,7 +126,143 @@ fn event_loop() -> Result<()> {
                 read_buffer.advance((8 + len) as u32);
             }
         }
+    };
+
+    loop {
+        let Some(event) = events.get(events_i) else {
+            println!("[EPOLL] blocking");
+            events_i = 0;
+            events.clear();
+            let n = epoll.wait(events.spare_capacity_mut(), None)?;
+            unsafe { events.set_len(n) };
+            println!("[EPOLL] complete");
+            continue;
+        };
+        events_i += 1;
+        let (id, interest) = event.to_parts();
+        match handle(id, interest) {
+            Ok(sig) => if let Some(sig) = sig {
+                println!("[{}] received {sig} signal", Sigfd::NAME);
+                break;
+            }
+            Err(err) => eprintln!("{err}"),
+        }
     }
 
     Ok(())
+}
+
+macro_rules! ready {
+    ($e:expr) => {
+        match $e {
+            Ready(ok) => ok,
+            Pending => break Ok(None),
+        }
+    };
+}
+
+use ready;
+
+// ===== Error Util =====
+
+struct UnknownId;
+struct UnknownKey;
+
+macro_rules! impl_subject {
+    ($t:ty, $n:literal) => {
+        impl Subject for $t {
+            const NAME: &'static str = $n;
+        }
+    };
+}
+impl_subject!(Epoll, "EPOLL");
+impl_subject!(Sigfd, "SIGFD");
+impl_subject!(Listener, "LISTENER");
+impl_subject!(Client, "CLIENT");
+impl_subject!(Clients, "CLIENTS");
+
+trait Subject {
+    const NAME: &'static str;
+
+    fn err<T, R: Into<Repr>>(&self, err: R, m: &'static str) -> Result<T, HandleError> {
+        Err(HandleError::new(Self::NAME, m, err.into()))
+    }
+}
+
+trait HandleErrorExt<T> {
+    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError>;
+}
+
+impl<S: Subject> Subject for &S {
+    const NAME: &'static str = S::NAME;
+}
+
+impl<T, E: Into<Repr>> HandleErrorExt<T> for Result<T, E> {
+    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError> {
+        match self {
+            Ok(ok) => Ok(ok),
+            Err(err) => Err(HandleError::new(S::NAME, m, err.into()))
+        }
+    }
+}
+
+impl<T> HandleErrorExt<T> for Option<T> {
+    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError> {
+        match self {
+            Some(ok) => Ok(ok),
+            None => Err(HandleError::new(S::NAME, m, Repr::None)),
+        }
+    }
+}
+
+// ===== Handle Error =====
+
+struct HandleError {
+    subject: &'static str,
+    message: &'static str,
+    repr: Repr,
+}
+
+enum Repr {
+    Errno,
+    UnknownId,
+    UnknownKey,
+    MsgError(conn::MsgError),
+    None,
+}
+
+macro_rules! impl_into_repr {
+    ($t:ty, $r:ident) => {
+        impl From<$t> for Repr {
+            fn from(_: $t) -> Self { Self::$r }
+        }
+    };
+}
+impl_into_repr!(errno::Errno, Errno);
+impl_into_repr!(UnknownId, UnknownId);
+impl_into_repr!(UnknownKey, UnknownKey);
+
+impl From<conn::MsgError> for Repr {
+    fn from(value: conn::MsgError) -> Self {
+        Self::MsgError(value)
+    }
+}
+
+impl HandleError {
+    fn new(subject: &'static str, message: &'static str, repr: Repr) -> Self {
+        Self { subject, message, repr }
+    }
+}
+
+impl std::fmt::Display for HandleError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "[{}] failed to {}", self.subject, self.message)?;
+        match &self.repr {
+            Repr::Errno => write!(f, ": {}", std::io::Error::last_os_error()),
+            Repr::UnknownId => write!(f, ": unrecognized ID"),
+            Repr::UnknownKey => write!(f, ": unrecognized key"),
+            Repr::MsgError(err) => err.fmt(f),
+            Repr::None => Ok(()),
+        }
+    }
 }
