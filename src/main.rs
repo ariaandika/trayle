@@ -29,6 +29,7 @@ use client::Client;
 use clients::Clients;
 use epoll::Epoll;
 use error::Result;
+use error::{HandleErrorExt, Subject, UnknownId, UnknownKey};
 use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
@@ -225,107 +226,3 @@ macro_rules! ready {
 }
 
 use ready;
-
-// ===== Error Util =====
-
-struct UnknownId;
-struct UnknownKey;
-
-macro_rules! impl_subject {
-    ($t:ty, $n:literal) => {
-        impl Subject for $t {
-            const NAME: &'static str = $n;
-        }
-    };
-}
-impl_subject!(Epoll, "EPOLL");
-impl_subject!(Sigfd, "SIGFD");
-impl_subject!(Listener, "LISTENER");
-impl_subject!(Client, "CLIENT");
-impl_subject!(Clients, "CLIENTS");
-
-trait Subject {
-    const NAME: &'static str;
-
-    fn err<T, R: Into<Repr>>(&self, err: R, m: &'static str) -> Result<T, HandleError> {
-        Err(HandleError::new(Self::NAME, m, err.into()))
-    }
-}
-
-trait HandleErrorExt<T> {
-    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError>;
-}
-
-impl<S: Subject> Subject for &S {
-    const NAME: &'static str = S::NAME;
-}
-
-impl<T, E: Into<Repr>> HandleErrorExt<T> for Result<T, E> {
-    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError> {
-        match self {
-            Ok(ok) => Ok(ok),
-            Err(err) => Err(HandleError::new(S::NAME, m, err.into()))
-        }
-    }
-}
-
-impl<T> HandleErrorExt<T> for Option<T> {
-    fn cx<S: Subject>(self, m: &'static str) -> Result<T, HandleError> {
-        match self {
-            Some(ok) => Ok(ok),
-            None => Err(HandleError::new(S::NAME, m, Repr::None)),
-        }
-    }
-}
-
-// ===== Handle Error =====
-
-struct HandleError {
-    subject: &'static str,
-    message: &'static str,
-    repr: Repr,
-}
-
-enum Repr {
-    Errno,
-    UnknownId,
-    UnknownKey,
-    MsgError(conn::MsgError),
-    None,
-}
-
-macro_rules! impl_into_repr {
-    ($t:ty, $r:ident) => {
-        impl From<$t> for Repr {
-            fn from(_: $t) -> Self { Self::$r }
-        }
-    };
-}
-impl_into_repr!(errno::Errno, Errno);
-impl_into_repr!(UnknownId, UnknownId);
-impl_into_repr!(UnknownKey, UnknownKey);
-
-impl From<conn::MsgError> for Repr {
-    fn from(value: conn::MsgError) -> Self {
-        Self::MsgError(value)
-    }
-}
-
-impl HandleError {
-    fn new(subject: &'static str, message: &'static str, repr: Repr) -> Self {
-        Self { subject, message, repr }
-    }
-}
-
-impl std::fmt::Display for HandleError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "[{}] failed to {}", self.subject, self.message)?;
-        match &self.repr {
-            Repr::Errno => write!(f, ": {}", std::io::Error::last_os_error()),
-            Repr::UnknownId => write!(f, ": unrecognized ID"),
-            Repr::UnknownKey => write!(f, ": unrecognized key"),
-            Repr::MsgError(err) => err.fmt(f),
-            Repr::None => Ok(()),
-        }
-    }
-}
