@@ -29,6 +29,10 @@ impl<T> Ptr<T> {
         unsafe { Ptr(self.0.add(n as usize)) }
     }
 
+    pub const fn sub(self, n: u32) -> Self {
+        unsafe { Ptr(self.0.sub(n as usize)) }
+    }
+
     pub const fn sub_mut(&mut self, off: u32) {
         self.0 = unsafe { self.0.sub(off as usize) };
     }
@@ -41,11 +45,15 @@ impl<T> Ptr<T> {
         unsafe { self.0.as_mut() }
     }
 
-    pub const fn write(&mut self, val: T) {
+    pub const fn read(self) -> T {
+        unsafe { self.0.read() }
+    }
+
+    pub const fn write(self, val: T) {
         unsafe { self.0.write(val) };
     }
 
-    pub const fn replace(&mut self, val: T) -> T {
+    pub const fn replace(self, val: T) -> T {
         unsafe { self.0.replace(val) }
     }
 
@@ -55,6 +63,10 @@ impl<T> Ptr<T> {
 
     pub const fn as_mut_slice<'a>(self, len: u32) -> &'a mut [T] {
         unsafe { std::slice::from_raw_parts_mut(self.0.as_ptr(), len as usize) }
+    }
+
+    pub const fn copy_from_nonoverlapping(self, ptr: *const T, count: u32) {
+        unsafe { self.0.as_ptr().copy_from_nonoverlapping(ptr, count as usize) };
     }
 
     #[cold]
@@ -67,8 +79,29 @@ impl<T> Ptr<T> {
         new_cap as u32
     }
 
+    #[cold]
+    #[inline(never)]
+    pub fn grow_offset(&mut self, old_cap: u32, add: u32, offset: u32) -> u32 {
+        let mut ptr = self.sub(offset);
+        let cap = ptr.grow_inner(old_cap + offset, add);
+        *self = ptr;
+        cap
+    }
+
+    fn grow_inner(&mut self, old_cap: u32, add: u32) -> u32 {
+        let exp_cap = old_cap as usize * 2;
+        let new_cap = exp_cap.max((old_cap + add) as usize);
+        assert!(exp_cap < (u32::MAX >> 1) as usize, "max capacity exceeded");
+        self.0 = alloc::grow(self.0, old_cap, new_cap);
+        new_cap as u32
+    }
+
     pub fn deallocate(self, cap: u32) {
         alloc::deallocate(self.0, cap);
+    }
+
+    pub fn deallocate_offset(self, cap: u32, off: u32) {
+        unsafe { alloc::deallocate(self.0.sub(off as usize), cap + off) };
     }
 }
 

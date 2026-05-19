@@ -43,6 +43,7 @@ mod sigfd;
 // ===== alloc =====
 mod ptr;
 mod buffer;
+mod fd_buffer;
 // ===== app =======
 mod client;
 mod clients;
