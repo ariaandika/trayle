@@ -1,5 +1,55 @@
-use crate::client::Client;
+use crate::conn::Connection;
+use crate::epoll::Epoll;
+use crate::objects::Objects;
 use crate::ptr::Ptr;
+
+// ===== ClientId =====
+
+#[derive(Clone, Copy)]
+#[repr(transparent)]
+pub struct ClientId(u64);
+
+impl ClientId {
+    /// Note that this should only be used to restore id from raw integer.
+    ///
+    /// To create new id, use `Clients` methods.
+    pub fn from_u64(int: u64) -> Self {
+        Self(int)
+    }
+}
+
+// ===== ClientState =====
+
+pub struct ClientState {
+    conn: Connection,
+    objects: Objects,
+}
+
+// ===== Client =====
+
+#[allow(unused, reason = "TODO")]
+pub struct Client {
+    id: ClientId,
+    state: ClientState,
+}
+
+// ===== ClientMut =====
+
+pub struct ClientMut<'a> {
+    state: &'a mut ClientState,
+}
+
+impl<'a> ClientMut<'a> {
+    pub fn conn(&self) -> &Connection {
+        &self.state.conn
+    }
+
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.state.objects
+    }
+}
+
+// ===== Clients =====
 
 pub struct Clients {
     ptr: Ptr<Entry>,
@@ -20,7 +70,7 @@ impl Drop for Clients {
 }
 
 enum Entry {
-    Some(Client),
+    Some(ClientState),
     None(u32)
 }
 
@@ -35,33 +85,38 @@ impl Clients {
         }
     }
 
-    /// Returns id that will be used for the next `insert`.
-    pub const fn peek_id(&self) -> u64 {
+    /// (idx, id)
+    const fn construct_id(&self) -> u64 {
         (self.last_delete as u64) << 4 | (self.id as u64)
     }
 
     /// (idx, id)
-    pub const fn destruct_id(id: u64) -> (u32, u32) {
-        debug_assert!(id & !(u64::MAX >> 1) == 0);
+    const fn destruct_id(id: u64) -> (u32, u32) {
+        debug_assert!(id & i64::MIN as u64 == 0);
         ((id >> 4) as u32, id as u32)
     }
+}
 
-    pub fn get_mut(&mut self, id: u64) -> Option<&mut Client> {
-        let (idx, _) = Self::destruct_id(id);
-        if idx < self.len {
-            match self.ptr.add(idx).as_mut() {
-                Entry::Some(client) => Some(client),
-                Entry::None(_) => None,
-            }
-        } else {
-            None
-        }
+impl Clients {
+    pub fn insert<'a>(
+        &'a mut self,
+        conn: Connection,
+        epoll: &Epoll,
+    ) -> crate::errno::Result<ClientMut<'a>> {
+        let key = self.construct_id();
+
+        epoll.add_read(key, &conn)?;
+
+        let objects = Objects::new();
+        let state = self.insert_inner(ClientState { conn, objects });
+        Ok(ClientMut { state })
     }
 
-    pub fn insert(&mut self, client: Client) {
+    fn insert_inner(&mut self, client: ClientState) -> &mut ClientState {
         if self.len == self.cap {
             self.cap = self.ptr.grow(self.cap, 0);
         }
+        let ptr = self.ptr;
         if self.last_delete == self.len {
             self.ptr.add(self.last_delete).write(Entry::Some(client));
             self.len += 1;
@@ -70,31 +125,56 @@ impl Clients {
             let Entry::None(next_delete) =
                 self.ptr.add(self.last_delete).replace(Entry::Some(client))
             else {
-                unreachable!("invalid replacement of deleted entry");
+                unreachable!("invalid entry deletion");
             };
             self.last_delete = next_delete;
         }
-        self.id += 1;
+        self.id = self.id.wrapping_add(1);
+        match ptr.as_mut() {
+            Entry::Some(state) => state,
+            Entry::None(_) => unsafe { std::hint::unreachable_unchecked() },
+        }
+    }
+}
+
+impl Clients {
+    pub fn get_mut(&mut self, id: ClientId) -> Option<ClientMut<'_>> {
+        let (idx, _) = Self::destruct_id(id.0);
+        if idx < self.len {
+            match self.ptr.add(idx).as_mut() {
+                Entry::Some(state) => Some(ClientMut { state }),
+                Entry::None(_) => None,
+            }
+        } else {
+            None
+        }
     }
 
-    pub fn remove(&mut self, id: u64) -> Option<Client> {
+    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<crate::errno::Result<Client>> {
+        let state = self.remove_inner(id)?;
+        if let Err(err) = epoll.remove(&state.conn) {
+            return Some(Err(err));
+        }
+        Some(Ok(Client { id, state }))
+    }
+
+    fn remove_inner(&mut self, id: ClientId) -> Option<ClientState> {
         if self.len == 0 {
             return None;
         }
-        let (idx, _) = Self::destruct_id(id);
+        let (idx, _) = Self::destruct_id(id.0);
         if idx >= self.len {
-            dbg!((idx, self.len));
             return None;
         }
-        let Entry::Some(client) = self.ptr.add(idx).as_ref() else {
-            unreachable!("invalid id, referencing None entry")
-        };
-        if client.id() != id {
-            dbg!((client.id(), id));
-            return None;
-        }
+        // let Entry::Some(client) = self.ptr.add(idx).as_ref() else {
+        //     unreachable!("invalid id, referencing None entry")
+        // };
+        // if client.id() != id {
+        //     dbg!((client.id(), id));
+        //     return None;
+        // }
         let Entry::Some(client) = self.ptr.add(idx).replace(Entry::None(self.last_delete)) else {
-            unreachable!();
+            unsafe { std::hint::unreachable_unchecked() };
         };
         self.last_delete = idx;
         Some(client)

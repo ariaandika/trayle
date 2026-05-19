@@ -15,7 +15,7 @@ macro_rules! impl_subject {
 impl_subject!(crate::epoll::Epoll, "EPOLL");
 impl_subject!(crate::sigfd::Sigfd, "SIGFD");
 impl_subject!(crate::listener::Listener, "LISTENER");
-impl_subject!(crate::client::Client, "CLIENT");
+impl_subject!(crate::clients::ClientMut<'_>, "CLIENT");
 impl_subject!(crate::clients::Clients, "CLIENTS");
 
 pub trait Subject {

@@ -25,7 +25,6 @@
 use std::task::Poll::*;
 
 use buffer::Buffer;
-use client::Client;
 use clients::Clients;
 use epoll::Epoll;
 use error::Result;
@@ -50,7 +49,6 @@ mod fd_buffer;
 // ===== app =======
 mod objects;
 mod wayland;
-mod client;
 mod clients;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
@@ -93,35 +91,36 @@ fn event_loop() -> Result<()> {
     // separate closure to act as a `try` block while capturing all required state
     //
     // cope and seethe: https://github.com/rust-lang/rust/issues/31436
-    let mut handle = |id: u64, interest: epoll::Interest| {
-        if id & STATIC_ID_MASK == STATIC_ID_MASK {
-            return match id {
+    let mut handle = |key: u64, interest: epoll::Interest| {
+        if key & STATIC_ID_MASK == STATIC_ID_MASK {
+            return match key {
                 LISTENER_ID => loop {
                     let conn = ready!(listener.poll_accept()).cx::<Listener>("accept client")?;
-                    let new_id = clients.peek_id();
-                    epoll.add_read(new_id, &conn).cx::<Epoll>("add client")?;
-                    clients.insert(Client::new(new_id, conn));
-                    println!("[CLIENT] connected {:?}", Clients::destruct_id(new_id));
+                    let _client = clients.insert(conn, &epoll).cx::<Epoll>("add client")?;
+                    println!("[CLIENT] connected");
                 },
                 SIGFD_ID => Ok(Some(sigfd.read())),
                 _ => epoll.err(UnknownKey, "handle event"),
             };
         }
 
+        let id = ClientId::from_u64(key);
+
         if interest.is_close() {
-            let Some(client) = clients.remove(id) else {
-                return clients.err(UnknownId, "remove client");
-            };
-            epoll.remove(&client).cx::<Epoll>("remove client")?;
-            println!("[CLIENT] close");
-            return Ok(None);
+            return match clients.remove(id, &epoll) {
+                Some(_client) => {
+                    println!("[CLIENT] close");
+                    Ok(None)
+                },
+                None => clients.err(UnknownId, "remove client"),
+            }
         }
 
-        let Some(client) = clients.get_mut(id) else {
+        let Some(mut client) = clients.get_mut(id) else {
             return clients.err(UnknownId, "get client");
         };
         loop {
-            ready!(client.conn().poll_read(&mut read_buffer, &mut fds_buffer)).cx::<Client>("read socket")?;
+            ready!(client.conn().poll_read(&mut read_buffer, &mut fds_buffer)).cx::<ClientMut>("read socket")?;
 
             while let Some((id, op, len)) = wayland::header(&read_buffer) {
                 if len < 8 {
@@ -136,7 +135,7 @@ fn event_loop() -> Result<()> {
                 let result = if id.is_display() {
                     handle_wl_display(op, body, &mut write_buffer)
                 } else {
-                    handle_message(id, op, body, client)
+                    handle_message(id, op, body, &mut client)
                 };
                 if let Err(err) = result {
                     println!("[WL_ERROR]: {err}");
@@ -165,8 +164,8 @@ fn event_loop() -> Result<()> {
             continue;
         };
         events_i += 1;
-        let (id, interest) = event.to_parts();
-        match handle(id, interest) {
+        let (key, interest) = event.to_parts();
+        match handle(key, interest) {
             Ok(sig) => if let Some(sig) = sig {
                 println!("[{}] received {sig} signal", Sigfd::NAME);
                 break;
@@ -184,7 +183,7 @@ fn handle_message(
     id: Id,
     op: u16,
     body: &[u8],
-    client: &mut Client,
+    client: &mut ClientMut<'_>,
 ) -> Result<(), WlError> {
     // use wayland::Interface as I;
 
@@ -226,3 +225,6 @@ macro_rules! ready {
 }
 
 use ready;
+
+use crate::clients::{ClientId, ClientMut};
+
