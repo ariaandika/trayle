@@ -5,6 +5,7 @@ use std::{ptr, slice};
 
 use crate::buffer::Buffer;
 use crate::errno::{self, ready};
+use crate::fd_buffer::FdBuffer;
 
 #[derive(Debug)]
 pub struct Connection {
@@ -24,31 +25,35 @@ impl Connection {
 
     /// Read data to the read buffer.
     pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), MsgError>> {
-        recvmsg(self.fd.as_raw_fd(), buffer, fds)
+        recvmsg(buffer, fds, self.fd.as_raw_fd())
+    }
+
+    /// Write data to the socket.
+    ///
+    /// May call write multiple time.
+    pub fn poll_write_all(&self, buffer: &mut Buffer, fds: &mut FdBuffer) -> Poll<Result<(), MsgError>> {
+        sendmsg(buffer, fds, self.fd.as_raw_fd())
     }
 }
 
 // ===== syscall =====
 
-#[allow(unused, reason = "todo")]
-fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) -> Poll<Result<(), MsgError>> {
-    use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_SPACE};
+fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), MsgError>> {
+    use libc::CMSG_FIRSTHDR;
     use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
+
+    debug_assert!(!buffer.is_empty());
 
     let (cmsg_ptr, cmsg_len) = if fds.is_empty() {
         (ptr::null_mut(), 0)
     } else {
-        let fd_size = size_of_val(fds) as u32;
+        let cmsg = fds.as_cmsg();
 
-        // CMSG_SPACE used when calculating required allocation of ancillary data
-        let cmsg_space = unsafe { CMSG_SPACE(fd_size) };
-        cmsg_buffer.reserve(cmsg_space as usize);
+        debug_assert!(cmsg.len() as u32 == unsafe { libc::CMSG_LEN(fds.len() * size_of::<RawFd>() as u32) });
 
-        // CMSG_LEN used when calculating exact length of ancillary data
-        let cmsg_len = unsafe { CMSG_LEN(fd_size) };
-        let cmsg_ptr = cmsg_buffer.spare_capacity_mut().as_mut_ptr().cast();
-        (cmsg_ptr, cmsg_len)
+        (cmsg.as_ptr().cast_mut(), cmsg.len() as u32)
     };
+
 
     // https://linux.die.net/man/3/cmsg
 
@@ -56,45 +61,39 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
         msg_name: ptr::null_mut(),
         msg_namelen: 0,
         msg_iov: &mut iovec {
-            iov_base: buf.as_ptr() as *mut c_void,
-            iov_len: buf.len(),
+            iov_base: buffer.as_ptr() as *mut c_void,
+            iov_len: buffer.len(),
         },
         msg_iovlen: 1,
-        msg_control: cmsg_ptr,
+        msg_control: cmsg_ptr.cast(),
         msg_controllen: cmsg_len as usize,
         msg_flags: 0,
     };
 
     if !fds.is_empty() {
-        unsafe {
-            let cmsg = &mut *CMSG_FIRSTHDR(&msghdr);
-            cmsg.cmsg_len = cmsg_len as usize;
-            cmsg.cmsg_level = SOL_SOCKET;
-            cmsg.cmsg_type = SCM_RIGHTS;
-
-            // initialize the payload
-            let fdptr = CMSG_DATA(cmsg).cast::<RawFd>();
-            fdptr.copy_from_nonoverlapping(fds.as_ptr(), fds.len());
-        }
+        let cmsg = unsafe { &mut *CMSG_FIRSTHDR(&msghdr) };
+        cmsg.cmsg_len = cmsg_len as usize;
+        cmsg.cmsg_level = SOL_SOCKET;
+        cmsg.cmsg_type = SCM_RIGHTS;
+        // payload initialized by FdBuffer
     }
 
-    let mut rem = buf.len();
     let mut msghdr = msghdr;
     loop {
-        let write = ready!(libc::sendmsg(socket, &msghdr, 0));
-        if write == rem {
-            break;
-        }
+        let write: usize = ready!(libc::sendmsg(socket, &msghdr, 0));
         if write == 0 {
             return Poll::Ready(Err(MsgError::WriteZero));
         }
-        rem -= write;
+        buffer.advance(write as u32);
+        if buffer.is_empty() {
+            break;
+        }
 
         unsafe {
-            // `advance` the message buffer
+            // rebuilt the message buffer
             let iov_mut = &mut *msghdr.msg_iov;
-            iov_mut.iov_base = iov_mut.iov_base.add(write);
-            iov_mut.iov_len = rem;
+            iov_mut.iov_base = buffer.as_ptr() as *mut c_void;
+            iov_mut.iov_len = buffer.len();
 
             // Ancillary data is received as if it were queued along with the first normal data octet in
             // the segment (if any).
@@ -106,10 +105,13 @@ fn sendmsg(buf: &[u8], fds: &[RawFd], cmsg_buffer: &mut Vec<u8>, socket: RawFd) 
             msghdr.msg_controllen = 0;
         }
     }
+
+    fds.clear();
+
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(socket: RawFd, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), MsgError>> {
+fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<(), MsgError>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
     use MsgError as E;
