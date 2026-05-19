@@ -1,7 +1,5 @@
 use std::os::fd::{AsRawFd, RawFd};
-use std::task::Poll;
 
-use crate::buffer::Buffer;
 use crate::conn::Connection;
 
 pub struct Client {
@@ -17,6 +15,10 @@ impl Client {
     pub const fn id(&self) -> u64 {
         self.id
     }
+
+    pub(crate) fn conn(&self) -> &Connection {
+        &self.conn
+    }
 }
 
 impl AsRawFd for Client {
@@ -24,12 +26,3 @@ impl AsRawFd for Client {
         self.conn.as_raw_fd()
     }
 }
-
-// ===== delegate Connection =====
-
-impl Client {
-    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), crate::conn::MsgError>> {
-        self.conn.poll_read(buffer, fds)
-    }
-}
-

@@ -18,7 +18,7 @@ pub struct Id(NonZeroU32);
 
 impl Id {
     pub const fn new(id: u32) -> Option<Self> {
-        debug_assert!(id > 1);
+        debug_assert!(id != 0);
         match NonZeroU32::new(id) {
             Some(x) => Some(Self(x)),
             None => None,
@@ -34,9 +34,19 @@ impl Id {
         unsafe { Self(NonZeroU32::new_unchecked(1)) }
     }
 
+    /// Returns `true` if id is special id for `wl_display`.
+    pub const fn is_display(&self) -> bool {
+        self.0.get() == 1
+    }
+
     /// Returns ID as `u32`.
     pub const fn as_u32(&self) -> u32 {
         self.0.get()
+    }
+
+    /// Returns the memory representation of this integer as a byte array in native byte order
+    pub const fn to_ne_bytes(self) -> [u8; 4] {
+        self.0.get().to_ne_bytes()
     }
 }
 

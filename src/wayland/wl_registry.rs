@@ -1,0 +1,7 @@
+
+
+
+pub struct WlRegistry {
+
+}
+

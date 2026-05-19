@@ -29,8 +29,10 @@ use client::Client;
 use clients::Clients;
 use epoll::Epoll;
 use error::Result;
+use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
+use wayland::{Id, WlError};
 
 // ===== shared ====
 mod error;
@@ -45,9 +47,9 @@ mod ptr;
 mod buffer;
 mod fd_buffer;
 // ===== app =======
+mod wayland;
 mod client;
 mod clients;
-mod wayland;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -77,7 +79,9 @@ fn event_loop() -> Result<()> {
     let mut events_i = 0;
     let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
     let mut read_buffer = Buffer::with_capacity(1024);
+    let mut write_buffer = Buffer::with_capacity(1024);
     let mut fds_buffer = Buffer::with_capacity(MAX_FD_SIZE);
+    let mut write_fd = FdBuffer::new::<16>();
 
     // ===== app =====
     let mut clients = Clients::with_capacity(8);
@@ -86,7 +90,7 @@ fn event_loop() -> Result<()> {
 
     // separate closure to act as a `try` block while capturing all required state
     //
-    // cope and seeth: https://github.com/rust-lang/rust/issues/31436
+    // cope and seethe: https://github.com/rust-lang/rust/issues/31436
     let mut handle = |id: u64, interest: epoll::Interest| {
         if id & STATIC_ID_MASK == STATIC_ID_MASK {
             return match id {
@@ -115,16 +119,35 @@ fn event_loop() -> Result<()> {
             return clients.err(UnknownId, "get client");
         };
         loop {
-            ready!(client.poll_read(&mut read_buffer, &mut fds_buffer)).cx::<Client>("read socket")?;
+            ready!(client.conn().poll_read(&mut read_buffer, &mut fds_buffer)).cx::<Client>("read socket")?;
 
-            while let Some((header, rest)) = wayland::split_header(&read_buffer) {
-                let (id, op, len) = header;
-                let Some((body, _rest)) = rest.split_at_checked(len as usize) else {
+            while let Some((id, op, len)) = wayland::header(&read_buffer) {
+                if len < 8 {
+                    todo!("error: len less than 8")
+                }
+                let Some(body) = read_buffer.get(8..len as usize) else {
                     break;
                 };
-                dbg!((id, op, len));
-                dbg!(body.len());
-                read_buffer.advance((8 + len) as u32);
+                let Some(id) = Id::new(id) else {
+                    todo!("invalid id")
+                };
+                let result = if id.is_display() {
+                    handle_wl_display(op, body, &mut write_buffer)
+                } else {
+                    handle_message(id, op, body, client)
+                };
+                if let Err(err) = result {
+                    println!("[WL_ERROR]: {err}");
+                }
+                if !write_buffer.is_empty() {
+                    dbg!(&*write_buffer);
+                    match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
+                        Ready(Ok(())) => println!("write ok"),
+                        _ => println!("cannot write"),
+                    }
+                    dbg!(&*write_buffer);
+                }
+                read_buffer.advance(len as u32);
             }
         }
     };
@@ -150,6 +173,36 @@ fn event_loop() -> Result<()> {
         }
     }
 
+    Ok(())
+}
+
+// ===== wayland =====
+
+fn handle_message(
+    id: Id,
+    op: u16,
+    body: &[u8],
+    client: &mut Client,
+) -> Result<(), WlError> {
+    todo!()
+}
+
+fn handle_wl_display(
+    op: u16,
+    body: &[u8],
+    write_buffer: &mut Buffer,
+) -> Result<(), WlError> {
+    use wayland::wl_display::Op;
+    match Op::from_request(op)? {
+        Op::Sync(decoder) => {
+            decoder.decode(body)?.encode_callback(69, write_buffer);
+            println!("[DEBUG] Sync");
+        }
+        Op::GetRegistry(decoder) => {
+            let get_registry = decoder.decode(body)?;
+            println!("[DEBUG] {get_registry:?}");
+        }
+    }
     Ok(())
 }
 

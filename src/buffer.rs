@@ -11,6 +11,7 @@ pub struct Buffer {
 
 impl Drop for Buffer {
     fn drop(&mut self) {
+        self.ptr.sub_mut(self.off);
         self.ptr.deallocate(self.cap + self.off);
     }
 }
@@ -55,6 +56,12 @@ impl Buffer {
                 .as_mut_ptr()
                 .copy_from_nonoverlapping(slice.as_ptr().cast(), slice.len());
             self.advance_mut(slice.len() as u32);
+        }
+    }
+
+    pub fn reserve(&mut self, len: u32) {
+        if self.cap - self.len < len {
+            self.cap = self.ptr.grow(self.cap, self.cap + len);
         }
     }
 
