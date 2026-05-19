@@ -32,7 +32,7 @@ pub trait SyscallReturns<I>: Sized {
 
 impl SyscallReturns<i32> for () {
     fn cvt(int: i32) -> Result<Self> {
-        if int == -1 { Ok(()) } else { Err(Errno {}) }
+        if int != -1 { Ok(()) } else { Err(Errno {}) }
     }
 }
 
