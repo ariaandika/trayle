@@ -16,6 +16,11 @@ impl ClientId {
     pub fn from_u64(int: u64) -> Self {
         Self(int)
     }
+
+    /// `(idx, id)`
+    pub fn to_parts(self) -> (u32, u32) {
+        Clients::destruct_id(self.0)
+    }
 }
 
 // ===== ClientState =====
@@ -33,13 +38,24 @@ pub struct Client {
     state: ClientState,
 }
 
+impl Client {
+    pub fn id(&self) -> ClientId {
+        self.id
+    }
+}
+
 // ===== ClientMut =====
 
 pub struct ClientMut<'a> {
+    id: ClientId,
     state: &'a mut ClientState,
 }
 
 impl<'a> ClientMut<'a> {
+    pub fn id(&self) -> ClientId {
+        self.id
+    }
+
     pub fn conn(&self) -> &Connection {
         &self.state.conn
     }
@@ -107,9 +123,10 @@ impl Clients {
 
         epoll.add_read(key, &conn)?;
 
+        let id = ClientId(key);
         let objects = Objects::new();
         let state = self.insert_inner(ClientState { conn, objects });
-        Ok(ClientMut { state })
+        Ok(ClientMut { id, state })
     }
 
     fn insert_inner(&mut self, client: ClientState) -> &mut ClientState {
@@ -142,7 +159,7 @@ impl Clients {
         let (idx, _) = Self::destruct_id(id.0);
         if idx < self.len {
             match self.ptr.add(idx).as_mut() {
-                Entry::Some(state) => Some(ClientMut { state }),
+                Entry::Some(state) => Some(ClientMut { id, state }),
                 Entry::None(_) => None,
             }
         } else {

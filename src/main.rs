@@ -1,10 +1,5 @@
 //! Wayland server implementation.
 //!
-//! # Shared
-//!
-//! - [`macros`] utility macros
-//! - [`error`] error types and util
-//!
 //! # Memory Management
 //!
 //! - [`buffer`] bytes buffer and cursor
@@ -22,6 +17,10 @@
 //! # Application
 //!
 //! - [`wayland`] contains all wayland logic
+//!
+//! # Util
+//!
+//! - [`error`] error handling
 use std::task::Poll::*;
 
 use buffer::Buffer;
@@ -33,9 +32,8 @@ use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
+use log::Log;
 
-// ===== shared ====
-mod error;
 // ===== os ========
 mod errno;
 mod conn;
@@ -50,6 +48,9 @@ mod fd_buffer;
 mod objects;
 mod wayland;
 mod clients;
+// ===== util ====
+mod log;
+mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -96,8 +97,8 @@ fn event_loop() -> Result<()> {
             return match key {
                 LISTENER_ID => loop {
                     let conn = ready!(listener.poll_accept()).cx::<Listener>("accept client")?;
-                    let _client = clients.insert(conn, &epoll).cx::<Epoll>("add client")?;
-                    println!("[CLIENT] connected");
+                    let client = clients.insert(conn, &epoll).cx::<Epoll>("add client")?;
+                    client.info("connected");
                 },
                 SIGFD_ID => Ok(Some(sigfd.read())),
                 _ => epoll.err(UnknownKey, "handle event"),
@@ -108,8 +109,8 @@ fn event_loop() -> Result<()> {
 
         if interest.is_close() {
             return match clients.remove(id, &epoll) {
-                Some(_client) => {
-                    println!("[CLIENT] close");
+                Some(result) => {
+                    result.cx::<ClientMut>("remove client")?.info("close");
                     Ok(None)
                 },
                 None => clients.err(UnknownId, "remove client"),
@@ -138,15 +139,13 @@ fn event_loop() -> Result<()> {
                     handle_message(id, op, body, &mut client)
                 };
                 if let Err(err) = result {
-                    println!("[WL_ERROR]: {err}");
+                    println!("[WL:ERROR]: {err}");
                 }
                 if !write_buffer.is_empty() {
-                    dbg!(&*write_buffer);
                     match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
                         Ready(Ok(())) => println!("write ok"),
                         _ => println!("cannot write"),
                     }
-                    dbg!(&*write_buffer);
                 }
                 read_buffer.advance(len as u32);
             }
@@ -155,19 +154,19 @@ fn event_loop() -> Result<()> {
 
     loop {
         let Some(event) = events.get(events_i) else {
-            println!("[EPOLL] blocking");
+            epoll.info("blocking");
             events_i = 0;
             events.clear();
             let n = epoll.wait(events.spare_capacity_mut(), None)?;
             unsafe { events.set_len(n) };
-            println!("[EPOLL] complete");
+            epoll.info("complete");
             continue;
         };
         events_i += 1;
         let (key, interest) = event.to_parts();
         match handle(key, interest) {
             Ok(sig) => if let Some(sig) = sig {
-                println!("[{}] received {sig} signal", Sigfd::NAME);
+                let _ = writeln!(sigfd, "{sig} signal received");
                 break;
             }
             Err(err) => eprintln!("{err}"),
@@ -181,8 +180,8 @@ fn event_loop() -> Result<()> {
 
 fn handle_message(
     id: Id,
-    op: u16,
-    body: &[u8],
+    _op: u16,
+    _body: &[u8],
     client: &mut ClientMut<'_>,
 ) -> Result<(), WlError> {
     // use wayland::Interface as I;
