@@ -1,15 +1,20 @@
 use std::os::fd::{AsRawFd, RawFd};
 
-use crate::conn::Connection;
+use crate::{conn::Connection, objects::Objects};
 
 pub struct Client {
     id: u64,
     conn: Connection,
+    objects: Objects,
 }
 
 impl Client {
-    pub const fn new(id: u64, conn: Connection) -> Self {
-        Self { id, conn }
+    pub fn new(id: u64, conn: Connection) -> Self {
+        Self {
+            id,
+            conn,
+            objects: Objects::new(),
+        }
     }
 
     pub const fn id(&self) -> u64 {
@@ -18,6 +23,10 @@ impl Client {
 
     pub(crate) fn conn(&self) -> &Connection {
         &self.conn
+    }
+
+    pub(crate) fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.objects
     }
 }
 

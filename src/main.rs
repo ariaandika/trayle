@@ -47,6 +47,7 @@ mod ptr;
 mod buffer;
 mod fd_buffer;
 // ===== app =======
+mod objects;
 mod wayland;
 mod client;
 mod clients;
@@ -184,7 +185,15 @@ fn handle_message(
     body: &[u8],
     client: &mut Client,
 ) -> Result<(), WlError> {
-    todo!()
+    // use wayland::Interface as I;
+
+    let Some(object) = client.objects_mut().get_mut(id) else {
+        return Err(WlError::UnknownObject);
+    };
+
+    println!("[CLIENT] message: {:?}",object.interface());
+
+    Ok(())
 }
 
 fn handle_wl_display(
