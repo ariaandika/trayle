@@ -76,7 +76,7 @@ fn event_loop() -> Result<()> {
     epoll.add_read(SIGFD_ID, &sigfd)?;
 
     // ===== alloc =====
-    let mut events_i = 0;
+    let mut events_read = 0;
     let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
     let mut read_buffer = Buffer::with_capacity(1024);
     let mut write_buffer = Buffer::with_capacity(1024);
@@ -88,57 +88,17 @@ fn event_loop() -> Result<()> {
 
     // ===== event loop =====
 
-    // separate closure to act as a `try` block while capturing all required state
-    //
-    // cope and seethe: https://github.com/rust-lang/rust/issues/31436
-    let mut handle_read = |mut client: ClientMut<'_>| {
-        loop {
-            match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
-                Ready(Ok(())) => {}
-                Ready(Err(err)) => todo!("handle: {err}"),
-                Pending => break,
-            };
-
-            while let Some((id, op, len)) = wayland::header(&read_buffer) {
-                if len < 8 {
-                    todo!("error: len less than 8")
-                }
-                let Some(body) = read_buffer.get(8..len as usize) else {
-                    break;
-                };
-                let Some(id) = Id::new(id) else {
-                    todo!("invalid id")
-                };
-                let result = if id.is_display() {
-                    handle_wl_display(op, body, &mut write_buffer)
-                } else {
-                    handle_message(id, op, body, &mut client)
-                };
-                if let Err(err) = result {
-                    println!("[WL:ERROR]: {err}");
-                }
-                if !write_buffer.is_empty() {
-                    match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
-                        Ready(Ok(())) => println!("write ok"),
-                        _ => println!("cannot write"),
-                    }
-                }
-                read_buffer.advance(len as u32);
-            }
-        }
-    };
-
     loop {
-        let Some(event) = events.get(events_i) else {
+        let Some(event) = events.get(events_read) else {
             epoll.info("blocking");
-            events_i = 0;
+            events_read = 0;
             events.clear();
             let n = epoll.wait(events.spare_capacity_mut(), None)?;
             unsafe { events.set_len(n) };
             epoll.info("complete");
             continue;
         };
-        events_i += 1;
+        events_read += 1;
         let (key, interest) = event.to_parts();
 
         if key & STATIC_ID_MASK == STATIC_ID_MASK {
@@ -162,7 +122,7 @@ fn event_loop() -> Result<()> {
                     writeln!(sigfd, "{sig} signal received");
                     break;
                 },
-                _ => writeln!(epoll, "{UnknownKey}"),
+                _ => writeln!(epoll, "unknown key from epoll: {key}"),
             }
             continue;
         }
@@ -173,12 +133,12 @@ fn event_loop() -> Result<()> {
             match clients.remove(id, &epoll) {
                 Some(Ok(client)) => writeln!(client, "disconnected"),
                 Some(Err(err)) => writeln!(clients, "{err}"),
-                None => writeln!(clients, "{UnknownId}"),
+                None => writeln!(clients, "unknown id from epoll: {id}"),
             }
         }
 
-        let Some(client) = clients.get_mut(id) else {
-            writeln!(clients, "{UnknownId}");
+        let Some(mut client) = clients.get_mut(id) else {
+            writeln!(clients, "unknown id from epoll: {id}");
             continue;
         };
 
@@ -186,7 +146,40 @@ fn event_loop() -> Result<()> {
             writeln!(client, "TODO: implement write event")
         }
 
-        handle_read(client);
+        let result = loop {
+            let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
+                match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
+                    Ready(Ok(())) => continue,
+                    Ready(Err(err)) => todo!("handle: {err}"),
+                    Pending => break Ok(()),
+                };
+            };
+            if len < 8 {
+                break Err(WlError::InvalidSize);
+            }
+            let Some(id) = Id::new(id) else {
+                break Err(WlError::ZeroId);
+            };
+            let result = if id.is_display() {
+                handle_wl_display(op, body, &mut write_buffer)
+            } else {
+                handle_message(id, op, body, &mut client)
+            };
+            if !write_buffer.is_empty() {
+                match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
+                    Ready(Ok(())) => println!("write ok"),
+                    _ => println!("cannot write"),
+                }
+            }
+            read_buffer.advance(len as u32);
+            if result.is_err() {
+                break result;
+            }
+        };
+        if let Err(err) = result {
+            writeln!(client, "{err}");
+            // TODO: disconnect client
+        }
     }
 
     Ok(())
@@ -228,9 +221,4 @@ fn handle_wl_display(
         }
     }
     Ok(())
-}
-
-errno::simple_errno! {
-    pub UnknownId, "unknown id from epoll: {}";
-    pub UnknownKey, "unknown key from epoll: {}";
 }

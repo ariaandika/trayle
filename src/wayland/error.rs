@@ -8,6 +8,8 @@ pub enum WlError {
     UnknownObject,
     /// Invalid size for message payload.
     InvalidSize,
+    /// Invalid object id of `0`.
+    ZeroId,
 }
 
 impl std::error::Error for WlError { }
@@ -18,6 +20,7 @@ impl std::fmt::Display for WlError {
             Self::UnknownOp => write!(f, "unknown op code"),
             Self::UnknownObject => write!(f, "unknown object id"),
             Self::InvalidSize => write!(f, "invalid payload size"),
+            Self::ZeroId => write!(f, "invalid object id of `0`"),
         }
     }
 }

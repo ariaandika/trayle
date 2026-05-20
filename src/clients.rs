@@ -23,6 +23,13 @@ impl ClientId {
     }
 }
 
+impl std::fmt::Display for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let (idx, id) = self.to_parts();
+        write!(f, "ClientId({idx},{id})")
+    }
+}
+
 // ===== ClientState =====
 
 pub struct ClientState {

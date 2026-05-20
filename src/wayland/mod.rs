@@ -19,14 +19,15 @@ macro_rules! roundup4 {
 use roundup4;
 
 /// `(id, op, len)`
-pub fn header(bytes: &[u8]) -> Option<(u32, u16, u16)> {
-    let header = bytes.first_chunk::<8>()?;
+pub fn header(bytes: &[u8]) -> Option<(u32, u16, u16, &[u8])> {
+    let (header, rest) = bytes.split_first_chunk::<8>()?;
     let ptr = header.as_ptr();
     unsafe {
         let id = u32::from_ne_bytes(*ptr.cast::<[u8; _]>());
         let op = u16::from_ne_bytes(*ptr.add(4).cast::<[u8; _]>());
         let len = u16::from_ne_bytes(*ptr.add(6).cast::<[u8; _]>());
-        Some((id, op, len))
+        let body_len = len.saturating_sub(8) as usize;
+        Some((id, op, len, rest.get(..body_len)?))
     }
 }
 
