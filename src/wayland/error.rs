@@ -1,4 +1,4 @@
-
+use crate::wayland::id::ZeroId;
 
 #[derive(Debug)]
 pub enum WlError {
@@ -22,5 +22,11 @@ impl std::fmt::Display for WlError {
             Self::InvalidSize => write!(f, "invalid payload size"),
             Self::ZeroId => write!(f, "invalid object id of `0`"),
         }
+    }
+}
+
+impl From<ZeroId> for WlError {
+    fn from(_: ZeroId) -> Self {
+        Self::ZeroId
     }
 }

@@ -17,17 +17,21 @@ use std::num::NonZeroU32;
 pub struct Id(NonZeroU32);
 
 impl Id {
-    pub const fn new(id: u32) -> Option<Self> {
+    pub const fn new(id: u32) -> Result<Self, ZeroId> {
         debug_assert!(id != 0);
         match NonZeroU32::new(id) {
-            Some(x) => Some(Self(x)),
-            None => None,
+            Some(x) => Ok(Self(x)),
+            None => Err(ZeroId),
         }
     }
 
     pub const fn new_const<const ID: u32>() -> Self {
         debug_assert!(ID > 1);
         unsafe { Self(NonZeroU32::new_unchecked(ID)) }
+    }
+
+    pub const fn from_ne_bytes(ne: [u8; 4]) -> Result<Self, ZeroId> {
+        Self::new(u32::from_ne_bytes(ne))
     }
 
     pub const fn wl_display() -> Self {
@@ -61,3 +65,17 @@ impl std::fmt::Display for Id {
         write!(f, "Id({})", self.0)
     }
 }
+
+// ===== Error =====
+
+#[derive(Debug, Clone, Copy)]
+pub struct ZeroId;
+
+impl std::error::Error for ZeroId { }
+
+impl std::fmt::Display for ZeroId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "invalid object id of `0`")
+    }
+}
+

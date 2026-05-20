@@ -1,7 +1,7 @@
-use crate::wayland::{PtrWrite, Write};
+use crate::wayland::{Id, PtrWrite, Write};
 
 /// Send `wl_callback::done` event.
-pub fn done(object_id: u32, callback_data: u32, mut writer: impl Write) {
+pub fn done(object_id: Id, callback_data: u32, mut writer: impl Write) {
     // opcode `0`, len `12`
     const HEADER_SUFFIX: *const u8 = [0, 0, 12, 0].as_ptr();
     unsafe {

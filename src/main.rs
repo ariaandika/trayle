@@ -135,6 +135,7 @@ fn event_loop() -> Result<()> {
                 Some(Err(err)) => writeln!(clients, "{err}"),
                 None => writeln!(clients, "unknown id from epoll: {id}"),
             }
+            continue;
         }
 
         let Some(mut client) = clients.get_mut(id) else {
@@ -146,39 +147,52 @@ fn event_loop() -> Result<()> {
             writeln!(client, "TODO: implement write event")
         }
 
-        let result = loop {
+        loop {
             let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
                 match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
                     Ready(Ok(())) => continue,
                     Ready(Err(err)) => todo!("handle: {err}"),
-                    Pending => break Ok(()),
+                    Pending => break,
                 };
             };
-            if len < 8 {
-                break Err(WlError::InvalidSize);
-            }
-            let Some(id) = Id::new(id) else {
-                break Err(WlError::ZeroId);
-            };
-            let result = if id.is_display() {
-                handle_wl_display(op, body, &mut write_buffer)
-            } else {
-                handle_message(id, op, body, &mut client)
-            };
-            if !write_buffer.is_empty() {
-                match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
-                    Ready(Ok(())) => println!("write ok"),
-                    _ => println!("cannot write"),
+            let result = 'a: {
+                if len < 8 {
+                    break 'a Err(WlError::InvalidSize);
                 }
+                let Ok(id) = Id::new(id) else {
+                    break 'a Err(WlError::ZeroId)
+                };
+                if id.is_display() {
+                    handle_wl_display(op, body, &mut write_buffer)
+                } else {
+                    handle_message(id, op, body, &mut client)
+                }
+            };
+            if let Err(err) = result {
+                // TODO: disconnect client
+                writeln!(client, "{err}");
+                break;
             }
             read_buffer.advance(len as u32);
-            if result.is_err() {
-                break result;
-            }
         };
-        if let Err(err) = result {
-            writeln!(client, "{err}");
-            // TODO: disconnect client
+        if !write_buffer.is_empty() {
+
+            print!("writing: `");
+            for &b in write_buffer.as_slice() {
+                if b.is_ascii_alphabetic() {
+                    print!("{}", b as char);
+                } else {
+                    print!("\\x{:0>2X}", b);
+                }
+            }
+            println!("`");
+
+            println!("writing: {}", write_buffer.len());
+            match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
+                Ready(Ok(())) => println!("write ok"),
+                _ => println!("cannot write"),
+            }
+            assert!(write_buffer.is_empty());
         }
     }
 
@@ -199,25 +213,29 @@ fn handle_message(
         return Err(WlError::UnknownObject);
     };
 
-    println!("[CLIENT] message: {:?}",object.interface());
+    println!("[CLIENT] message: {:?}", object.interface());
 
     Ok(())
 }
 
-fn handle_wl_display(
-    op: u16,
-    body: &[u8],
-    write_buffer: &mut Buffer,
-) -> Result<(), WlError> {
+fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<(), WlError> {
     use wayland::wl_display::Op;
+
+    const GLOBALS: [(&str, u16); 1] = [("wl_compositor", 7)];
+
     match Op::from_request(op)? {
         Op::Sync(decoder) => {
-            decoder.decode(body)?.encode_callback(69, write_buffer);
-            println!("[DEBUG] Sync");
+            decoder.decode(body)?.reply(0, write_buffer);
+            println!("[CLIENT] message: Sync");
         }
         Op::GetRegistry(decoder) => {
             let get_registry = decoder.decode(body)?;
-            println!("[DEBUG] {get_registry:?}");
+            let wl_registry = get_registry.wl_registry();
+            // FEAT: encode globals at startup
+            for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
+                wl_registry.global(i, iface, version as u32, &mut *write_buffer);
+            }
+            println!("[CLIENT] message: GetRegistry");
         }
     }
     Ok(())
