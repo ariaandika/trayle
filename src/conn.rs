@@ -4,43 +4,47 @@ use std::task::Poll;
 use std::{ptr, slice};
 
 use crate::buffer::Buffer;
-use crate::errno::{self, ready};
+use crate::errno::{Errno, simple_errno};
 use crate::fd_buffer::FdBuffer;
 
 #[derive(Debug)]
-pub struct Connection {
-    fd: OwnedFd,
+pub struct Connection(OwnedFd);
+
+impl std::os::fd::FromRawFd for Connection {
+    unsafe fn from_raw_fd(fd: RawFd) -> Self {
+        unsafe { Self(<_>::from_raw_fd(fd)) }
+    }
 }
 
 impl AsRawFd for Connection {
     fn as_raw_fd(&self) -> RawFd {
-        self.fd.as_raw_fd()
+        self.0.as_raw_fd()
     }
 }
 
 impl Connection {
-    pub const fn from_fd(fd: OwnedFd) -> Self {
-        Self { fd }
-    }
-
     /// Read data to the read buffer.
-    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), MsgError>> {
-        recvmsg(buffer, fds, self.fd.as_raw_fd())
+    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), ReadError>> {
+        recvmsg(buffer, fds, self.0.as_raw_fd())
     }
 
     /// Write data to the socket.
     ///
     /// May call write multiple time.
-    pub fn poll_write_all(&self, buffer: &mut Buffer, fds: &mut FdBuffer) -> Poll<Result<(), MsgError>> {
-        sendmsg(buffer, fds, self.fd.as_raw_fd())
+    pub fn poll_write_all(
+        &self,
+        buffer: &mut Buffer,
+        fds: &mut FdBuffer,
+    ) -> Poll<Result<(), WriteError>> {
+        sendmsg(buffer, fds, self.0.as_raw_fd())
     }
 }
 
 // ===== syscall =====
 
-fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), MsgError>> {
+fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), WriteError>> {
     use libc::CMSG_FIRSTHDR;
-    use libc::{SCM_RIGHTS, SOL_SOCKET, c_void, iovec, msghdr};
+    use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
 
     debug_assert!(!buffer.is_empty());
 
@@ -61,7 +65,7 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
         msg_name: ptr::null_mut(),
         msg_namelen: 0,
         msg_iov: &mut iovec {
-            iov_base: buffer.as_ptr() as *mut c_void,
+            iov_base: buffer.as_ptr() as *mut _,
             iov_len: buffer.len(),
         },
         msg_iovlen: 1,
@@ -80,30 +84,30 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
 
     let mut msghdr = msghdr;
     loop {
-        let write: usize = ready!(libc::sendmsg(socket, &msghdr, 0));
-        if write == 0 {
-            return Poll::Ready(Err(MsgError::WriteZero));
-        }
-        buffer.advance(write as u32);
+        let Ok(write) = unsafe { libc::sendmsg(socket, &msghdr, 0) }.try_into() else {
+            return match Errno::get() {
+                libc::EWOULDBLOCK => Poll::Pending,
+                _ => Poll::Ready(Err(WriteError)),
+            };
+        };
+        buffer.advance(write);
         if buffer.is_empty() {
             break;
         }
 
-        unsafe {
-            // rebuilt the message buffer
-            let iov_mut = &mut *msghdr.msg_iov;
-            iov_mut.iov_base = buffer.as_ptr() as *mut c_void;
-            iov_mut.iov_len = buffer.len();
+        // rebuilt the message buffer
+        let iov_mut = unsafe { &mut *msghdr.msg_iov };
+        iov_mut.iov_base = buffer.as_ptr() as *mut _;
+        iov_mut.iov_len = buffer.len();
 
-            // Ancillary data is received as if it were queued along with the first normal data octet in
-            // the segment (if any).
-            //
-            // - https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
-            //
-            // unset the ancillary data
-            msghdr.msg_control = ptr::null_mut();
-            msghdr.msg_controllen = 0;
-        }
+        // Ancillary data is received as if it were queued along with the first normal data octet in
+        // the segment (if any).
+        //
+        // - https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+        //
+        // unset the ancillary data
+        msghdr.msg_control = ptr::null_mut();
+        msghdr.msg_controllen = 0;
     }
 
     fds.clear();
@@ -111,10 +115,10 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<(), MsgError>> {
+fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
-    use MsgError as E;
+    use ReadError as E;
 
     const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
 
@@ -135,7 +139,12 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<
         msg_flags: 0,
     };
 
-    let read: usize = ready!(libc::recvmsg(socket, &mut msghdr, 0));
+    let Ok(read) = unsafe { libc::recvmsg(socket, &mut msghdr, 0) }.try_into() else {
+        return match Errno::get() {
+            libc::EWOULDBLOCK => Poll::Pending,
+            _ => Poll::Ready(Err(E::Errno)),
+        };
+    };
     if read == 0 {
         return Poll::Ready(Err(E::ConnectionAborted));
     }
@@ -160,33 +169,29 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }
 
-        buffer.advance_mut(read as u32);
+        buffer.advance_mut(read);
     }
 
     Poll::Ready(Ok(()))
 }
 
-// ===== MsgError =====
+// ===== Error =====
 
-pub enum MsgError {
+simple_errno! {
+    pub WriteError, "failed to write to socket: {}";
+}
+
+pub enum ReadError {
     Errno,
-    WriteZero,
     ControlDataType,
     ControlDataTruncated,
     ConnectionAborted,
 }
 
-impl From<errno::Errno> for MsgError {
-    fn from(_: errno::Errno) -> Self {
-        Self::Errno
-    }
-}
-
-impl std::fmt::Display for MsgError {
+impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Errno => std::io::Error::last_os_error().fmt(f),
-            Self::WriteZero => std::io::ErrorKind::WriteZero.fmt(f),
+            Self::Errno => write!(f, "failed to read socket: {Errno}"),
             Self::ControlDataType => "unexpected ancillary data type".fmt(f),
             Self::ControlDataTruncated => "ancillary data truncated".fmt(f),
             Self::ConnectionAborted => std::io::ErrorKind::ConnectionAborted.fmt(f),

@@ -1,20 +1,19 @@
-use std::ffi::c_int;
 use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, OwnedFd, RawFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::ptr;
 
-use crate::errno::{Result, cvt, not_interupt};
+use crate::errno::simple_errno;
 
 #[derive(Debug, Clone, Copy)]
 pub struct Interest(i32);
 
 impl Interest {
+    pub fn is_write(&self) -> bool {
+        self.0 & libc::EPOLLOUT == libc::EPOLLOUT
+    }
+
     // pub fn is_read(&self) -> bool {
     //     self.0 & libc::EPOLLIN == libc::EPOLLIN
-    // }
-    //
-    // pub fn is_write(&self) -> bool {
-    //     self.0 & libc::EPOLLOUT == libc::EPOLLOUT
     // }
     //
     // pub fn is_shutdown(&self) -> bool {
@@ -47,10 +46,14 @@ impl EpollEvent {
 pub struct Epoll(OwnedFd);
 
 impl Epoll {
-    pub fn new() -> Result<Self> {
-        Ok(Self(unsafe {
-            cvt(libc::epoll_create1(libc::EPOLL_CLOEXEC))?
-        }))
+    pub fn new() -> Result<Self, CreateError> {
+        unsafe {
+            let fd = libc::epoll_create1(libc::EPOLL_CLOEXEC);
+            if fd == -1 {
+                return Err(CreateError);
+            }
+            Ok(Self(<_>::from_raw_fd(fd)))
+        }
     }
 }
 
@@ -60,12 +63,15 @@ impl Epoll {
 const OTHER_EVENT: i32 = libc::EPOLLRDHUP | libc::EPOLLET;
 
 impl Epoll {
-    pub fn add_read<F: AsRawFd>(&self, key: u64, fd: &F) -> Result<()> {
+    pub fn add_read<F: AsRawFd>(&self, key: u64, fd: &F) -> Result<(), AddError> {
         let mut event = libc::epoll_event {
             events: (libc::EPOLLIN | OTHER_EVENT) as u32,
             u64: key,
         };
-        self.epoll_ctl(libc::EPOLL_CTL_ADD, fd.as_raw_fd(), &mut event)
+        match self.epoll_ctl(libc::EPOLL_CTL_ADD, fd.as_raw_fd(), &mut event) {
+            0 => Ok(()),
+            _ => Err(AddError),
+        }
     }
 
     // pub fn add_write<F: AsRawFd>(&self, key: u64, fd: &F) -> Result<()> {
@@ -76,12 +82,15 @@ impl Epoll {
     //     self.epoll_ctl(libc::EPOLL_CTL_ADD, fd.as_raw_fd(), &mut event)
     // }
 
-    pub fn remove<F: AsRawFd>(&self, fd: &F) -> Result<()> {
-        self.epoll_ctl(libc::EPOLL_CTL_DEL, fd.as_raw_fd(), ptr::dangling_mut())
+    pub fn remove<F: AsRawFd>(&self, fd: &F) -> Result<(), RemoveError> {
+        match self.epoll_ctl(libc::EPOLL_CTL_DEL, fd.as_raw_fd(), ptr::null_mut()) {
+            0 => Ok(()),
+            _ => Err(RemoveError),
+        }
     }
 
-    fn epoll_ctl(&self, op: c_int, fd: RawFd, event: *mut libc::epoll_event) -> Result<()> {
-        unsafe { cvt(libc::epoll_ctl(self.0.as_raw_fd(), op, fd, event)) }
+    fn epoll_ctl(&self, op: i32, fd: RawFd, event: *mut libc::epoll_event) -> i32 {
+        unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd, event) }
     }
 }
 
@@ -96,7 +105,7 @@ impl Epoll {
         &self,
         events: &mut [MaybeUninit<EpollEvent>],
         timeout: Option<u32>,
-    ) -> Result<usize> {
+    ) -> Result<usize, WaitError> {
         let result = unsafe {
             libc::epoll_wait(
                 self.0.as_raw_fd(),
@@ -108,12 +117,31 @@ impl Epoll {
                 },
             )
         };
-        match cvt(result) {
-            Ok(nfds) => {
-                unsafe { std::hint::assert_unchecked(nfds <= events.len()) };
-                Ok(nfds)
-            }
-            Err(_) => not_interupt(0),
+        match result.try_into() {
+            Ok(nfds) => Ok(nfds),
+            Err(_) => unsafe {
+                if *libc::__errno_location() == libc::EINTR {
+                    Ok(0)
+                } else {
+                    Err(WaitError)
+                }
+            },
         }
     }
+}
+
+// ===== Errors =====
+
+// `man 2 epoll_create1`
+// EINVAL size is not positive.
+// EINVAL (epoll_create1()) Invalid value specified in flags.
+// EMFILE The per-process limit on the number of open file descriptors has been reached.
+// ENFILE The system-wide limit on the total number of open files has been reached.
+// ENOMEM There was insufficient memory to create the kernel object.
+
+simple_errno! {
+    pub CreateError, "failed to create epoll: {}";
+    pub AddError, "failed to add epoll fd: {}";
+    pub RemoveError, "failed to remove epoll fd: {}";
+    pub WaitError, "failed to wait for epoll event: {}";
 }

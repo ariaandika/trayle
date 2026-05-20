@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
-use std::os::unix::io::{AsRawFd, OwnedFd, RawFd};
+use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 
-use crate::errno::{Result, cvt};
+use crate::errno::simple_errno;
 
 // https://man7.org/linux/man-pages/man2/signalfd.2.html
 
@@ -46,21 +46,25 @@ impl AsRawFd for Sigfd {
     }
 }
 
+pub fn e(int: i32) -> Result<i32, CreateError> {
+    if int != -1 { Ok(int) } else { Err(CreateError) }
+}
+
 impl Sigfd {
-    pub fn new() -> Result<Self> {
+    pub fn new() -> Result<Self, CreateError> {
         unsafe {
             let mut mask = MaybeUninit::uninit();
-            cvt::<_, ()>(libc::sigemptyset(mask.as_mut_ptr()))?;
+            e(libc::sigemptyset(mask.as_mut_ptr()))?;
             for signal in Sig::SIGNALS {
-                cvt::<_, ()>(libc::sigaddset(mask.as_mut_ptr(), signal))?;
+                e(libc::sigaddset(mask.as_mut_ptr(), signal))?;
             }
-            cvt::<_, ()>(libc::sigprocmask(
+            e(libc::sigprocmask(
                 libc::SIG_BLOCK,
                 mask.as_ptr(),
                 std::ptr::null_mut(),
             ))?;
-            let fd = cvt(libc::signalfd(-1, mask.as_ptr(), libc::SFD_NONBLOCK))?;
-            Ok(Self(fd))
+            let fd = e(libc::signalfd(-1, mask.as_ptr(), libc::SFD_NONBLOCK))?;
+            Ok(Self(<_>::from_raw_fd(fd)))
         }
     }
 
@@ -81,4 +85,10 @@ impl Sigfd {
         let fdsi = unsafe { fdsi.assume_init() };
         Sig::from_signo(fdsi.ssi_signo as i32)
     }
+}
+
+// ===== Error =====
+
+simple_errno! {
+    pub CreateError, "failed to create signalfd: {}";
 }

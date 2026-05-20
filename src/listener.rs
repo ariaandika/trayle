@@ -1,9 +1,9 @@
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::task::Poll;
 use std::{mem, ptr};
 
 use crate::conn::Connection;
-use crate::errno::{Errno, cvt, ready};
+use crate::errno::{Errno, simple_errno};
 
 // ===== SocketPath =====
 
@@ -63,67 +63,81 @@ impl AsRawFd for Listener {
     }
 }
 
+pub fn e(int: i32) -> Option<i32> {
+    if int != -1 { Some(int) } else { None }
+}
+
 impl Listener {
     pub fn new(path: SocketPath) -> Result<Self, BindError> {
         let path_ptr = path.path;
         match Self::bind(path) {
-            Ok(ok) => Ok(ok),
-            Err(_) => Err(BindError { path_ptr }),
+            Some(ok) => Ok(ok),
+            None => Err(BindError { path_ptr }),
         }
     }
 
-    fn bind(path: SocketPath) -> Result<Self, Errno> {
-        let fd = unsafe { cvt(libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0))? };
+    fn bind(path: SocketPath) -> Option<Self> {
+        let fd = unsafe { e(libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0))? };
         let SocketPath { addr, len, path } = path;
 
         /// https://man7.org/linux/man-pages/man2/listen.2.html#NOTES
         const BACKLOG: i32 = -1;
 
-        unsafe {
-            let fd = AsRawFd::as_raw_fd(&fd);
-            cvt::<_, ()>(libc::bind(fd, (&raw const addr) as *const _, len))?;
-            cvt::<_, ()>(libc::listen(fd, BACKLOG))?;
+        let fd = unsafe {
+            e(libc::bind(fd, (&raw const addr) as *const _, len))?;
+            e(libc::listen(fd, BACKLOG))?;
 
             // there is also using `fnctl`, but its about standard thing
-            cvt::<_, ()>(libc::ioctl(fd, libc::FIONBIO, &mut true))?;
-        }
+            e(libc::ioctl(fd, libc::FIONBIO, &mut true))?;
 
-        Ok(Self { fd, path })
+            <_>::from_raw_fd(fd)
+        };
+        Some(Self { fd, path })
     }
 
-    pub fn poll_accept(&self) -> Poll<Result<Connection, Errno>> {
-        let fd = ready!(libc::accept(
-            self.fd.as_raw_fd(),
-            ptr::null_mut(),
-            ptr::null_mut()
-        ));
+    pub fn poll_accept(&self) -> Poll<Result<Connection, AcceptError>> {
         unsafe {
-            cvt::<_, ()>(libc::ioctl(
-                AsRawFd::as_raw_fd(&fd),
-                libc::FIONBIO,
-                &mut true,
-            ))?
-        };
-        Poll::Ready(Ok(Connection::from_fd(fd)))
+            let result = libc::accept(self.fd.as_raw_fd(), ptr::null_mut(), ptr::null_mut());
+            let Some(fd) = e(result) else {
+                return match Errno::get() {
+                    libc::EWOULDBLOCK => Poll::Pending,
+                    _ => Poll::Ready(Err(AcceptError)),
+                };
+            };
+            let result = libc::ioctl(AsRawFd::as_raw_fd(&fd), libc::FIONBIO, &mut true);
+            if result == -1 {
+                return Poll::Ready(Err(AcceptError));
+            }
+            Poll::Ready(Ok(<_>::from_raw_fd(fd)))
+        }
     }
 }
 
 // ===== Error =====
 
-#[derive(Debug)]
 pub struct BindError {
     path_ptr: *const std::ffi::c_char,
 }
 
-impl std::error::Error for BindError { }
+impl std::error::Error for BindError {}
+
+impl std::fmt::Debug for BindError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{self}")
+    }
+}
 
 impl std::fmt::Display for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "failed to bind ")?;
-        match unsafe { std::ffi::CStr::from_ptr(self.path_ptr).to_str() } {
-            Ok(path) => write!(f, "`{path}`: "),
-            Err(_) => write!(f, "`<non-utf8-path>`: "),
-        }?;
-        write!(f, "{}", std::io::Error::last_os_error())
+        let path = unsafe {
+            std::ffi::CStr::from_ptr(self.path_ptr)
+                .to_str()
+                .unwrap_or("<non-utf8>")
+        };
+        write!(f, "failed to bind `{path}`: {Errno}")
     }
+}
+
+simple_errno! {
+    pub AcceptError, "failed to accept socket: {}";
 }

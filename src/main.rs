@@ -24,22 +24,21 @@
 use std::task::Poll::*;
 
 use buffer::Buffer;
-use clients::Clients;
+use clients::{ClientId, ClientMut, Clients};
 use epoll::Epoll;
 use error::Result;
-use error::{HandleErrorExt, Subject, UnknownId, UnknownKey};
 use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
+use log::Log;
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
-use log::Log;
 
 // ===== os ========
 mod errno;
-mod conn;
-mod listener;
 mod epoll;
 mod sigfd;
+mod conn;
+mod listener;
 // ===== alloc =====
 mod ptr;
 mod buffer;
@@ -92,36 +91,13 @@ fn event_loop() -> Result<()> {
     // separate closure to act as a `try` block while capturing all required state
     //
     // cope and seethe: https://github.com/rust-lang/rust/issues/31436
-    let mut handle = |key: u64, interest: epoll::Interest| {
-        if key & STATIC_ID_MASK == STATIC_ID_MASK {
-            return match key {
-                LISTENER_ID => loop {
-                    let conn = ready!(listener.poll_accept()).cx::<Listener>("accept client")?;
-                    let client = clients.insert(conn, &epoll).cx::<Epoll>("add client")?;
-                    client.info("connected");
-                },
-                SIGFD_ID => Ok(Some(sigfd.read())),
-                _ => epoll.err(UnknownKey, "handle event"),
-            };
-        }
-
-        let id = ClientId::from_u64(key);
-
-        if interest.is_close() {
-            return match clients.remove(id, &epoll) {
-                Some(result) => {
-                    result.cx::<ClientMut>("remove client")?.info("close");
-                    Ok(None)
-                },
-                None => clients.err(UnknownId, "remove client"),
-            }
-        }
-
-        let Some(mut client) = clients.get_mut(id) else {
-            return clients.err(UnknownId, "get client");
-        };
+    let mut handle_read = |mut client: ClientMut<'_>| {
         loop {
-            ready!(client.conn().poll_read(&mut read_buffer, &mut fds_buffer)).cx::<ClientMut>("read socket")?;
+            match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
+                Ready(Ok(())) => {}
+                Ready(Err(err)) => todo!("handle: {err}"),
+                Pending => break,
+            };
 
             while let Some((id, op, len)) = wayland::header(&read_buffer) {
                 if len < 8 {
@@ -164,13 +140,53 @@ fn event_loop() -> Result<()> {
         };
         events_i += 1;
         let (key, interest) = event.to_parts();
-        match handle(key, interest) {
-            Ok(sig) => if let Some(sig) = sig {
-                let _ = writeln!(sigfd, "{sig} signal received");
-                break;
+
+        if key & STATIC_ID_MASK == STATIC_ID_MASK {
+            match key {
+                LISTENER_ID => loop {
+                    let conn = match listener.poll_accept() {
+                        Ready(Ok(ok)) => ok,
+                        Ready(Err(err)) => {
+                            writeln!(epoll, "{err}");
+                            break;
+                        }
+                        Pending => break,
+                    };
+                    match clients.add(conn, &epoll) {
+                        Ok(client) => client.info("connected"),
+                        Err(err) => writeln!(clients, "{err}"),
+                    };
+                },
+                SIGFD_ID => {
+                    let sig = sigfd.read();
+                    writeln!(sigfd, "{sig} signal received");
+                    break;
+                },
+                _ => writeln!(epoll, "{UnknownKey}"),
             }
-            Err(err) => eprintln!("{err}"),
+            continue;
         }
+
+        let id = ClientId::from_u64(key);
+
+        if interest.is_close() {
+            match clients.remove(id, &epoll) {
+                Some(Ok(client)) => writeln!(client, "disconnected"),
+                Some(Err(err)) => writeln!(clients, "{err}"),
+                None => writeln!(clients, "{UnknownId}"),
+            }
+        }
+
+        let Some(client) = clients.get_mut(id) else {
+            writeln!(clients, "{UnknownId}");
+            continue;
+        };
+
+        if interest.is_write() {
+            writeln!(client, "TODO: implement write event")
+        }
+
+        handle_read(client);
     }
 
     Ok(())
@@ -214,16 +230,7 @@ fn handle_wl_display(
     Ok(())
 }
 
-macro_rules! ready {
-    ($e:expr) => {
-        match $e {
-            Ready(ok) => ok,
-            Pending => break Ok(None),
-        }
-    };
+errno::simple_errno! {
+    pub UnknownId, "unknown id from epoll: {}";
+    pub UnknownKey, "unknown key from epoll: {}";
 }
-
-use ready;
-
-use crate::clients::{ClientId, ClientMut};
-
