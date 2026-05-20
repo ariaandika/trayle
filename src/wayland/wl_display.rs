@@ -1,6 +1,11 @@
-use crate::wayland::{Decode, Decoder, Id, PtrWrite, WlError, Write, roundup4, wl_callback, wl_registry::WlRegistry};
+use crate::wayland::prelude::*;
+use crate::wayland::wl_registry::WlRegistry;
 
 // ===== Op =====
+
+const ERROR_OP: u16 = 0;
+const DELETE_ID_OP: u16 = 1;
+const DONE_OP: u16 = 0;
 
 pub enum Op {
     Sync(Decoder<Sync>),
@@ -25,9 +30,17 @@ pub struct Sync {
 
 impl Sync {
     /// Write `wl_callback::done` and `wl_display::delete_id`  event.
-    pub fn reply(self, callback_data: u32, mut writer: impl Write) {
-        wl_callback::done(self.wl_callback_id, callback_data, &mut writer);
-        delete_id(self.wl_callback_id, &mut writer);
+    pub fn reply(self, callback_data: u32, buffer: &mut Buffer) {
+        unsafe {
+            // wl_callback::done(callback_data: uint)
+            buffer
+                .message(self.wl_callback_id, DONE_OP, 12)
+                .put(callback_data);
+            // wl_display::delete_id(id: uint)
+            buffer
+                .message(Id::wl_display(), DELETE_ID_OP, 12)
+                .put(self.wl_callback_id);
+        };
     }
 }
 
@@ -68,38 +81,15 @@ impl Decode for GetRegistry {
 
 // ===== Encode =====
 
-const ERROR_OP: u16 = 0;
-const DELETE_ID_OP: u16 = 1;
-
 /// Send `wl_display::error` event.
-pub fn error(object_id: Id, code: u32, message: &str, mut writer: impl Write) {
+pub fn error(object_id: Id, code: u32, message: &str, buffer: &mut Buffer) {
     let msg_len = message.len() as u16;
     let len = const { 8 + 4 + 4 + 4 } + roundup4!(msg_len + 1);
-    // SAFETY: initialization in `error_inner`
     unsafe {
-        let ptr = writer.spare(len as u32);
-
-        // object_id 1, opcode 0, len placeholder
-        const HEADER: u64 = 1;
-        ptr.cast::<u64>().write(HEADER);
-        ptr.add(6).cast::<u16>().write(len);
-        ptr.add(8).cast::<Id>().write(object_id);
-        ptr.add(12).cast::<u32>().write(code);
-        ptr.add(16).cast::<u32>().write((msg_len + 1) as u32);
-        ptr.add(20).copy_from_nonoverlapping(message.as_ptr(), msg_len as usize);
-        ptr.add((20 + msg_len) as usize).write(0);
-    }
-}
-
-/// Send `wl_display::delete_id` event.
-pub fn delete_id(id: Id, mut writer: impl Write) {
-    const LEN: u16 = const { 8 + 4 };
-    // SAFETY: initialization in `error_inner`
-    unsafe {
-        let ptr = writer.spare(LEN as u32);
-        ptr.put(1u32);
-        ptr.add(4).put(DELETE_ID_OP);
-        ptr.add(6).put(LEN);
-        ptr.add(8).put(id);
-    }
+        buffer
+            .message(Id::wl_display(), ERROR_OP, len)
+            .put(object_id)
+            .put(code)
+            .put(message)
+    };
 }

@@ -207,13 +207,19 @@ fn handle_message(
     _body: &[u8],
     client: &mut ClientMut<'_>,
 ) -> Result<(), WlError> {
-    // use wayland::Interface as I;
+    use wayland::Interface as I;
 
     let Some(object) = client.objects_mut().get_mut(id) else {
         return Err(WlError::UnknownObject);
     };
 
     println!("[CLIENT] message: {:?}", object.interface());
+
+    match object.interface() {
+        I::WlDisplay => {}
+        I::WlRegistry => {}
+        I::WlCallback => {}
+    }
 
     Ok(())
 }
