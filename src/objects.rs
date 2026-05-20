@@ -41,7 +41,7 @@ impl Objects {
 
     pub fn get_mut(&mut self, id: Id) -> Option<&mut Object> {
         debug_assert!(!id.is_display());
-        let idx = id.as_u32() - 2;
+        let idx = id.to_u32() - 2;
         if idx < self.len {
             match self.ptr.add(idx).as_mut() {
                 Entry::Some(object) => Some(object),

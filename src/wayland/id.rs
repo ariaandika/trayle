@@ -18,16 +18,10 @@ pub struct Id(NonZeroU32);
 
 impl Id {
     pub const fn new(id: u32) -> Result<Self, ZeroId> {
-        debug_assert!(id != 0);
         match NonZeroU32::new(id) {
             Some(x) => Ok(Self(x)),
             None => Err(ZeroId),
         }
-    }
-
-    pub const fn new_const<const ID: u32>() -> Self {
-        debug_assert!(ID > 1);
-        unsafe { Self(NonZeroU32::new_unchecked(ID)) }
     }
 
     pub const fn from_ne_bytes(ne: [u8; 4]) -> Result<Self, ZeroId> {
@@ -39,12 +33,12 @@ impl Id {
     }
 
     /// Returns `true` if id is special id for `wl_display`.
-    pub const fn is_display(&self) -> bool {
+    pub const fn is_display(self) -> bool {
         self.0.get() == 1
     }
 
     /// Returns ID as `u32`.
-    pub const fn as_u32(&self) -> u32 {
+    pub const fn to_u32(self) -> u32 {
         self.0.get()
     }
 
