@@ -69,7 +69,8 @@ impl PrimitiveEncode for &str {
     unsafe fn encode(self, ptr: *mut u8) -> *mut u8 {
         unsafe {
             let len = self.len() as u16;
-            ptr.copy_from_nonoverlapping(len.to_ne_bytes().as_ptr(), 4);
+            let len_nul = (len + 1) as u32;
+            ptr.copy_from_nonoverlapping(len_nul.to_ne_bytes().as_ptr(), 4);
             ptr.add(4).copy_from_nonoverlapping(self.as_ptr(), self.len());
             ptr.add((4 + len) as usize).write(0);
             ptr.add((4 + roundup4!(len + 1)) as usize)
