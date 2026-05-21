@@ -65,7 +65,7 @@ fn main() -> error::Terminate {
 }
 
 fn event_loop() -> Result<()> {
-    log::init();
+    let _guard = log::init();
 
     // ===== os =====
     let listener = Listener::new(SOCKET_PATH)?;
@@ -90,13 +90,12 @@ fn event_loop() -> Result<()> {
 
     loop {
         let Some(event) = events.get(events_read) else {
-            log::debug!(epoll, "blocking");
+            log::trace!(epoll, "blocking");
             log::flush();
             events_read = 0;
             events.clear();
             let n = epoll.wait(events.spare_capacity_mut(), None)?;
             unsafe { events.set_len(n) };
-            log::debug!(epoll, "complete");
             continue;
         };
         events_read += 1;
@@ -114,8 +113,8 @@ fn event_loop() -> Result<()> {
                         Pending => break,
                     };
                     match clients.add(conn, &epoll) {
-                        Ok(client) => log::debug!(client, "connected"),
-                        Err(err) => log::error!(type clients::Client, "{err}"),
+                        Ok(id) => log::debug!(client, "id={id} connected"),
+                        Err(err) => log::error!(client, "{err}"),
                     };
                 },
                 SIGFD_ID => {
@@ -132,7 +131,7 @@ fn event_loop() -> Result<()> {
 
         if interest.is_close() {
             match clients.remove(id, &epoll) {
-                Some(Ok(client)) => log::debug!(client, "disconnected"),
+                Some(Ok(())) => log::debug!(client, "id={id} disconnected"),
                 Some(Err(err)) => log::error!(epoll, "{err}"),
                 None => log::error!(epoll, "unknown key: {id}"),
             }
@@ -180,6 +179,7 @@ fn event_loop() -> Result<()> {
         if !write_buffer.is_empty() {
             let len = write_buffer.len();
             let ok = matches!(client.conn().poll_write_all(&mut write_buffer, &mut write_fd), Ready(Ok(())));
+            // TODO: handle pending write
             log::trace!(client, "writing {len} bytes: {}", if ok { "ok" } else { "failed" });
         }
     }
@@ -197,7 +197,7 @@ fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<
     match Op::from_request(op)? {
         Op::Sync(decoder) => {
             decoder.decode(body)?.reply(0, write_buffer);
-            log::trace!(type clients::Client, "<- wl_display@Sync");
+            log::trace!(client, "<- wl_display@Sync");
         }
         Op::GetRegistry(decoder) => {
             let get_registry = decoder.decode(body)?;
@@ -206,7 +206,7 @@ fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<
             for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
                 wl_registry.global(i, iface, version as u32, &mut *write_buffer);
             }
-            log::trace!(type clients::Client, "<- wl_display@GetRegistry {wl_registry:?}");
+            log::trace!(client, "<- wl_display@GetRegistry {wl_registry:?}");
         }
     }
     Ok(())

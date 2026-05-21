@@ -16,17 +16,11 @@ impl ClientId {
     pub fn from_u64(int: u64) -> Self {
         Self(int)
     }
-
-    /// `(idx, id)`
-    pub fn to_parts(self) -> (u32, u32) {
-        Clients::destruct_id(self.0)
-    }
 }
 
 impl std::fmt::Display for ClientId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (idx, id) = self.to_parts();
-        write!(f, "ClientId({idx},{id})")
+        (self.0 as u32).fmt(f)
     }
 }
 
@@ -37,32 +31,13 @@ pub struct ClientState {
     objects: Objects,
 }
 
-// ===== Client =====
-
-#[allow(unused, reason = "TODO")]
-pub struct Client {
-    id: ClientId,
-    state: ClientState,
-}
-
-impl Client {
-    pub fn id(&self) -> ClientId {
-        self.id
-    }
-}
-
 // ===== ClientMut =====
 
 pub struct ClientMut<'a> {
-    id: ClientId,
     state: &'a mut ClientState,
 }
 
 impl<'a> ClientMut<'a> {
-    pub fn id(&self) -> ClientId {
-        self.id
-    }
-
     pub fn conn(&self) -> &Connection {
         &self.state.conn
     }
@@ -121,26 +96,25 @@ impl Clients {
 }
 
 impl Clients {
-    pub fn add<'a>(
-        &'a mut self,
+    pub fn add(
+        &mut self,
         conn: Connection,
         epoll: &Epoll,
-    ) -> Result<ClientMut<'a>, AddError> {
+    ) -> Result<ClientId, AddError> {
         let key = self.construct_id();
 
         epoll.add_read(key, &conn)?;
 
         let id = ClientId(key);
         let objects = Objects::new();
-        let state = self.insert_inner(ClientState { conn, objects });
-        Ok(ClientMut { id, state })
+        self.insert_inner(ClientState { conn, objects });
+        Ok(id)
     }
 
-    fn insert_inner(&mut self, client: ClientState) -> &mut ClientState {
+    fn insert_inner(&mut self, client: ClientState) {
         if self.len == self.cap {
             self.cap = self.ptr.grow(self.cap, 0);
         }
-        let ptr = self.ptr;
         if self.last_delete == self.len {
             self.ptr.add(self.last_delete).write(Entry::Some(client));
             self.len += 1;
@@ -154,10 +128,6 @@ impl Clients {
             self.last_delete = next_delete;
         }
         self.id = self.id.wrapping_add(1);
-        match ptr.as_mut() {
-            Entry::Some(state) => state,
-            Entry::None(_) => unsafe { std::hint::unreachable_unchecked() },
-        }
     }
 }
 
@@ -166,7 +136,7 @@ impl Clients {
         let (idx, _) = Self::destruct_id(id.0);
         if idx < self.len {
             match self.ptr.add(idx).as_mut() {
-                Entry::Some(state) => Some(ClientMut { id, state }),
+                Entry::Some(state) => Some(ClientMut { state }),
                 Entry::None(_) => None,
             }
         } else {
@@ -174,12 +144,12 @@ impl Clients {
         }
     }
 
-    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<Result<Client, RemoveError>> {
+    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<Result<(), RemoveError>> {
         let state = self.remove_inner(id)?;
         if let Err(err) = epoll.remove(&state.conn) {
             return Some(Err(err));
         }
-        Some(Ok(Client { id, state }))
+        Some(Ok(()))
     }
 
     fn remove_inner(&mut self, id: ClientId) -> Option<ClientState> {
