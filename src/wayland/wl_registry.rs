@@ -2,6 +2,7 @@ use crate::wayland::prelude::*;
 
 const GLOBAL_OP: u16 = 0;
 
+#[derive(Debug)]
 pub struct WlRegistry {
     id: Id,
 }

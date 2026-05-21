@@ -29,7 +29,6 @@ use epoll::Epoll;
 use error::Result;
 use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
-use log::Log;
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
 
@@ -66,6 +65,7 @@ fn main() -> error::Terminate {
 }
 
 fn event_loop() -> Result<()> {
+    log::init();
 
     // ===== os =====
     let listener = Listener::new(SOCKET_PATH)?;
@@ -90,12 +90,13 @@ fn event_loop() -> Result<()> {
 
     loop {
         let Some(event) = events.get(events_read) else {
-            epoll.info("blocking");
+            log::debug!(epoll, "blocking");
+            log::flush();
             events_read = 0;
             events.clear();
             let n = epoll.wait(events.spare_capacity_mut(), None)?;
             unsafe { events.set_len(n) };
-            epoll.info("complete");
+            log::debug!(epoll, "complete");
             continue;
         };
         events_read += 1;
@@ -107,22 +108,22 @@ fn event_loop() -> Result<()> {
                     let conn = match listener.poll_accept() {
                         Ready(Ok(ok)) => ok,
                         Ready(Err(err)) => {
-                            writeln!(epoll, "{err}");
+                            log::error!(epoll, "{err}");
                             break;
                         }
                         Pending => break,
                     };
                     match clients.add(conn, &epoll) {
-                        Ok(client) => client.info("connected"),
-                        Err(err) => writeln!(clients, "{err}"),
+                        Ok(client) => log::debug!(client, "connected"),
+                        Err(err) => log::error!(type clients::Client, "{err}"),
                     };
                 },
                 SIGFD_ID => {
                     let sig = sigfd.read();
-                    writeln!(sigfd, "{sig} signal received");
+                    log::info!(sigfd, "{sig} signal received");
                     break;
                 },
-                _ => writeln!(epoll, "unknown key from epoll: {key}"),
+                _ => log::error!(epoll, "unknown key from epoll: {key}"),
             }
             continue;
         }
@@ -131,20 +132,21 @@ fn event_loop() -> Result<()> {
 
         if interest.is_close() {
             match clients.remove(id, &epoll) {
-                Some(Ok(client)) => writeln!(client, "disconnected"),
-                Some(Err(err)) => writeln!(clients, "{err}"),
-                None => writeln!(clients, "unknown id from epoll: {id}"),
+                Some(Ok(client)) => log::debug!(client, "disconnected"),
+                Some(Err(err)) => log::error!(epoll, "{err}"),
+                None => log::error!(epoll, "unknown key: {id}"),
             }
             continue;
         }
 
         let Some(mut client) = clients.get_mut(id) else {
-            writeln!(clients, "unknown id from epoll: {id}");
+            log::warn!(epoll, "unknown key: {id}");
             continue;
         };
 
         if interest.is_write() {
-            writeln!(client, "TODO: implement write event")
+            log::error!(epoll, "TODO: implement write pending");
+            continue;
         }
 
         loop {
@@ -170,29 +172,15 @@ fn event_loop() -> Result<()> {
             };
             if let Err(err) = result {
                 // TODO: disconnect client
-                writeln!(client, "{err}");
+                log::error!(client, "{err}");
                 break;
             }
             read_buffer.advance(len as u32);
         };
         if !write_buffer.is_empty() {
-
-            print!("writing: `");
-            for &b in write_buffer.as_slice() {
-                if b.is_ascii_alphabetic() {
-                    print!("{}", b as char);
-                } else {
-                    print!("\\x{:0>2X}", b);
-                }
-            }
-            println!("`");
-
-            println!("writing: {}", write_buffer.len());
-            match client.conn().poll_write_all(&mut write_buffer, &mut write_fd) {
-                Ready(Ok(())) => println!("write ok"),
-                _ => println!("cannot write"),
-            }
-            assert!(write_buffer.is_empty());
+            let len = write_buffer.len();
+            let ok = matches!(client.conn().poll_write_all(&mut write_buffer, &mut write_fd), Ready(Ok(())));
+            log::trace!(client, "writing {len} bytes: {}", if ok { "ok" } else { "failed" });
         }
     }
 
@@ -200,6 +188,29 @@ fn event_loop() -> Result<()> {
 }
 
 // ===== wayland =====
+
+fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<(), WlError> {
+    use wayland::wl_display::Op;
+
+    const GLOBALS: [(&str, u16); 1] = [("wl_compositor", 7)];
+
+    match Op::from_request(op)? {
+        Op::Sync(decoder) => {
+            decoder.decode(body)?.reply(0, write_buffer);
+            log::trace!(type clients::Client, "<- wl_display@Sync");
+        }
+        Op::GetRegistry(decoder) => {
+            let get_registry = decoder.decode(body)?;
+            let wl_registry = get_registry.wl_registry();
+            // FEAT: encode globals at startup
+            for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
+                wl_registry.global(i, iface, version as u32, &mut *write_buffer);
+            }
+            log::trace!(type clients::Client, "<- wl_display@GetRegistry {wl_registry:?}");
+        }
+    }
+    Ok(())
+}
 
 fn handle_message(
     id: Id,
@@ -213,36 +224,15 @@ fn handle_message(
         return Err(WlError::UnknownObject);
     };
 
-    println!("[CLIENT] message: {:?}", object.interface());
+    let iface = object.interface();
 
-    match object.interface() {
+    match iface {
         I::WlDisplay => {}
         I::WlRegistry => {}
         I::WlCallback => {}
     }
 
-    Ok(())
-}
+    log::info!(client, "message: {iface:?}");
 
-fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<(), WlError> {
-    use wayland::wl_display::Op;
-
-    const GLOBALS: [(&str, u16); 1] = [("wl_compositor", 7)];
-
-    match Op::from_request(op)? {
-        Op::Sync(decoder) => {
-            decoder.decode(body)?.reply(0, write_buffer);
-            println!("[CLIENT] message: Sync");
-        }
-        Op::GetRegistry(decoder) => {
-            let get_registry = decoder.decode(body)?;
-            let wl_registry = get_registry.wl_registry();
-            // FEAT: encode globals at startup
-            for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
-                wl_registry.global(i, iface, version as u32, &mut *write_buffer);
-            }
-            println!("[CLIENT] message: GetRegistry");
-        }
-    }
     Ok(())
 }
