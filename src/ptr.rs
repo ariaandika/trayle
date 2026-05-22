@@ -13,6 +13,13 @@ impl<T> Clone for Ptr<T> {
 
 #[allow(clippy::wrong_self_convention)]
 impl<T> Ptr<T> {
+    pub const fn new(ptr: *mut T) -> Option<Self> {
+        match NonNull::new(ptr) {
+            Some(x) => Some(Self(x)),
+            None => None,
+        }
+    }
+
     pub fn with_capacity(cap: u32) -> Ptr<T> {
         Self(alloc::allocate(cap))
     }
@@ -35,6 +42,10 @@ impl<T> Ptr<T> {
 
     pub const fn sub_mut(&mut self, off: u32) {
         self.0 = unsafe { self.0.sub(off as usize) };
+    }
+
+    pub const fn as_ptr(&self) -> *mut T {
+        self.0.as_ptr()
     }
 
     pub const fn as_ref<'a>(self) -> &'a T {
@@ -122,6 +133,7 @@ mod alloc {
     }
 
     pub fn allocate<T>(cap: u32) -> NonNull<T> {
+        debug_assert!(cap != 0);
         unsafe {
             let layout = layout::<T>(cap);
             match NonNull::new(alloc::alloc(layout)) {
@@ -142,6 +154,7 @@ mod alloc {
     }
 
     pub fn deallocate<T>(ptr: NonNull<T>, cap: u32) {
+        debug_assert!(cap != 0);
         unsafe { alloc::dealloc(ptr.as_ptr().cast(), layout::<T>(cap)) };
     }
 }

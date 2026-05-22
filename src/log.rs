@@ -89,6 +89,7 @@ macro_rules! names {
     (client) => {*b"client"};
     (epoll ) => {*b"epoll "};
     (sigfd ) => {*b"sigfd "};
+    (listener) => {*b"listen"};
     ($($tt:tt)*) => {compile_error!(stringify!(stringify!($($tt)*)))};
 }
 

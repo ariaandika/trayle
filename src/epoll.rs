@@ -60,25 +60,25 @@ impl Epoll {
 // ===== epoll_ctl =====
 
 /// peer closed connection, edge trigger notification.
-const OTHER_EVENT: i32 = libc::EPOLLRDHUP | libc::EPOLLET;
+const DEFAULT_EVENT: i32 = libc::EPOLLIN | libc::EPOLLRDHUP | libc::EPOLLET;
 
 impl Epoll {
-    pub fn add_read<F: AsRawFd>(&self, key: u64, fd: &F) {
-        self.epoll_ctl(libc::EPOLL_CTL_ADD, libc::EPOLLIN, key, fd.as_raw_fd())
+    pub fn add<F: AsRawFd>(&self, key: u64, fd: &F) {
+        self.epoll_ctl(libc::EPOLL_CTL_ADD, 0, key, fd.as_raw_fd())
     }
 
-    pub fn mod_set_write<F: AsRawFd>(&self, key: u64, fd: &F) {
-        let event = libc::EPOLLIN | libc::EPOLLOUT;
-        self.epoll_ctl(libc::EPOLL_CTL_MOD, event, key, fd.as_raw_fd())
-    }
-
-    pub fn mod_unset_write<F: AsRawFd>(&self, key: u64, fd: &F) {
-        self.epoll_ctl(libc::EPOLL_CTL_MOD, libc::EPOLLIN, key, fd.as_raw_fd())
+    pub fn modify<F: AsRawFd>(&self, is_write: bool, key: u64, fd: &F) {
+        self.epoll_ctl(
+            libc::EPOLL_CTL_MOD,
+            libc::EPOLLOUT * is_write as i32,
+            key,
+            fd.as_raw_fd(),
+        )
     }
 
     fn epoll_ctl(&self, op: i32, events: i32, key: u64, fd: RawFd) {
         let mut event = libc::epoll_event {
-            events: (events | OTHER_EVENT) as u32,
+            events: (events | DEFAULT_EVENT) as u32,
             u64: key,
         };
         let result = unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd, &mut event) };
@@ -87,7 +87,7 @@ impl Epoll {
         }
     }
 
-    pub fn remove<F: AsRawFd>(&self, fd: &F) {
+    pub fn delete<F: AsRawFd>(&self, fd: &F) {
         let result = unsafe {
             libc::epoll_ctl(
                 self.0.as_raw_fd(),

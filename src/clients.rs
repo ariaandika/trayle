@@ -1,3 +1,4 @@
+use crate::buffer::SmallBuf;
 use crate::conn::Connection;
 use crate::epoll::Epoll;
 use crate::objects::Objects;
@@ -16,19 +17,16 @@ impl ClientId {
     pub fn from_u64(int: u64) -> Self {
         Self(int)
     }
+
+    pub fn to_u64(self) -> u64 {
+        self.0
+    }
 }
 
 impl std::fmt::Display for ClientId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         (self.0 as u32).fmt(f)
     }
-}
-
-// ===== ClientState =====
-
-pub struct ClientState {
-    conn: Connection,
-    objects: Objects,
 }
 
 // ===== ClientMut =====
@@ -45,6 +43,18 @@ impl<'a> ClientMut<'a> {
     pub fn objects_mut(&mut self) -> &mut Objects {
         &mut self.state.objects
     }
+
+    pub fn buffer_mut(&mut self) -> &mut SmallBuf {
+        &mut self.state.buffer
+    }
+}
+
+// ===== ClientState =====
+
+pub struct ClientState {
+    conn: Connection,
+    objects: Objects,
+    buffer: SmallBuf,
 }
 
 // ===== Clients =====
@@ -96,38 +106,28 @@ impl Clients {
 }
 
 impl Clients {
-    pub fn add(
-        &mut self,
-        conn: Connection,
-        epoll: &Epoll,
-    ) -> ClientId {
-        let key = self.construct_id();
-
-        epoll.add_read(key, &conn);
-
-        let id = ClientId(key);
-        let objects = Objects::new();
-        self.insert_inner(ClientState { conn, objects });
-        id
-    }
-
-    fn insert_inner(&mut self, client: ClientState) {
+    pub fn insert(&mut self, conn: Connection, epoll: &Epoll) -> ClientId {
+        let id = self.construct_id();
+        epoll.add(id, &conn);
         if self.len == self.cap {
             self.cap = self.ptr.grow(self.cap, 0);
         }
+        let new_entry = Entry::Some(ClientState {
+            conn,
+            objects: Objects::new(),
+            buffer: SmallBuf::new(),
+        });
+        let Entry::None(next_delete) = self.ptr.add(self.last_delete).replace(new_entry) else {
+            unreachable!("corrupted clients list");
+        };
         if self.last_delete == self.len {
-            self.ptr.add(self.last_delete).write(Entry::Some(client));
             self.len += 1;
             self.last_delete += 1;
         } else {
-            let Entry::None(next_delete) =
-                self.ptr.add(self.last_delete).replace(Entry::Some(client))
-            else {
-                unreachable!("invalid entry deletion");
-            };
             self.last_delete = next_delete;
         }
         self.id = self.id.wrapping_add(1);
+        ClientId(id)
     }
 }
 
@@ -145,12 +145,6 @@ impl Clients {
     }
 
     pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<()> {
-        let state = self.remove_inner(id)?;
-        epoll.remove(&state.conn);
-        Some(())
-    }
-
-    fn remove_inner(&mut self, id: ClientId) -> Option<ClientState> {
         if self.len == 0 {
             return None;
         }
@@ -169,6 +163,7 @@ impl Clients {
             unsafe { std::hint::unreachable_unchecked() };
         };
         self.last_delete = idx;
-        Some(client)
+        epoll.delete(&client.conn);
+        Some(())
     }
 }

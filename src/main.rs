@@ -72,8 +72,8 @@ fn event_loop() -> Result<()> {
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
 
-    epoll.add_read(LISTENER_ID, &listener);
-    epoll.add_read(SIGFD_ID, &sigfd);
+    epoll.add(LISTENER_ID, &listener);
+    epoll.add(SIGFD_ID, &sigfd);
 
     // ===== alloc =====
     let mut events_read = 0;
@@ -108,12 +108,12 @@ fn event_loop() -> Result<()> {
                     let conn = match listener.poll_accept() {
                         Ready(Ok(ok)) => ok,
                         Ready(Err(err)) => {
-                            log::error!(epoll, "{err}");
+                            log::error!(listener, "{err}");
                             break;
                         }
                         Pending => break,
                     };
-                    let id = clients.add(conn, &epoll);
+                    let id = clients.insert(conn, &epoll);
                     log::debug!(client, "id={id} connected");
                 },
                 SIGFD_ID => {
@@ -121,7 +121,7 @@ fn event_loop() -> Result<()> {
                     log::info!(sigfd, "{sig} signal received");
                     break;
                 },
-                _ => log::error!(epoll, "unknown key from epoll: {key}"),
+                _ => log::error!(epoll, "unknown static key: {key}"),
             }
             continue;
         }
@@ -131,54 +131,98 @@ fn event_loop() -> Result<()> {
         if interest.is_close() {
             match clients.remove(id, &epoll) {
                 Some(()) => log::debug!(client, "id={id} disconnected"),
-                None => log::error!(epoll, "unknown key: {id}"),
+                None => log::error!(epoll, "unknown dynamic key: {id}"),
             }
             continue;
         }
 
         let Some(mut client) = clients.get_mut(id) else {
-            log::warn!(epoll, "unknown key: {id}");
+            log::warn!(epoll, "unknown dynamic key: {id}");
             continue;
         };
 
-        if interest.is_write() {
-            log::error!(epoll, "TODO: implement write pending");
-            continue;
-        }
+        debug_assert!(read_buffer.is_empty());
+        debug_assert!(write_buffer.is_empty());
 
-        loop {
-            let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
-                match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
-                    Ready(Ok(())) => continue,
-                    Ready(Err(err)) => todo!("handle: {err}"),
-                    Pending => break,
+        client.buffer_mut().copy_to(&mut read_buffer, &mut write_buffer);
+
+        if interest.is_read() {
+            let result = loop {
+                let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
+                    match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
+                        Ready(Ok(())) => continue,
+                        Ready(Err(err)) => break Some(Ok(err)),
+                        Pending => break None,
+                    };
                 };
-            };
-            let result = 'a: {
                 if len < 8 {
-                    break 'a Err(WlError::InvalidSize);
+                    break Some(Err(WlError::InvalidSize));
                 }
                 let Ok(id) = Id::new(id) else {
-                    break 'a Err(WlError::ZeroId)
+                    break Some(Err(WlError::ZeroId));
                 };
-                if id.is_display() {
+                let result = if id.is_display() {
                     handle_wl_display(op, body, &mut write_buffer)
                 } else {
                     handle_message(id, op, body, &mut client)
+                };
+                if let Err(err) = result {
+                    break Some(Err(err));
                 }
+                read_buffer.advance(len as u32);
             };
-            if let Err(err) = result {
-                // TODO: disconnect client
-                log::error!(client, "{err}");
-                break;
+
+            if let Some(err) = result {
+                read_buffer.clear();
+                write_buffer.clear();
+                clients.remove(id, &epoll);
+                match err {
+                    Ok(conn::ReadError::ConnectionAborted) => {}
+                    Ok(err) => log::error!(client, "{}", err),
+                    Err(err) => log::error!(client, "{}", err),
+                }
+                log::debug!(client, "disconnected");
+                continue;
             }
-            read_buffer.advance(len as u32);
+        }
+
+        let pending_write = if !write_buffer.is_empty() {
+            let result = client
+                .conn()
+                .poll_write_all(&mut write_buffer, &mut write_fd);
+            match result {
+                Ready(Ok(())) => if interest.is_write() {
+                    epoll.modify(false, id.to_u64(), client.conn());
+                }
+                Ready(Err(err)) => {
+                    read_buffer.clear();
+                    write_buffer.clear();
+                    clients.remove(id, &epoll);
+                    log::error!(client, "{}", err);
+                    log::debug!(client, "disconnecting");
+                    continue;
+                }
+                Pending => if !interest.is_write() {
+                    log::warn!(client, "pending message write {}", write_buffer.len());
+                    epoll.modify(true, id.to_u64(), client.conn());
+                }
+            }
+            result.is_pending()
+        } else {
+            false
         };
-        if !write_buffer.is_empty() {
-            let len = write_buffer.len();
-            let ok = matches!(client.conn().poll_write_all(&mut write_buffer, &mut write_fd), Ready(Ok(())));
-            // TODO: handle pending write
-            log::trace!(client, "writing {len} bytes: {}", if ok { "ok" } else { "failed" });
+
+        let pending_read = !read_buffer.is_empty();
+
+        // the sad pending bytes cannot stay in shared buffer because it will be used for other
+        // socket, it will be stored in on demand allocation
+        if pending_read | pending_write {
+            if pending_read {
+                log::warn!(client, "partial message read {}", read_buffer.len());
+            }
+            client
+                .buffer_mut()
+                .copy_from(&mut read_buffer, &mut write_buffer);
         }
     }
 
