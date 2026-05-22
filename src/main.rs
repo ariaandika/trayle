@@ -61,10 +61,7 @@ const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
 fn main() -> ExitCode {
     let _guard = log::init();
-    match event_loop() {
-        Ok(()) => ExitCode::SUCCESS,
-        Err(_) => ExitCode::FAILURE,
-    }
+    <_>::from(event_loop().is_err() as u8)
 }
 
 fn event_loop() -> Result<(), PrintError> {
@@ -163,7 +160,7 @@ fn event_loop() -> Result<(), PrintError> {
                     break Some(Err(WlError::ZeroId));
                 };
                 let result = if id.is_display() {
-                    handle_wl_display(op, body, &mut write_buffer)
+                    handle_wl_display(op, body, &mut client, &mut write_buffer)
                 } else {
                     handle_message(id, op, body, &mut client)
                 };
@@ -232,7 +229,12 @@ fn event_loop() -> Result<(), PrintError> {
 
 // ===== wayland =====
 
-fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<(), WlError> {
+fn handle_wl_display(
+    op: u16,
+    body: &[u8],
+    client: &mut ClientMut<'_>,
+    write_buffer: &mut Buffer,
+) -> Result<(), WlError> {
     use wayland::wl_display::Op;
 
     const GLOBALS: [(&str, u16); 1] = [("wl_compositor", 7)];
@@ -245,10 +247,13 @@ fn handle_wl_display(op: u16, body: &[u8], write_buffer: &mut Buffer) -> Result<
         Op::GetRegistry(decoder) => {
             let get_registry = decoder.decode(body)?;
             let wl_registry = get_registry.wl_registry();
+            client.objects_mut().insert(&wl_registry)?;
+
             // FEAT: encode globals at startup
             for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
                 wl_registry.global(i, iface, version as u32, &mut *write_buffer);
             }
+
             log::trace!(client, "<- wl_display@GetRegistry {wl_registry:?}");
         }
     }

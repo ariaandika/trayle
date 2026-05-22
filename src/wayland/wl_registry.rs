@@ -7,6 +7,14 @@ pub struct WlRegistry {
     id: Id,
 }
 
+impl WlObject for WlRegistry {
+    const INTERFACE: Interface = Interface::WlRegistry;
+
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
 impl WlRegistry {
     /// Can only be created by `GetRegistry`.
     pub(super) fn new(id: Id) -> Self {

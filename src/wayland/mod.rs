@@ -10,6 +10,7 @@ pub mod wl_display;
 pub mod wl_registry;
 
 mod prelude {
+    pub use super::{WlObject, Interface};
     pub use super::id::Id;
     pub use super::error::WlError;
     pub use super::decode::{Decoder, Decode};
@@ -17,6 +18,12 @@ mod prelude {
     pub use crate::buffer::Buffer;
 
     pub(super) use super::roundup4;
+}
+
+pub trait WlObject {
+    const INTERFACE: Interface;
+
+    fn id(&self) -> Id;
 }
 
 #[derive(Debug, Clone, Copy)]
