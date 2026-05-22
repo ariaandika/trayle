@@ -21,12 +21,12 @@
 //! # Util
 //!
 //! - [`error`] error handling
+use std::process::ExitCode;
 use std::task::Poll::*;
 
 use buffer::Buffer;
 use clients::{ClientId, ClientMut, Clients};
 use epoll::Epoll;
-use error::Result;
 use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
@@ -48,7 +48,6 @@ mod wayland;
 mod clients;
 // ===== util ====
 mod log;
-mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -60,13 +59,15 @@ const MAX_EPOLL_EVENT: usize = 128;
 const MAX_FD: u32 = 32;
 const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
-fn main() -> error::Terminate {
-    event_loop().into()
+fn main() -> ExitCode {
+    let _guard = log::init();
+    match event_loop() {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(_) => ExitCode::FAILURE,
+    }
 }
 
-fn event_loop() -> Result<()> {
-    let _guard = log::init();
-
+fn event_loop() -> Result<(), PrintError> {
     // ===== os =====
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
@@ -277,4 +278,15 @@ fn handle_message(
     log::info!(client, "message: {iface:?}");
 
     Ok(())
+}
+
+// ===== Error =====
+
+pub struct PrintError;
+
+impl<E: std::fmt::Display> From<E> for PrintError {
+    fn from(value: E) -> Self {
+        log::error!(setup, "{value}");
+        Self
+    }
 }

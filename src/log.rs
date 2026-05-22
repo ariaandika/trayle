@@ -90,6 +90,7 @@ macro_rules! names {
     (epoll ) => {*b"epoll "};
     (sigfd ) => {*b"sigfd "};
     (listener) => {*b"listen"};
+    (setup ) => {*b"setup "};
     ($($tt:tt)*) => {compile_error!(stringify!(stringify!($($tt)*)))};
 }
 
