@@ -1,5 +1,5 @@
 use crate::conn::Connection;
-use crate::epoll::{Epoll, AddError, RemoveError};
+use crate::epoll::Epoll;
 use crate::objects::Objects;
 use crate::ptr::Ptr;
 
@@ -100,15 +100,15 @@ impl Clients {
         &mut self,
         conn: Connection,
         epoll: &Epoll,
-    ) -> Result<ClientId, AddError> {
+    ) -> ClientId {
         let key = self.construct_id();
 
-        epoll.add_read(key, &conn)?;
+        epoll.add_read(key, &conn);
 
         let id = ClientId(key);
         let objects = Objects::new();
         self.insert_inner(ClientState { conn, objects });
-        Ok(id)
+        id
     }
 
     fn insert_inner(&mut self, client: ClientState) {
@@ -144,12 +144,10 @@ impl Clients {
         }
     }
 
-    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<Result<(), RemoveError>> {
+    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<()> {
         let state = self.remove_inner(id)?;
-        if let Err(err) = epoll.remove(&state.conn) {
-            return Some(Err(err));
-        }
-        Some(Ok(()))
+        epoll.remove(&state.conn);
+        Some(())
     }
 
     fn remove_inner(&mut self, id: ClientId) -> Option<ClientState> {

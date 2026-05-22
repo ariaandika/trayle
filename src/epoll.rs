@@ -12,10 +12,10 @@ impl Interest {
         self.0 & libc::EPOLLOUT == libc::EPOLLOUT
     }
 
-    // pub fn is_read(&self) -> bool {
-    //     self.0 & libc::EPOLLIN == libc::EPOLLIN
-    // }
-    //
+    pub fn is_read(&self) -> bool {
+        self.0 & libc::EPOLLIN == libc::EPOLLIN
+    }
+
     // pub fn is_shutdown(&self) -> bool {
     //     self.0 & libc::EPOLLRDHUP == libc::EPOLLRDHUP
     // }
@@ -63,34 +63,42 @@ impl Epoll {
 const OTHER_EVENT: i32 = libc::EPOLLRDHUP | libc::EPOLLET;
 
 impl Epoll {
-    pub fn add_read<F: AsRawFd>(&self, key: u64, fd: &F) -> Result<(), AddError> {
+    pub fn add_read<F: AsRawFd>(&self, key: u64, fd: &F) {
+        self.epoll_ctl(libc::EPOLL_CTL_ADD, libc::EPOLLIN, key, fd.as_raw_fd())
+    }
+
+    pub fn mod_set_write<F: AsRawFd>(&self, key: u64, fd: &F) {
+        let event = libc::EPOLLIN | libc::EPOLLOUT;
+        self.epoll_ctl(libc::EPOLL_CTL_MOD, event, key, fd.as_raw_fd())
+    }
+
+    pub fn mod_unset_write<F: AsRawFd>(&self, key: u64, fd: &F) {
+        self.epoll_ctl(libc::EPOLL_CTL_MOD, libc::EPOLLIN, key, fd.as_raw_fd())
+    }
+
+    fn epoll_ctl(&self, op: i32, events: i32, key: u64, fd: RawFd) {
         let mut event = libc::epoll_event {
-            events: (libc::EPOLLIN | OTHER_EVENT) as u32,
+            events: (events | OTHER_EVENT) as u32,
             u64: key,
         };
-        match self.epoll_ctl(libc::EPOLL_CTL_ADD, fd.as_raw_fd(), &mut event) {
-            0 => Ok(()),
-            _ => Err(AddError),
+        let result = unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd, &mut event) };
+        if result == -1 {
+            epoll_ctl_panic();
         }
     }
 
-    // pub fn add_write<F: AsRawFd>(&self, key: u64, fd: &F) -> Result<()> {
-    //     let mut event = libc::epoll_event {
-    //         events: (libc::EPOLLOUT | OTHER_EVENT) as u32,
-    //         u64: key,
-    //     };
-    //     self.epoll_ctl(libc::EPOLL_CTL_ADD, fd.as_raw_fd(), &mut event)
-    // }
-
-    pub fn remove<F: AsRawFd>(&self, fd: &F) -> Result<(), RemoveError> {
-        match self.epoll_ctl(libc::EPOLL_CTL_DEL, fd.as_raw_fd(), ptr::null_mut()) {
-            0 => Ok(()),
-            _ => Err(RemoveError),
+    pub fn remove<F: AsRawFd>(&self, fd: &F) {
+        let result = unsafe {
+            libc::epoll_ctl(
+                self.0.as_raw_fd(),
+                libc::EPOLL_CTL_DEL,
+                fd.as_raw_fd(),
+                ptr::null_mut(),
+            )
+        };
+        if result == -1 {
+            epoll_ctl_panic();
         }
-    }
-
-    fn epoll_ctl(&self, op: i32, fd: RawFd, event: *mut libc::epoll_event) -> i32 {
-        unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd, event) }
     }
 }
 
@@ -101,13 +109,9 @@ impl Epoll {
     ///
     /// This method will block until either a file descriptor deliver an event, the call is
     /// interupted by a signal handler, or `timeout` expires.
-    pub fn wait(
-        &self,
-        events: &mut [MaybeUninit<EpollEvent>],
-        timeout: Option<u32>,
-    ) -> Result<usize, WaitError> {
-        let result = unsafe {
-            libc::epoll_wait(
+    pub fn wait(&self, events: &mut [MaybeUninit<EpollEvent>], timeout: Option<u32>) -> usize {
+        unsafe {
+            let result = libc::epoll_wait(
                 self.0.as_raw_fd(),
                 events.as_mut_ptr().cast(),
                 events.len() as i32,
@@ -115,33 +119,40 @@ impl Epoll {
                     Some(ok) => (ok & i32::MAX as u32) as i32,
                     None => -1,
                 },
-            )
-        };
-        match result.try_into() {
-            Ok(nfds) => Ok(nfds),
-            Err(_) => unsafe {
-                if *libc::__errno_location() == libc::EINTR {
-                    Ok(0)
-                } else {
-                    Err(WaitError)
+            );
+            match result.try_into() {
+                Ok(nfds) => nfds,
+                Err(_) => {
+                    if *libc::__errno_location() != libc::EINTR {
+                        epoll_wait_panic();
+                    }
+                    0
                 }
-            },
+            }
         }
     }
 }
 
 // ===== Errors =====
 
-// `man 2 epoll_create1`
-// EINVAL size is not positive.
-// EINVAL (epoll_create1()) Invalid value specified in flags.
-// EMFILE The per-process limit on the number of open file descriptors has been reached.
-// ENFILE The system-wide limit on the total number of open files has been reached.
-// ENOMEM There was insufficient memory to create the kernel object.
+#[cold]
+#[inline(never)]
+fn epoll_ctl_panic() -> ! {
+    // at some point, handling every epoll_ctl error become cumbersome, because it needs to sync
+    // with the clients collection data structure
+    //
+    // looking further, all epoll_ctl failure is a server fault, except ENOMEM and ENOSPC, in which
+    // no recovery seems possible, thus the panic
+    panic!("`epoll_ctl` fail: {}", crate::errno::Errno);
+}
+
+#[cold]
+#[inline(never)]
+fn epoll_wait_panic() -> ! {
+    // all epoll_wait errors, except EINTR, are server error
+    panic!("`epoll_wait` fail: {}", crate::errno::Errno);
+}
 
 simple_errno! {
     pub CreateError, "failed to create epoll: {}";
-    pub AddError, "failed to add epoll fd: {}";
-    pub RemoveError, "failed to remove epoll fd: {}";
-    pub WaitError, "failed to wait for epoll event: {}";
 }

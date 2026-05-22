@@ -72,8 +72,8 @@ fn event_loop() -> Result<()> {
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
 
-    epoll.add_read(LISTENER_ID, &listener)?;
-    epoll.add_read(SIGFD_ID, &sigfd)?;
+    epoll.add_read(LISTENER_ID, &listener);
+    epoll.add_read(SIGFD_ID, &sigfd);
 
     // ===== alloc =====
     let mut events_read = 0;
@@ -94,7 +94,8 @@ fn event_loop() -> Result<()> {
             log::flush();
             events_read = 0;
             events.clear();
-            let n = epoll.wait(events.spare_capacity_mut(), None)?;
+            let n = epoll.wait(events.spare_capacity_mut(), None);
+            // SAFETY: the kernel guarantee that `n` events has been written
             unsafe { events.set_len(n) };
             continue;
         };
@@ -112,10 +113,8 @@ fn event_loop() -> Result<()> {
                         }
                         Pending => break,
                     };
-                    match clients.add(conn, &epoll) {
-                        Ok(id) => log::debug!(client, "id={id} connected"),
-                        Err(err) => log::error!(client, "{err}"),
-                    };
+                    let id = clients.add(conn, &epoll);
+                    log::debug!(client, "id={id} connected");
                 },
                 SIGFD_ID => {
                     let sig = sigfd.read();
@@ -131,8 +130,7 @@ fn event_loop() -> Result<()> {
 
         if interest.is_close() {
             match clients.remove(id, &epoll) {
-                Some(Ok(())) => log::debug!(client, "id={id} disconnected"),
-                Some(Err(err)) => log::error!(epoll, "{err}"),
+                Some(()) => log::debug!(client, "id={id} disconnected"),
                 None => log::error!(epoll, "unknown key: {id}"),
             }
             continue;
