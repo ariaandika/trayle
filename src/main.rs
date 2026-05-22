@@ -39,7 +39,7 @@ mod sigfd;
 mod conn;
 mod listener;
 // ===== alloc =====
-mod ptr;
+mod alloc;
 mod buffer;
 mod fd_buffer;
 // ===== app =======

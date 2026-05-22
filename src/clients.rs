@@ -1,8 +1,11 @@
+use std::ptr::NonNull;
+use std::{mem, slice};
+
+use crate::alloc;
 use crate::buffer::SmallBuf;
 use crate::conn::Connection;
 use crate::epoll::Epoll;
 use crate::objects::Objects;
-use crate::ptr::Ptr;
 
 // ===== ClientId =====
 
@@ -60,7 +63,7 @@ pub struct ClientState {
 // ===== Clients =====
 
 pub struct Clients {
-    ptr: Ptr<Entry>,
+    ptr: NonNull<Entry>,
     id: u32,
     len: u32,
     cap: u32,
@@ -70,10 +73,10 @@ pub struct Clients {
 
 impl Drop for Clients {
     fn drop(&mut self) {
-        for entry in self.ptr.as_mut_slice(self.len) {
+        for entry in self.as_mut_slice() {
             drop(std::mem::replace(entry, Entry::None(0)));
         }
-        self.ptr.deallocate(self.cap);
+        alloc::deallocate(self.ptr, self.cap);
     }
 }
 
@@ -85,7 +88,7 @@ enum Entry {
 impl Clients {
     pub fn with_capacity(cap: u32) -> Self {
         Self {
-            ptr: Ptr::allocate(cap),
+            ptr: alloc::allocate(cap),
             id: 0,
             len: 0,
             cap,
@@ -103,6 +106,10 @@ impl Clients {
         debug_assert!(id & i64::MIN as u64 == 0);
         ((id >> 4) as u32, id as u32)
     }
+
+    fn as_mut_slice(&mut self) -> &mut [Entry] {
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len as usize) }
+    }
 }
 
 impl Clients {
@@ -110,14 +117,15 @@ impl Clients {
         let id = self.construct_id();
         epoll.add(id, &conn);
         if self.len == self.cap {
-            self.cap = self.ptr.grow(self.cap, 0);
+            self.cap = alloc::grow(&mut self.ptr, self.cap, 0);
         }
         let new_entry = Entry::Some(ClientState {
             conn,
             objects: Objects::new(),
             buffer: SmallBuf::new(),
         });
-        let Entry::None(next_delete) = self.ptr.add(self.last_delete).replace(new_entry) else {
+        let entry = unsafe { self.ptr.add(self.last_delete as usize).as_mut() };
+        let Entry::None(next_delete) = mem::replace(entry, new_entry) else {
             unreachable!("corrupted clients list");
         };
         if self.last_delete == self.len {
@@ -135,7 +143,7 @@ impl Clients {
     pub fn get_mut(&mut self, id: ClientId) -> Option<ClientMut<'_>> {
         let (idx, _) = Self::destruct_id(id.0);
         if idx < self.len {
-            match self.ptr.add(idx).as_mut() {
+            match unsafe { self.ptr.add(idx as usize).as_mut() } {
                 Entry::Some(state) => Some(ClientMut { state }),
                 Entry::None(_) => None,
             }
@@ -159,7 +167,8 @@ impl Clients {
         //     dbg!((client.id(), id));
         //     return None;
         // }
-        let Entry::Some(client) = self.ptr.add(idx).replace(Entry::None(self.last_delete)) else {
+        let entry = unsafe { self.ptr.add(idx as usize).as_mut() };
+        let Entry::Some(client) = mem::replace(entry, Entry::None(self.last_delete)) else {
             unsafe { std::hint::unreachable_unchecked() };
         };
         self.last_delete = idx;

@@ -1,4 +1,6 @@
-use crate::ptr::Ptr;
+use std::ptr::NonNull;
+
+use crate::alloc;
 use crate::wayland::{Id, Interface};
 
 // ===== Object =====
@@ -16,7 +18,7 @@ impl Object {
 // ===== Objects =====
 
 pub struct Objects {
-    ptr: Ptr<Entry>,
+    ptr: NonNull<Entry>,
     id: u32,
     len: u32,
     cap: u32,
@@ -30,11 +32,12 @@ enum Entry {
 
 impl Objects {
     pub fn new() -> Self {
+        const CAP: u32 = 32;
         Self {
-            ptr: Ptr::allocate(32),
+            ptr: alloc::allocate(CAP),
             id: 0,
             len: 0,
-            cap: 32,
+            cap: CAP,
             last_delete: 0,
         }
     }
@@ -43,7 +46,7 @@ impl Objects {
         debug_assert!(!id.is_display());
         let idx = id.to_u32() - 2;
         if idx < self.len {
-            match self.ptr.add(idx).as_mut() {
+            match unsafe { self.ptr.add(idx as usize).as_mut() } {
                 Entry::Some(object) => Some(object),
                 Entry::None(_) => None,
             }

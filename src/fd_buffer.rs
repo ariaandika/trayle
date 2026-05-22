@@ -1,22 +1,11 @@
 use std::os::fd::RawFd;
+use std::ptr::NonNull;
+use std::slice;
 
-use crate::ptr::Ptr;
-
-const FDSIZE: u32 = size_of::<RawFd>() as u32;
-const FDALIGN: u32 = align_of::<RawFd>() as u32;
-
-const HDRSIZE: u32 = size_of::<libc::cmsghdr>() as u32;
-const HDRALIGN: u32 = align_of::<libc::cmsghdr>() as u32;
-const HDRCAP: u32 = HDRSIZE / HDRALIGN;
-
-const _: () = unsafe { assert!(HDRSIZE == libc::CMSG_LEN(0)) };
-
-const ALIGN: u32 = HDRALIGN;
-const SIZE_SCALE: u32 = (size_of::<libc::cmsghdr>() / size_of::<RawFd>()) as u32;
-const ALIGN_SCALE: u32 = (align_of::<libc::cmsghdr>() / align_of::<RawFd>()) as u32;
+use crate::alloc;
 
 pub struct FdBuffer {
-    ptr: Ptr<u8>,
+    ptr: NonNull<u8>,
 
     // in `RawFd` unit
 
@@ -25,39 +14,63 @@ pub struct FdBuffer {
     cap: u32,
 }
 
-// use `u64` to get alignment `HDRALIGN` but size 1
-const _: () = assert!(align_of::<u64>() as u32 == HDRALIGN);
-type Align = u64;
+// perhaps this might be simpler to use union but, cheese butter
+
+// fragment unit is size 8 align 8
+// - cmsg header is 2 fragment unit
+// - 2 fd is 1 fragment unit
+
+type Fragment = u64;
+
+const fn bytes_to_frag(value: u32) -> u32 {
+    value / FRAGALIGN
+}
+
+const fn fd_to_frag(value: u32) -> u32 {
+    value / FDFRAG
+}
+
+const FRAGALIGN: u32 = align_of::<Fragment>() as u32;
+const FRAGSIZE: u32 = size_of::<Fragment>() as u32;
+const HDRSIZE: u32 = size_of::<libc::cmsghdr>() as u32;
+const HDRFRAG: u32 = HDRSIZE / FRAGSIZE;
+const FDSIZE: u32 = size_of::<RawFd>() as u32;
+const FDFRAG: u32 = FRAGSIZE / FDSIZE;
+
+const _: () = assert!(align_of::<u64>() == align_of::<libc::cmsghdr>());
+const _: () = unsafe { assert!(HDRSIZE == libc::CMSG_LEN(0)) };
 
 impl Drop for FdBuffer {
     fn drop(&mut self) {
-        let total_cap = (self.cap + self.off) / ALIGN_SCALE + HDRCAP;
-        self.ptr
-            .sub(self.off * FDSIZE)
-            .cast::<Align>()
-            .sub(HDRCAP)
-            .deallocate(total_cap);
+        unsafe {
+            let total_frag = fd_to_frag(self.cap + self.off) + HDRFRAG;
+            let ptr = self.ptr
+                .cast::<RawFd>()
+                .sub(self.off as usize)
+                .cast::<Fragment>()
+                .sub(HDRFRAG as usize);
+            alloc::deallocate(ptr, total_frag);
+        }
     }
 }
 
 impl FdBuffer {
     /// Note that `FdBuffer` does not close fds on drop.
     pub fn new<const CAP: u32>() -> Self {
-        const { assert!(CAP.is_multiple_of(ALIGN_SCALE)) }
+        const { assert!(CAP.is_multiple_of(FDFRAG)) }
 
         // cmsg buffer *alignment* need to be the same as `cmsghdr`, in this case is *pointer size*,
         // but the `CMSG_SPACE` returns size, with the header, in *bytes*,
         // thus manual layout calculation is required
-        let total_cap = const {
+        let total_frag = const {
             let total_bytes = unsafe { libc::CMSG_SPACE(CAP * FDSIZE) };
-            debug_assert!((total_bytes - HDRSIZE) / FDSIZE == CAP);
-            total_bytes / ALIGN
+            debug_assert!(bytes_to_frag(total_bytes) - HDRFRAG == fd_to_frag(CAP));
+            bytes_to_frag(total_bytes)
         };
-        let ptr = Ptr::<Align>::allocate(total_cap);
-
-        // then the raw data can be treated as raw bytes
+        let ptr = alloc::allocate::<Fragment>(total_frag);
+        let ptr = unsafe { ptr.add(HDRFRAG as usize) };
         Self {
-            ptr: ptr.add(HDRCAP).cast(), // exclude cmsg header
+            ptr: ptr.cast(),
             off: 0,
             len: 0,
             cap: CAP,
@@ -73,15 +86,16 @@ impl FdBuffer {
     }
 
     fn advance_one(&mut self) {
-        self.ptr = self.ptr.add(FDSIZE);
+        debug_assert!(self.len != 0);
+        self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
         self.off += 1;
         self.len -= 1;
         self.cap -= 1;
     }
 
     fn advance_mut_one(&mut self) {
+        debug_assert!(self.len != self.cap);
         self.len += 1;
-        debug_assert!(self.len <= self.cap);
     }
 
     /// Returns `true` if there is remaining capacity.
@@ -89,8 +103,12 @@ impl FdBuffer {
         if self.len == self.cap {
             return false;
         }
-        self.ptr.copy_from_nonoverlapping(fd.to_ne_bytes().as_ptr(), FDSIZE);
-        self.advance_mut_one();
+        unsafe {
+            self.ptr
+                .as_ptr()
+                .copy_from_nonoverlapping(fd.to_ne_bytes().as_ptr(), FDSIZE as usize);
+            self.advance_mut_one();
+        }
         true
     }
 
@@ -98,22 +116,27 @@ impl FdBuffer {
         if self.len == 0 {
             return None;
         }
-        let fd = i32::from_ne_bytes(self.ptr.cast::<[u8; 4]>().read());
+        let fd = unsafe { self.ptr.cast().read_unaligned() };
         self.advance_one();
         Some(fd)
     }
 
     pub fn as_cmsg(&self) -> &[u8] {
-        debug_assert!(self.off == 0);
-        let base = self.ptr.sub(HDRSIZE);
-        base.as_mut_slice(self.len * FDSIZE + HDRSIZE)
+        debug_assert!(
+            self.off == 0,
+            "TODO: this should be changed to handle pending write"
+        );
+        unsafe {
+            let base = self.ptr.sub(HDRSIZE as usize);
+            slice::from_raw_parts(base.as_ptr(), (self.len * FDSIZE + HDRSIZE) as usize)
+        }
     }
 
     /// Clear the buffer, retaining leftover capacity.
     ///
     /// Note that this does not close remaining fds.
     pub fn clear(&mut self) {
-        self.ptr = self.ptr.sub(self.off * FDSIZE);
+        self.ptr = unsafe { self.ptr.sub((self.off * FDSIZE) as usize) };
         self.cap += self.off;
 
         self.len = 0;

@@ -28,9 +28,9 @@ impl Connection {
         recvmsg(buffer, fds, self.0.as_raw_fd())
     }
 
-    /// Write data to the socket.
+    /// Write all data to the socket.
     ///
-    /// May call write multiple time.
+    /// If write is pending, add write event to epoll.
     pub fn poll_write_all(
         &self,
         buffer: &mut Buffer,
