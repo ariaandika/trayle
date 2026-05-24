@@ -42,11 +42,11 @@ impl Objects {
         }
     }
 
-    pub fn insert<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
-        self.insert_inner(object.id(), O::INTERFACE)
+    pub fn insert_object<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
+        self.insert(object.id(), O::INTERFACE)
     }
 
-    fn insert_inner(&mut self, id: Id, interface: Interface) -> Result<(), WlError> {
+    pub fn insert(&mut self, id: Id, interface: Interface) -> Result<(), WlError> {
         debug_assert!(!id.is_display());
         let idx = id.to_u32() - 2;
 

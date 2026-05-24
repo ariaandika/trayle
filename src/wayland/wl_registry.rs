@@ -61,7 +61,7 @@ pub struct Bind<'a> {
     pub name: u32,
     pub id_name: &'a str,
     pub id_version: u32,
-    pub id: u32,
+    pub id: Id,
 }
 
 impl Decode for marker::Bind {

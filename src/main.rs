@@ -251,18 +251,6 @@ fn handle_wl_display(
     use wayland::wl_display::Op;
     use wayland::WlObject;
 
-    const GLOBALS: [(&str, u16); 9] = [
-        ("wl_compositor", 7),
-        ("wl_shm", 2),
-        ("wl_data_device_manager", 4),
-        ("wl_seat", 10),
-        ("wl_subcompositor", 1),
-        ("wl_fixes", 2),
-        ("zwp_linux_dmabuf_v1", 5),
-        ("zwp_linux_dmabuf_feedback_v1", 5),
-        ("xdg_wm_base", 7),
-    ];
-
     match Op::from_request(op)? {
         Op::Sync(decoder) => {
             decoder.decode(body)?.reply(0, write_buffer);
@@ -271,10 +259,10 @@ fn handle_wl_display(
         Op::GetRegistry(decoder) => {
             let get_registry = decoder.decode(body)?;
             let wl_registry = get_registry.wl_registry();
-            client.objects_mut().insert(&wl_registry)?;
+            client.objects_mut().insert_object(&wl_registry)?;
 
             // FEAT: encode globals at startup
-            for ((iface, version), i) in GLOBALS.into_iter().zip(0..) {
+            for ((iface, version, _), i) in wayland::GLOBALS.into_iter().zip(0..) {
                 wl_registry.global(i, iface, version as u32, &mut *write_buffer);
             }
 
@@ -301,15 +289,33 @@ fn handle_message(id: Id, op: u16, body: &[u8], client: &mut ClientMut<'_>) -> R
                     let bind = decoder.decode(body)?;
                     log::trace!(
                         client,
-                        "<- wl_registry@bind name={},id={}({},v{})",
+                        "<- wl_registry@bind {{ name:{}, id:{}, global: ({}, v{}) }}",
                         bind.name,
                         bind.id,
                         bind.id_name,
                         bind.id_version,
                     );
+                    let Some((bind_name, version, iface)) = wayland::GLOBALS.get(bind.name as usize) else {
+                        return Err(WlError::UnknownBind);
+                    };
+                    if bind.id_name != *bind_name {
+                        return Err(WlError::UnknownBind);
+                    }
+                    if bind.id_version > *version as u32 {
+                        return Err(WlError::UnknownBind);
+                    }
+                    client.objects_mut().insert(bind.id, *iface)?;
                 }
             }
         }
+        I::WlShm => {
+            log::error!(client, "`{iface:?}` is not yet implemented");
+            return WlError::todo()
+        }
+        _ => {
+            log::error!(client, "`{iface:?}` is not yet implemented");
+            return WlError::todo()
+        },
     }
 
     Ok(())

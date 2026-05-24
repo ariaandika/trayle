@@ -29,12 +29,52 @@ pub trait WlObject {
 // commented entry are exists but never constructed
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
-#[allow(clippy::enum_variant_names, reason = "for now just wl_*")]
+#[allow(dead_code)]
 pub enum Interface {
     // WlDisplay,
     WlRegistry,
     // WlCallback,
+    WlCompositor,
+    WlShmPool,
+    WlShm,
+    WlBuffer,
+    WlDataOffer,
+    WlDataSource,
+    WlDataDevice,
+    WlDataDeviceManager,
+    // WlShell, /// deprecated
+    WlShellSurface,
+    WlSurface,
+    WlSeat,
+    WlPointer,
+    WlKeyboard,
+    WlTouch,
+    WlOutput,
+    WlRegion,
+    WlSubCompositor,
+    WlSubSurface,
+    WlFixes,
+    ZwpLinuxDmabufV1,
+    ZwpLinuxBufferParamsV1,
+    ZwpLinuxDmabufFeedbackV1,
+    XdgWmBase,
+    XdgPositioner,
+    XdgSurface,
+    XdgToplevel,
+    XdgPopup,
 }
+
+pub static GLOBALS: [(&str, u16, Interface); 9] = [
+    ("wl_compositor", 7, Interface::WlCompositor),
+    ("wl_shm", 2, Interface::WlShm),
+    ("wl_data_device_manager", 4, Interface::WlDataDeviceManager),
+    ("wl_seat", 10, Interface::WlSeat),
+    ("wl_subcompositor", 1, Interface::WlSubCompositor),
+    ("wl_fixes", 2, Interface::WlFixes),
+    ("zwp_linux_dmabuf_v1", 5, Interface::ZwpLinuxDmabufV1),
+    ("zwp_linux_dmabuf_feedback_v1", 5, Interface::ZwpLinuxDmabufFeedbackV1),
+    ("xdg_wm_base", 7, Interface::XdgWmBase),
+];
 
 /// `(id, op, len)`
 pub fn header(bytes: &[u8]) -> Option<(u32, u16, u16, &[u8])> {
