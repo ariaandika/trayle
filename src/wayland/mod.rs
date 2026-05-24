@@ -13,7 +13,7 @@ mod prelude {
     pub use super::{WlObject, Interface};
     pub use super::id::Id;
     pub use super::error::WlError;
-    pub use super::decode::{Decoder, Decode};
+    pub use super::decode::{Reader, Decode, Decoder};
     pub use super::encode::{PtrWrite, Encoder};
     pub use crate::buffer::Buffer;
 

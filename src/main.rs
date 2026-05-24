@@ -151,17 +151,19 @@ fn event_loop() -> Result<(), PrintError> {
                 let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
                     match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
                         Ready(Ok(())) => continue,
-                        Ready(Err(err)) => break Some(Ok(err)),
-                        Pending => break None,
+                        Ready(Err(err)) => break Err(Some(err)),
+                        Pending => break Ok(()),
                     };
                 };
                 if len < 8 {
                     encode_error(Id::wl_display(), WlError::InvalidSize, &mut write_buffer);
-                    break Some(Err(WlError::InvalidSize));
+                    log::error!(client, "{}", WlError::InvalidSize);
+                    break Err(None);
                 }
                 let Ok(id) = Id::new(id) else {
                     encode_error(Id::wl_display(), WlError::ZeroId, &mut write_buffer);
-                    break Some(Err(WlError::ZeroId));
+                    log::error!(client, "{}", WlError::ZeroId);
+                    break Err(None);
                 };
                 let result = if id.is_display() {
                     handle_wl_display(op, body, &mut client, &mut write_buffer)
@@ -171,20 +173,20 @@ fn event_loop() -> Result<(), PrintError> {
                 // TODO: checks for recoverable error
                 if let Err(err) = result {
                     encode_error(id, err, &mut write_buffer);
-                    break Some(Err(err));
+                    log::error!(client, "id={id}, {err}");
+                    break Err(None);
                 }
                 read_buffer.advance(len as u32);
             };
 
-            if let Some(err) = result {
+            if let Err(err) = result {
                 match err {
-                    Ok(conn::ReadError::ConnectionAborted) => {}
-                    Ok(read_err) => log::error!(client, "{read_err}"),
-                    Err(err) => {
+                    Some(conn::ReadError::ConnectionAborted) => {}
+                    Some(read_err) => log::error!(client, "{read_err}"),
+                    None => {
                         let _ = client
                             .conn()
                             .poll_write_all(&mut write_buffer, &mut write_fd);
-                        log::error!(client, "{err}");
                     },
                 }
                 read_buffer.clear();
@@ -247,13 +249,24 @@ fn handle_wl_display(
     write_buffer: &mut Buffer,
 ) -> Result<(), WlError> {
     use wayland::wl_display::Op;
+    use wayland::WlObject;
 
-    const GLOBALS: [(&str, u16); 1] = [("wl_compositor", 7)];
+    const GLOBALS: [(&str, u16); 9] = [
+        ("wl_compositor", 7),
+        ("wl_shm", 2),
+        ("wl_data_device_manager", 4),
+        ("wl_seat", 10),
+        ("wl_subcompositor", 1),
+        ("wl_fixes", 2),
+        ("zwp_linux_dmabuf_v1", 5),
+        ("zwp_linux_dmabuf_feedback_v1", 5),
+        ("xdg_wm_base", 7),
+    ];
 
     match Op::from_request(op)? {
         Op::Sync(decoder) => {
             decoder.decode(body)?.reply(0, write_buffer);
-            log::trace!(client, "<- wl_display@Sync");
+            log::trace!(client, "<- wl_display::sync");
         }
         Op::GetRegistry(decoder) => {
             let get_registry = decoder.decode(body)?;
@@ -265,18 +278,13 @@ fn handle_wl_display(
                 wl_registry.global(i, iface, version as u32, &mut *write_buffer);
             }
 
-            log::trace!(client, "<- wl_display@GetRegistry {wl_registry:?}");
+            log::trace!(client, "<- wl_display::get_registry id={}", wl_registry.id());
         }
     }
     Ok(())
 }
 
-fn handle_message(
-    id: Id,
-    _op: u16,
-    _body: &[u8],
-    client: &mut ClientMut<'_>,
-) -> Result<(), WlError> {
+fn handle_message(id: Id, op: u16, body: &[u8], client: &mut ClientMut<'_>) -> Result<(), WlError> {
     use wayland::Interface as I;
 
     let Some(object) = client.objects_mut().get_mut(id) else {
@@ -286,12 +294,25 @@ fn handle_message(
     let iface = object.interface();
 
     match iface {
-        I::WlRegistry => WlError::todo(),
+        I::WlRegistry => {
+            use wayland::wl_registry::RequestOp as Op;
+            match Op::from_request(op)? {
+                Op::Bind(decoder) => {
+                    let bind = decoder.decode(body)?;
+                    log::trace!(
+                        client,
+                        "<- wl_registry@bind name={},id={}({},v{})",
+                        bind.name,
+                        bind.id,
+                        bind.id_name,
+                        bind.id_version,
+                    );
+                }
+            }
+        }
     }
 
-    // log::info!(client, "message: {iface:?}");
-    //
-    // Ok(())
+    Ok(())
 }
 
 // ===== Error =====

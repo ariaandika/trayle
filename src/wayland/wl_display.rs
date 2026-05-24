@@ -45,13 +45,12 @@ impl Sync {
 }
 
 impl Decode for Sync {
-    fn decode(body: &[u8]) -> Result<Self, WlError> {
-        match body.as_array() {
-            Some(ok) => Ok(Self {
-                wl_callback_id: Id::from_ne_bytes(*ok)?,
-            }),
-            None => Err(WlError::InvalidSize),
-        }
+    type Output<'a> = Self;
+
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        Ok(Self {
+            wl_callback_id: reader.read()?,
+        })
     }
 }
 
@@ -69,13 +68,12 @@ impl GetRegistry {
 }
 
 impl Decode for GetRegistry {
-    fn decode(body: &[u8]) -> Result<Self, WlError> {
-        match body.as_array() {
-            Some(ok) => Ok(Self {
-                wl_registry_id: Id::from_ne_bytes(*ok)?,
-            }),
-            None => Err(WlError::InvalidSize),
-        }
+    type Output<'a> = Self;
+
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        Ok(Self {
+            wl_registry_id: reader.read()?,
+        })
     }
 }
 
@@ -101,6 +99,7 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
         E::UnknownOp => MALFORMED,
         E::UnknownObject => SEMANTIC,
         E::InvalidSize => MALFORMED,
+        E::ExcessiveSize => MALFORMED,
         E::InvalidNewId => SEMANTIC,
         E::ZeroId => SEMANTIC,
         E::Internal => (Id::wl_display(), IMPLEMENTATION),

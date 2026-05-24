@@ -6,8 +6,10 @@ pub enum WlError {
     UnknownOp,
     /// Unknown object id.
     UnknownObject,
-    /// Invalid size for message payload.
+    /// Invalid payload size.
     InvalidSize,
+    /// Excessive payload size.
+    ExcessiveSize,
     /// Invalid new object id, e.g: new id that is used by existing object.
     InvalidNewId,
     /// Invalid object id of `0`.
@@ -22,12 +24,14 @@ impl WlError {
             Self::UnknownOp => "unknown op code",
             Self::UnknownObject => "unknown object id",
             Self::InvalidSize => "invalid payload size",
+            Self::ExcessiveSize => "excessive payload size",
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",
             Self::Internal => "internal error",
         }
     }
 
+    #[allow(unused)]
     pub const fn todo<T>() -> Result<T, WlError> {
         Err(WlError::Internal)
     }

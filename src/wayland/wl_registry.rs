@@ -34,3 +34,45 @@ impl WlRegistry {
         };
     }
 }
+
+// ===== Op =====
+
+pub enum RequestOp {
+    Bind(Decoder<marker::Bind>),
+}
+
+impl RequestOp {
+    pub fn from_request(op: u16) -> Result<RequestOp, WlError> {
+        match op {
+            0 => Ok(Self::Bind(Decoder::new())),
+            _ => Err(WlError::UnknownOp),
+        }
+    }
+}
+
+mod marker {
+    pub struct Bind;
+}
+
+// ===== Bind =====
+
+#[derive(Debug)]
+pub struct Bind<'a> {
+    pub name: u32,
+    pub id_name: &'a str,
+    pub id_version: u32,
+    pub id: u32,
+}
+
+impl Decode for marker::Bind {
+    type Output<'a> = Bind<'a>;
+
+    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Bind {
+            name: reader.read()?,
+            id_name: reader.read()?,
+            id_version: reader.read()?,
+            id: reader.read()?,
+        })
+    }
+}
