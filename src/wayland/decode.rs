@@ -95,8 +95,13 @@ impl PrimitiveDecode<'_> for u16 {
 impl<'a> PrimitiveDecode<'a> for &'a str {
     fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError> {
         let len = u32::decode(reader)?;
+        if len == 0 {
+            return Err(WlError::Null);
+        }
         let round_len = roundup4!(len as u16) as u32;
         let bytes = reader.read_bytes(round_len as usize)?;
-        Ok(str::from_utf8(bytes).unwrap())
+        // SAFETY: `len <= round_len` and `len` is non-zero
+        let unrounded = unsafe { bytes.get_unchecked(..(len - 1) as usize) };
+        Ok(str::from_utf8(unrounded).unwrap())
     }
 }

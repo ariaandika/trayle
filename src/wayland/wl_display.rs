@@ -98,10 +98,12 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
     let (id, code) = match error {
         E::UnknownOp => MALFORMED,
         E::UnknownObject => SEMANTIC,
+        E::UnknownBind => SEMANTIC,
         E::InvalidSize => MALFORMED,
         E::ExcessiveSize => MALFORMED,
         E::InvalidNewId => SEMANTIC,
         E::ZeroId => SEMANTIC,
+        E::Null => SEMANTIC,
         E::Internal => (Id::wl_display(), IMPLEMENTATION),
     };
 

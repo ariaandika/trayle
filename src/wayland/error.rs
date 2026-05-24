@@ -6,6 +6,8 @@ pub enum WlError {
     UnknownOp,
     /// Unknown object id.
     UnknownObject,
+    /// Unknown global when binding in `wl_registry::bind`.
+    UnknownBind,
     /// Invalid payload size.
     InvalidSize,
     /// Excessive payload size.
@@ -14,6 +16,8 @@ pub enum WlError {
     InvalidNewId,
     /// Invalid object id of `0`.
     ZeroId,
+    /// Invalid null value.
+    Null,
     /// Internal compositor error.
     Internal,
 }
@@ -23,10 +27,12 @@ impl WlError {
         match self {
             Self::UnknownOp => "unknown op code",
             Self::UnknownObject => "unknown object id",
+            Self::UnknownBind => "unknown global binding operation",
             Self::InvalidSize => "invalid payload size",
             Self::ExcessiveSize => "excessive payload size",
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",
+            Self::Null => "invalid null value",
             Self::Internal => "internal error",
         }
     }

@@ -56,7 +56,7 @@ impl PartialEq<u32> for Id {
 
 impl std::fmt::Display for Id {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Id({})", self.0)
+        self.0.fmt(f)
     }
 }
 
