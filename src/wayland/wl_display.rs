@@ -81,14 +81,39 @@ impl Decode for GetRegistry {
 
 // ===== Encode =====
 
-/// Send `wl_display::error` event.
-pub fn error(object_id: Id, code: u32, message: &str, buffer: &mut Buffer) {
+/// server couldn't find object
+const INVALID_OBJECT: u32 = 0;
+/// method doesn't exist on the specified interface or malformed request
+const INVALID_METHOD: u32 = 1;
+// /// server is out of memory
+// const NO_MEMORY: u32 = 2;
+/// implementation error in compositor
+const IMPLEMENTATION: u32 = 3;
+
+/// Send `wl_display::error` event from `WlError`.
+pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
+    use WlError as E;
+
+    const MALFORMED: (Id, u32) = (Id::wl_display(), INVALID_METHOD);
+    const SEMANTIC: (Id, u32) = (Id::wl_display(), INVALID_OBJECT);
+
+    let (id, code) = match error {
+        E::UnknownOp => MALFORMED,
+        E::UnknownObject => SEMANTIC,
+        E::InvalidSize => MALFORMED,
+        E::InvalidNewId => SEMANTIC,
+        E::ZeroId => SEMANTIC,
+        E::Internal => (Id::wl_display(), IMPLEMENTATION),
+    };
+
+    let message = error.message();
     let msg_len = message.len() as u16;
     let len = const { 8 + 4 + 4 + 4 } + roundup4!(msg_len + 1);
+
     unsafe {
         buffer
             .message(Id::wl_display(), ERROR_OP, len)
-            .put(object_id)
+            .put(id)
             .put(code)
             .put(message)
     };

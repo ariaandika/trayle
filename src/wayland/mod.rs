@@ -26,13 +26,14 @@ pub trait WlObject {
     fn id(&self) -> Id;
 }
 
+// commented entry are exists but never constructed
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
 #[allow(clippy::enum_variant_names, reason = "for now just wl_*")]
 pub enum Interface {
-    WlDisplay,
+    // WlDisplay,
     WlRegistry,
-    WlCallback,
+    // WlCallback,
 }
 
 /// `(id, op, len)`

@@ -85,41 +85,41 @@ impl FdBuffer {
         self.len == 0
     }
 
-    fn advance_one(&mut self) {
-        debug_assert!(self.len != 0);
-        self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
-        self.off += 1;
-        self.len -= 1;
-        self.cap -= 1;
-    }
-
-    fn advance_mut_one(&mut self) {
-        debug_assert!(self.len != self.cap);
-        self.len += 1;
-    }
-
-    /// Returns `true` if there is remaining capacity.
-    pub fn push(&mut self, fd: RawFd) -> bool {
-        if self.len == self.cap {
-            return false;
-        }
-        unsafe {
-            self.ptr
-                .as_ptr()
-                .copy_from_nonoverlapping(fd.to_ne_bytes().as_ptr(), FDSIZE as usize);
-            self.advance_mut_one();
-        }
-        true
-    }
-
-    pub fn pop_front(&mut self) -> Option<RawFd> {
-        if self.len == 0 {
-            return None;
-        }
-        let fd = unsafe { self.ptr.cast().read_unaligned() };
-        self.advance_one();
-        Some(fd)
-    }
+    // fn advance_one(&mut self) {
+    //     debug_assert!(self.len != 0);
+    //     self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
+    //     self.off += 1;
+    //     self.len -= 1;
+    //     self.cap -= 1;
+    // }
+    //
+    // fn advance_mut_one(&mut self) {
+    //     debug_assert!(self.len != self.cap);
+    //     self.len += 1;
+    // }
+    //
+    // /// Returns `true` if there is remaining capacity.
+    // pub fn push(&mut self, fd: RawFd) -> bool {
+    //     if self.len == self.cap {
+    //         return false;
+    //     }
+    //     unsafe {
+    //         self.ptr
+    //             .as_ptr()
+    //             .copy_from_nonoverlapping(fd.to_ne_bytes().as_ptr(), FDSIZE as usize);
+    //         self.advance_mut_one();
+    //     }
+    //     true
+    // }
+    //
+    // pub fn pop_front(&mut self) -> Option<RawFd> {
+    //     if self.len == 0 {
+    //         return None;
+    //     }
+    //     let fd = unsafe { self.ptr.cast().read_unaligned() };
+    //     self.advance_one();
+    //     Some(fd)
+    // }
 
     pub fn as_cmsg(&self) -> &[u8] {
         debug_assert!(

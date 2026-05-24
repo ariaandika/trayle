@@ -146,6 +146,8 @@ fn event_loop() -> Result<(), PrintError> {
 
         if interest.is_read() {
             let result = loop {
+                use wayland::wl_display::encode_error;
+
                 let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
                     match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
                         Ready(Ok(())) => continue,
@@ -154,9 +156,11 @@ fn event_loop() -> Result<(), PrintError> {
                     };
                 };
                 if len < 8 {
+                    encode_error(Id::wl_display(), WlError::InvalidSize, &mut write_buffer);
                     break Some(Err(WlError::InvalidSize));
                 }
                 let Ok(id) = Id::new(id) else {
+                    encode_error(Id::wl_display(), WlError::ZeroId, &mut write_buffer);
                     break Some(Err(WlError::ZeroId));
                 };
                 let result = if id.is_display() {
@@ -164,21 +168,28 @@ fn event_loop() -> Result<(), PrintError> {
                 } else {
                     handle_message(id, op, body, &mut client)
                 };
+                // TODO: checks for recoverable error
                 if let Err(err) = result {
+                    encode_error(id, err, &mut write_buffer);
                     break Some(Err(err));
                 }
                 read_buffer.advance(len as u32);
             };
 
             if let Some(err) = result {
+                match err {
+                    Ok(conn::ReadError::ConnectionAborted) => {}
+                    Ok(read_err) => log::error!(client, "{read_err}"),
+                    Err(err) => {
+                        let _ = client
+                            .conn()
+                            .poll_write_all(&mut write_buffer, &mut write_fd);
+                        log::error!(client, "{err}");
+                    },
+                }
                 read_buffer.clear();
                 write_buffer.clear();
                 clients.remove(id, &epoll);
-                match err {
-                    Ok(conn::ReadError::ConnectionAborted) => {}
-                    Ok(err) => log::error!(client, "{}", err),
-                    Err(err) => log::error!(client, "{}", err),
-                }
                 log::debug!(client, "disconnected");
                 continue;
             }
@@ -275,14 +286,12 @@ fn handle_message(
     let iface = object.interface();
 
     match iface {
-        I::WlDisplay => {}
-        I::WlRegistry => {}
-        I::WlCallback => {}
+        I::WlRegistry => WlError::todo(),
     }
 
-    log::info!(client, "message: {iface:?}");
-
-    Ok(())
+    // log::info!(client, "message: {iface:?}");
+    //
+    // Ok(())
 }
 
 // ===== Error =====
