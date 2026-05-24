@@ -20,7 +20,7 @@ pub fn parse_wayland(string: Str) -> Result<Protocol, Error> {
 fn parse_protocol(parser: &mut Parser) -> Result<Protocol, Error> {
     let attrs = parser.assert_open_tag("protocol").and_then(parse_attr)?;
     Ok(Protocol {
-        name: attrs.get_attr("name")?.clone(),
+        name: attrs.assert_attr("name")?,
         copyright: if parser.peek_tag_name()? == "copyright" {
             parser.assert_open_tag("copyright")?;
             let cp = parser.next_plain()?;
@@ -32,11 +32,10 @@ fn parse_protocol(parser: &mut Parser) -> Result<Protocol, Error> {
         desc: peek_description(parser)?,
         interfaces: {
             let mut interfaces = Vec::with_capacity(8);
-            while !parser.is_close_tag("protocol") {
+            while !parser.try_close_tag("protocol") {
                 let _span = span("<interface>");
                 interfaces.push(parse_interface(parser)?);
             }
-            parser.assert_close_tag("protocol")?;
             interfaces
         },
     })
@@ -45,17 +44,13 @@ fn parse_protocol(parser: &mut Parser) -> Result<Protocol, Error> {
 fn parse_interface(parser: &mut Parser) -> Result<Interface, Error> {
     let attrs = parser.assert_open_tag("interface").and_then(parse_attr)?;
     Ok(Interface {
-        name: attrs.get_attr("name")?.clone(),
-        version: attrs.get_attr("version")?.parse().cx("invalid version")?,
-        frozen: attrs
-            .get(&"frozen".into())
-            .map(|e| e.parse().cx("invalid frozen value"))
-            .transpose()?,
+        name: attrs.assert_attr("name")?,
+        version: attrs.assert_attr("version")?.parse().cx("invalid version")?,
+        frozen: attrs.get_parsed("frozen")?,
         desc: peek_description(parser)?,
         items: {
             let mut items = Vec::with_capacity(4);
-
-            while !parser.is_close_tag("interface") {
+            while !parser.try_close_tag("interface") {
                 let _span = span("<item>");
                 let item = match parser.peek_tag_name()? {
                     "request" | "event" => Item::Operation(parse_operation(parser)?),
@@ -64,8 +59,6 @@ fn parse_interface(parser: &mut Parser) -> Result<Interface, Error> {
                 };
                 items.push(item);
             }
-
-            parser.assert_close_tag("interface")?;
             items
         },
     })
@@ -82,20 +75,17 @@ fn parse_operation(parser: &mut Parser) -> Result<Operation, Error> {
             true => OpKind::Request,
             false => OpKind::Event,
         },
-        name: attrs.get_attr("name")?.clone(),
+        name: attrs.assert_attr("name")?,
         ty: attrs.get(&"type".into()).cloned(),
-        since: parse_optional_int(&attrs, "since")?,
-        dep_since: parse_optional_int(&attrs, "deprecated-since")?,
+        since: attrs.get_parsed("since")?,
+        dep_since: attrs.get_parsed("deprecated-since")?,
         desc: peek_description(parser)?,
         args: {
             let mut args = Vec::with_capacity(4);
-
-            while !parser.is_close_tag(&tag_name) {
+            while !parser.try_close_tag(&tag_name) {
                 let _span = span("<arg>");
                 args.push(parse_arg(parser)?);
             }
-
-            parser.assert_close_tag(&tag_name)?;
             args
         },
     })
@@ -104,14 +94,11 @@ fn parse_operation(parser: &mut Parser) -> Result<Operation, Error> {
 fn parse_arg(parser: &mut Parser) -> Result<Arg, Error> {
     let attrs = parser.assert_self_closing_tag("arg").and_then(parse_attr)?;
     Ok(Arg {
-        name: attrs.get_attr("name")?.clone(),
-        ty: attrs.get_attr("type")?.clone(),
+        name: attrs.assert_attr("name")?,
+        ty: attrs.assert_attr("type")?,
         summary: attrs.get(&"summary".into()).cloned(),
         interface: attrs.get(&"interface".into()).cloned(),
-        allow_null: attrs
-            .get(&"allow_null".into())
-            .map(|e| e.parse().cx("invalid `allow-null` value"))
-            .transpose()?,
+        allow_null: attrs.get_parsed("allow-null")?,
         enum_: attrs.get(&"enum".into()).cloned(),
         desc: peek_description(parser)?,
     })
@@ -120,33 +107,31 @@ fn parse_arg(parser: &mut Parser) -> Result<Arg, Error> {
 fn parse_enum(parser: &mut Parser) -> Result<Enum, Error> {
     let attrs = parser.assert_open_tag("enum").and_then(parse_attr)?;
     Ok(Enum {
-        name: attrs.get_attr("name")?.clone(),
-        since: parse_optional_int(&attrs, "since")?,
-        bitfield: attrs
-            .get(&"version".into())
-            .map(|e| e.parse().cx("invalid frozen value"))
-            .transpose()?,
+        name: attrs.assert_attr("name")?,
+        since: attrs.get_parsed("since")?,
+        bitfield: attrs.get_parsed("bitfield")?,
         desc: peek_description(parser)?,
         entries: {
             let mut entries = Vec::with_capacity(4);
-            while !parser.is_close_tag("enum") {
+            while !parser.try_close_tag("enum") {
                 let _span = span("<entries>");
                 entries.push(parse_entry(parser)?);
+                parser.try_close_tag("entry");
             }
-            parser.assert_close_tag("enum")?;
             entries
         },
     })
 }
 
 fn parse_entry(parser: &mut Parser) -> Result<Entry, Error> {
-    let attrs = parser.assert_self_closing_tag("entry").and_then(parse_attr)?;
+    let (attrs, _) = parser.assert_tag("entry")?;
+    let attrs = parse_attr(attrs)?;
     Ok(Entry {
-        name: attrs.get_attr("name")?.clone(),
-        value: attrs.get_attr("name")?.clone(),
+        name: attrs.assert_attr("name")?,
+        value: attrs.assert_attr("name")?,
         summary: attrs.get(&"summary".into()).cloned(),
-        since: parse_optional_int(&attrs, "since")?,
-        dep_since: parse_optional_int(&attrs, "deprecated-since")?,
+        since: attrs.get_parsed("since")?,
+        dep_since: attrs.get_parsed("deprecated-since")?,
         desc: peek_description(parser)?,
     })
 }
@@ -155,46 +140,29 @@ fn peek_description(parser: &mut Parser) -> Result<Option<Description>, Error> {
     if parser.peek_tag_name()? != "description" {
         return Ok(None);
     }
-
     let (_, attrs, self_closing) = parser.next_tag()?;
     let attrs = parse_attr(attrs)?;
-    let summary = attrs.get_attr("summary")?.clone();
-
-    // there is self closing description
-    let content = if self_closing {
-        Str::from_static("")
-    } else {
-        parser.next_plain()?
-    };
-
-    if !self_closing {
-        parser.assert_close_tag("description")?;
-    }
-
     Ok(Some(Description {
-        summary,
-        content,
+        summary: attrs.assert_attr("summary")?,
+        content: {
+            let content = if self_closing {
+                Str::from_static("")
+            } else {
+                parser.next_plain()?
+            };
+            if !self_closing {
+                parser.assert_close_tag("description")?;
+            }
+            content
+        },
     }))
-}
-
-fn parse_optional_int(
-    attrs: &HashMap<Str, Str>,
-    cx: &'static str,
-) -> Result<Option<std::num::NonZeroU32>, Error> {
-    attrs
-        .get(&cx.into())
-        .map(|value| match value.parse() {
-            Ok(ok) => Ok(ok),
-            Err(_) => err!("invalid {cx} value: `{value}`"),
-        })
-        .transpose()
 }
 
 // ===== xml parser =====
 
 fn parse_tag(string: Str) -> Result<(Str, Str, bool), Error> {
     let len = string.find([' ', '>']).cx("expected space or `>`")?;
-    let self_close = &string[string.len() - 2..] == "/>";
+    let self_close = string.ends_with("/>");
     let name = string.slice(1..len);
     let attrs = string.slice(len..);
     Ok((name, attrs, self_close))
@@ -204,7 +172,7 @@ fn parse_attr(mut string: Str) -> Result<HashMap<Str, Str>, Error> {
     std::iter::from_fn(|| {
         let name_len = string.find('=')?;
         let key = string.split_to(name_len).trim_start();
-        if &string[..2] != "=\"" {
+        if !string.starts_with("=\"")  {
             return Some(err!("bad attribute separator for `{key}`"));
         }
         string.advance(2);
@@ -265,24 +233,43 @@ impl Parser {
         Ok(&string[1..len])
     }
 
-    fn is_close_tag(&self, expected: &str) -> bool {
-        fn inner(string: &str, expected: &str) -> Option<()> {
+    fn try_close_tag(&mut self, expected: &str) -> bool {
+        fn inner(string: &str, expected: &str) -> Option<usize> {
             let offset = string.find('<')?;
-            let name = string[offset + 1..].strip_prefix('/')?;
-            name.starts_with(expected).then_some(())
+            let name = string.get(offset + 1..)?.strip_prefix('/')?;
+            let suffix = name.strip_prefix(expected)?;
+            suffix.starts_with('>').then_some(offset + 2 + expected.len() + 1)
         }
-        inner(&self.string, expected).is_some()
+        match inner(&self.string, expected) {
+            Some(cnt) => {
+                self.string.advance(cnt);
+                true
+            },
+            None => false,
+        }
+    }
+
+    fn assert_tag(&mut self, expected: &str) -> Result<(Str, bool), Error> {
+        let (name, attrs, self_closing) = self.next_tag()?;
+        if &*name == expected {
+            Ok((attrs, self_closing))
+        } else {
+            err!("expected `<{expected}>` opening tag, found `<{name}>`")
+        }
     }
 
     fn assert_open_tag(&mut self, expected: &str) -> Result<Str, Error> {
-        let (name, attrs, self_closing) = self.next_tag()?;
-        if &*name != expected {
-            return err!("expected `<{expected}>` opening tag, found `<{name}>`");
+        match self.assert_tag(expected)? {
+            (attrs, false) => Ok(attrs),
+            _ => err!("unexpected `<{expected}>` as self closing tag"),
         }
-        if self_closing {
-            return err!("unexpected `<{expected}>` as self closing tag");
+    }
+
+    fn assert_self_closing_tag(&mut self, expected: &str) -> Result<Str, Error> {
+        match self.assert_tag(expected)? {
+            (attrs, true) => Ok(attrs),
+            _ => err!("expected `<{expected}>` as self closing tag"),
         }
-        Ok(attrs)
     }
 
     fn assert_close_tag(&mut self, expected: &str) -> Result<(), Error> {
@@ -292,33 +279,42 @@ impl Parser {
             return err!("expected `<{expected}>` as closing tag");
         }
         let (name, _) = rest.split_at(rest.len() - 1);
-        if name != expected {
-            return err!("expected `<{expected}>` closing tag, found `<{name}>`");
+        if name == expected {
+            Ok(())
+        } else {
+            err!("expected `<{expected}>` closing tag, found `<{name}>`")
         }
-        Ok(())
-    }
-
-    fn assert_self_closing_tag(&mut self, expected: &str) -> Result<Str, Error> {
-        let (name, attrs, self_closing) = self.next_tag()?;
-        if &*name != expected {
-            return err!("expected `<{expected}>` opening tag, found `<{name}>`");
-        }
-        if !self_closing {
-            return err!("expected `<{expected}>` as self closing tag");
-        }
-        Ok(attrs)
     }
 }
 
 trait MapExt {
-    fn get_attr(&self, cx: &'static str) -> Result<Str, Error>;
+    fn assert_attr(&self, cx: &'static str) -> Result<Str, Error>;
+
+    fn get_parsed<P>(&self, cx: &'static str) -> Result<Option<P>, Error>
+    where
+        P: std::str::FromStr,
+        P::Err: std::fmt::Display;
 }
 
 impl MapExt for HashMap<Str, Str> {
-    fn get_attr(&self, cx: &'static str) -> Result<Str, Error> {
+    fn assert_attr(&self, cx: &'static str) -> Result<Str, Error> {
         match self.get(&cx.into()) {
             Some(ok) => Ok(ok.clone()),
-            None => err!("no `{cx}`")
+            None => err!("expected `{cx}` attribute"),
         }
+    }
+
+    fn get_parsed<P>(&self, cx: &'static str) -> Result<Option<P>, Error>
+    where
+        P: std::str::FromStr,
+        P::Err: std::fmt::Display,
+    {
+        self.get(&cx.into())
+            .map(|value| {
+                value
+                    .parse()
+                    .map_err(|e| Error::new(format!("invalid {cx} value `{value}`: {e}")))
+            })
+            .transpose()
     }
 }
