@@ -32,8 +32,11 @@ impl Drop for Objects {
 impl Objects {
     pub fn new() -> Self {
         const CAP: u32 = 32;
+        let ptr = alloc::allocate(CAP);
+        // initialize the `len`-nth entry
+        unsafe { ptr.write(None) };
         Self {
-            ptr: alloc::allocate(CAP),
+            ptr,
             len: 0,
             cap: CAP,
         }
@@ -53,14 +56,16 @@ impl Objects {
             return Err(WlError::InvalidNewId);
         }
 
-        let entry_mut = unsafe { self.ptr.add(idx as usize).as_mut() };
+        // SAFETY: `idx <= len`, and the `len`-nth entry is always initialized
+        let entry_mut = unsafe { self.ptr.add(idx as usize).replace(Some(Object { interface })) };
         if entry_mut.is_some() {
             return Err(WlError::InvalidNewId);
         }
-        *entry_mut = Some(Object { interface });
         if idx == self.len {
             // append new entry
             self.len += 1;
+            // initialize the `len`-nth entry
+            unsafe { self.ptr.add(self.len as usize).write(None) };
         }
 
         // make sure there is available space after the last element
