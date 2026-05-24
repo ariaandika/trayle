@@ -1,280 +1,324 @@
-use std::cmp;
-use std::task::Poll::{self, *};
+use std::collections::HashMap;
 
-use crate::buffer::{FileBuffer, Str};
+use crate::error::{Error, ErrorExt, err, span};
+use crate::schema::*;
+use crate::str::Str;
 
-// ===== Parser =====
+// trait Parse: Sized {
+//     fn parse(parser: &mut Parser) -> Result<Self, Error>;
+// }
 
-pub struct Parser {
-    buffer: FileBuffer,
-}
-
-impl Parser {
-    pub fn new(buffer: FileBuffer) -> Self {
-        assert_eq!(buffer.first(), Some(b'<'));
-        Self { buffer }
+pub fn parse_wayland(string: Str) -> Result<Protocol, Error> {
+    let mut parser = Parser { string };
+    let prolog = parser.next_tag_string()?;
+    if &*prolog != "<?xml version=\"1.0\" encoding=\"UTF-8\"?>" {
+        return err!("unexpected xml prolog: `{prolog}`");
     }
+    parse_protocol(&mut parser)
 }
 
-impl Parser {
-    pub fn assert_prolog(&mut self, prolog: &str) {
-        loop {
-            let Some(slice) = self.buffer.get(..prolog.len()) else {
-                self.buffer.read();
-                continue;
-            };
-            assert_eq!(slice, prolog.as_bytes());
-            self.buffer.advance(prolog.len());
-            self.buffer.trim_ascii_start_mut();
-            break;
-        }
-    }
-
-    pub fn next_tag(&mut self, name: &str) -> (Tag, Str) {
-        let name_bytes = self.peek();
-        if name_bytes != name.as_bytes() {
-            panic!("expected `{name}` tag, found `{}`", String::from_utf8_lossy(name_bytes))
-        }
-        self.next_tag_inner()
-    }
-
-    pub fn next_closing_tag(&mut self, name: &str) -> (Tag, Str) {
-        let (tag, content) = self.next_tag(name);
-        assert!(tag.is_closing());
-        (tag, content)
-    }
-
-    pub fn next_tag_if(&mut self, name: &str) -> Option<(Tag, Str)> {
-        if self.peek() != name.as_bytes() {
-            return None;
-        }
-        Some(self.next_tag_inner())
-    }
-}
-
-/// find whitespace or `'>'`.
-fn tag_name(b: &u8) -> bool {
-    // matches!(*self, b'\t' | b'\n' | b'\x0C' | b'\r' | b' ')
-    b.is_ascii_whitespace() || *b == b'>'
-}
-
-/// find `'<'`.
-fn tag_open(b: &u8) -> bool {
-    *b == b'<'
-}
-
-/// find `'>'`.
-fn tag_close(b: &u8) -> bool {
-    *b == b'>'
-}
-
-/// whitespace or `'>'`.
-static TAG_NAME_DELIM: [char; 6] = ['\t', '\n', '\x0C', '\r', ' ', '>'];
-
-/// `Some` or returns `Pending`.
-macro_rules! some {
-    ($e:expr) => {
-        match $e {
-            Some(ok) => ok,
-            None => return Pending,
-        }
-    };
-}
-
-impl Parser {
-    pub fn peek(&mut self) -> &[u8] {
-        loop {
-            let Some(ok) = self.buffer.split_first() else {
-                self.buffer.read();
-                continue;
-            };
-            let (b'<', bytes) = ok else {
-                unreachable!("internal error: not in `<` boundary")
-            };
-            let Some(name_len) = bytes.iter().position(tag_name) else {
-                self.buffer.read();
-                continue;
-            };
-            let is_closing = bytes[0] == b'/';
-            let name = &bytes[is_closing as usize..name_len];
-            // SAFETY: fuck off marbles
-            return unsafe { std::mem::transmute::<&[u8], &[u8]>(name) };
-        }
-    }
-
-    fn next_tag_inner(&mut self) -> (Tag, Str) {
-        loop {
-            match self.poll_next_tag_inner() {
-                Ready(ok) => return ok,
-                Pending => self.buffer.read(),
+fn parse_protocol(parser: &mut Parser) -> Result<Protocol, Error> {
+    let attrs = parser.assert_open_tag("protocol").and_then(parse_attr)?;
+    Ok(Protocol {
+        name: attrs.get_attr("name")?.clone(),
+        copyright: if parser.peek_tag_name()? == "copyright" {
+            parser.assert_open_tag("copyright")?;
+            let cp = parser.next_plain()?;
+            parser.assert_close_tag("copyright")?;
+            Some(cp)
+        } else {
+            None
+        },
+        desc: peek_description(parser)?,
+        interfaces: {
+            let mut interfaces = Vec::with_capacity(8);
+            while !parser.is_close_tag("protocol") {
+                let _span = span("<interface>");
+                interfaces.push(parse_interface(parser)?);
             }
-        }
+            parser.assert_close_tag("protocol")?;
+            interfaces
+        },
+    })
+}
+
+fn parse_interface(parser: &mut Parser) -> Result<Interface, Error> {
+    let attrs = parser.assert_open_tag("interface").and_then(parse_attr)?;
+    Ok(Interface {
+        name: attrs.get_attr("name")?.clone(),
+        version: attrs.get_attr("version")?.parse().cx("invalid version")?,
+        frozen: attrs
+            .get(&"frozen".into())
+            .map(|e| e.parse().cx("invalid frozen value"))
+            .transpose()?,
+        desc: peek_description(parser)?,
+        items: {
+            let mut items = Vec::with_capacity(4);
+
+            while !parser.is_close_tag("interface") {
+                let _span = span("<item>");
+                let item = match parser.peek_tag_name()? {
+                    "request" | "event" => Item::Operation(parse_operation(parser)?),
+                    "enum" => Item::Enum(parse_enum(parser)?),
+                    tag => return err!("unexpected `<{tag}>`"),
+                };
+                items.push(item);
+            }
+
+            parser.assert_close_tag("interface")?;
+            items
+        },
+    })
+}
+
+fn parse_operation(parser: &mut Parser) -> Result<Operation, Error> {
+    let (tag_name, attrs, self_close) = parser.next_tag()?;
+    if self_close {
+        return err!("unexpected `<{tag_name}>` as self closing tag");
+    }
+    let attrs = parse_attr(attrs)?;
+    Ok(Operation {
+        kind: match &tag_name == "request" {
+            true => OpKind::Request,
+            false => OpKind::Event,
+        },
+        name: attrs.get_attr("name")?.clone(),
+        ty: attrs.get(&"type".into()).cloned(),
+        since: parse_optional_int(&attrs, "since")?,
+        dep_since: parse_optional_int(&attrs, "deprecated-since")?,
+        desc: peek_description(parser)?,
+        args: {
+            let mut args = Vec::with_capacity(4);
+
+            while !parser.is_close_tag(&tag_name) {
+                let _span = span("<arg>");
+                args.push(parse_arg(parser)?);
+            }
+
+            parser.assert_close_tag(&tag_name)?;
+            args
+        },
+    })
+}
+
+fn parse_arg(parser: &mut Parser) -> Result<Arg, Error> {
+    let attrs = parser.assert_self_closing_tag("arg").and_then(parse_attr)?;
+    Ok(Arg {
+        name: attrs.get_attr("name")?.clone(),
+        ty: attrs.get_attr("type")?.clone(),
+        summary: attrs.get(&"summary".into()).cloned(),
+        interface: attrs.get(&"interface".into()).cloned(),
+        allow_null: attrs
+            .get(&"allow_null".into())
+            .map(|e| e.parse().cx("invalid `allow-null` value"))
+            .transpose()?,
+        enum_: attrs.get(&"enum".into()).cloned(),
+        desc: peek_description(parser)?,
+    })
+}
+
+fn parse_enum(parser: &mut Parser) -> Result<Enum, Error> {
+    let attrs = parser.assert_open_tag("enum").and_then(parse_attr)?;
+    Ok(Enum {
+        name: attrs.get_attr("name")?.clone(),
+        since: parse_optional_int(&attrs, "since")?,
+        bitfield: attrs
+            .get(&"version".into())
+            .map(|e| e.parse().cx("invalid frozen value"))
+            .transpose()?,
+        desc: peek_description(parser)?,
+        entries: {
+            let mut entries = Vec::with_capacity(4);
+            while !parser.is_close_tag("enum") {
+                let _span = span("<entries>");
+                entries.push(parse_entry(parser)?);
+            }
+            parser.assert_close_tag("enum")?;
+            entries
+        },
+    })
+}
+
+fn parse_entry(parser: &mut Parser) -> Result<Entry, Error> {
+    let attrs = parser.assert_self_closing_tag("entry").and_then(parse_attr)?;
+    Ok(Entry {
+        name: attrs.get_attr("name")?.clone(),
+        value: attrs.get_attr("name")?.clone(),
+        summary: attrs.get(&"summary".into()).cloned(),
+        since: parse_optional_int(&attrs, "since")?,
+        dep_since: parse_optional_int(&attrs, "deprecated-since")?,
+        desc: peek_description(parser)?,
+    })
+}
+
+fn peek_description(parser: &mut Parser) -> Result<Option<Description>, Error> {
+    if parser.peek_tag_name()? != "description" {
+        return Ok(None);
     }
 
-    fn poll_next_tag_inner(&mut self) -> Poll<(Tag, Str)> {
-        let (b'<', bytes) = some!(self.buffer.split_first()) else {
-            unreachable!("internal error: not in `<` boundary")
+    let (_, attrs, self_closing) = parser.next_tag()?;
+    let attrs = parse_attr(attrs)?;
+    let summary = attrs.get_attr("summary")?.clone();
+
+    // there is self closing description
+    let content = if self_closing {
+        Str::from_static("")
+    } else {
+        parser.next_plain()?
+    };
+
+    if !self_closing {
+        parser.assert_close_tag("description")?;
+    }
+
+    Ok(Some(Description {
+        summary,
+        content,
+    }))
+}
+
+fn parse_optional_int(
+    attrs: &HashMap<Str, Str>,
+    cx: &'static str,
+) -> Result<Option<std::num::NonZeroU32>, Error> {
+    attrs
+        .get(&cx.into())
+        .map(|value| match value.parse() {
+            Ok(ok) => Ok(ok),
+            Err(_) => err!("invalid {cx} value: `{value}`"),
+        })
+        .transpose()
+}
+
+// ===== xml parser =====
+
+fn parse_tag(string: Str) -> Result<(Str, Str, bool), Error> {
+    let len = string.find([' ', '>']).cx("expected space or `>`")?;
+    let self_close = &string[string.len() - 2..] == "/>";
+    let name = string.slice(1..len);
+    let attrs = string.slice(len..);
+    Ok((name, attrs, self_close))
+}
+
+fn parse_attr(mut string: Str) -> Result<HashMap<Str, Str>, Error> {
+    std::iter::from_fn(|| {
+        let name_len = string.find('=')?;
+        let key = string.split_to(name_len).trim_start();
+        if &string[..2] != "=\"" {
+            return Some(err!("bad attribute separator for `{key}`"));
+        }
+        string.advance(2);
+        let Some(len) = string.find('"') else {
+            return Some(err!("no closing value for `{key}`"));
         };
-        let is_closing = bytes[0] == b'/';
+        let val = string.split_to(len);
+        string.advance(1);
+        Some(Ok((key, val)))
+    })
+    .collect()
+}
 
-        // get the tag
-        let tag_len = some!(bytes.iter().position(tag_close)) + 1;
+struct Parser {
+    string: Str,
+}
 
-        // get plain content
-        let bytes = &bytes[tag_len..];
-        let content_len = some!(bytes.iter().position(tag_open));
-
-        // skip comment, if there is comment mixed with plain content, well shiver my timber
-        let mut skip_len = 0;
+impl Parser {
+    fn skip_plain(&mut self) -> Result<(), Error> {
         loop {
-            let bytes = &bytes[content_len + skip_len..];
-            if *some!(bytes.get(1)) != b'!' {
+            let adv = self.string.find('<').cx("expected `<`")?;
+            self.string.advance(adv);
+            if !self.string.starts_with("<!--") {
                 break;
             }
-            let read = some!(bytes[2..].iter().position(tag_open));
-            skip_len += 2 + read;
-        }
-
-        // no more pending
-        self.buffer.advance(1); // skip '<'
-        let tag = self.buffer.split_to(tag_len);
-        let content = self.buffer.split_to(content_len);
-        self.buffer.advance(skip_len);
-
-        let tag = Tag {
-            is_closing,
-            string: tag,
-        };
-        Ready((tag, content))
-    }
-}
-
-// ===== Tag =====
-
-#[derive(Debug)]
-pub struct Tag {
-    is_closing: bool,
-    string: Str,
-}
-
-impl Tag {
-    pub fn is_closing(&self) -> bool {
-        self.is_closing
-    }
-
-    pub fn is_self_close(&self) -> bool {
-        self.string.as_bytes()[self.string.len() - 2] == b'/'
-    }
-
-    // pub fn name(&self) -> Bytes {
-    //     Bytes::new(self.name_slice())
-    // }
-
-    // pub fn name_str(&self) -> &str {
-    //     let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
-    //     &self.string[..len]
-    // }
-
-    pub fn attrs(&self) -> Attrs {
-        let len = self.string.find(TAG_NAME_DELIM).expect("parser error");
-        let mut string = self.string.slice(len..);
-        string.trim_ascii_start_mut();
-        Attrs { string, }
-    }
-}
-
-// ===== Attributes =====
-
-pub struct Attrs {
-    string: Str,
-}
-
-impl Attrs {
-    pub fn next(&mut self, name: &str) -> Attr {
-        if *self.string.first().unwrap() == b'>' {
-            panic!("end of attribute, expect: `{name}`");
-        }
-        if let peek = self.peek().unwrap() && peek != name {
-            panic!("expect attribute `{name}` found `{peek}`");
-        }
-        self.next_inner()
-    }
-
-    // pub fn next_if(&mut self, name: &str) -> Option<Attr> {
-    //     if *self.string.first().unwrap() == b'>' {
-    //         return None;
-    //     }
-    //     if self.peek()? != name {
-    //         return None;
-    //     }
-    //     Some(self.next_inner())
-    // }
-
-    pub fn peek(&self) -> Option<&str> {
-        if *self.string.first().unwrap() == b'>' {
-            return None;
-        }
-        Some(self.string.split_once('=').expect("no value attr").0)
-    }
-
-    fn next_inner(&mut self) -> Attr {
-        let len = self.string.find('"').expect("no value attr");
-        let len = self.string[len + 1..].find('"').expect("unclosed value quote") + len + 2;
-        let string = self.string.split_to(len);
-        self.string.trim_ascii_start_mut();
-        if self.string.starts_with('/') {
             self.string.advance(1);
         }
-        Attr { string }
+        Ok(())
+    }
+
+    fn next_tag_string(&mut self) -> Result<Str, Error> {
+        self.skip_plain()?;
+        let end_idx = self.string.find('>').cx("expected `>`")?;
+        let len = end_idx + 1;
+        Ok(self.string.split_to(len))
+    }
+
+    fn next_tag(&mut self) -> Result<(Str, Str, bool), Error> {
+        self.next_tag_string().and_then(parse_tag)
+    }
+
+    fn next_plain(&mut self) -> Result<Str, Error> {
+        let len = self.string.find('<').cx("expected `<`")?;
+        Ok(self.string.split_to(len))
+    }
+
+    fn peek_tag_name(&self) -> Result<&str, Error> {
+        let mut string = &*self.string;
+        loop {
+            let offset = string.find('<').cx("expected `<`")?;
+            string = &string[offset..];
+            if !string.starts_with("<!--") {
+                break;
+            }
+            string = &string[1..];
+        }
+        let len = string.find([' ', '>']).cx("expected `>`")?;
+        Ok(&string[1..len])
+    }
+
+    fn is_close_tag(&self, expected: &str) -> bool {
+        fn inner(string: &str, expected: &str) -> Option<()> {
+            let offset = string.find('<')?;
+            let name = string[offset + 1..].strip_prefix('/')?;
+            name.starts_with(expected).then_some(())
+        }
+        inner(&self.string, expected).is_some()
+    }
+
+    fn assert_open_tag(&mut self, expected: &str) -> Result<Str, Error> {
+        let (name, attrs, self_closing) = self.next_tag()?;
+        if &*name != expected {
+            return err!("expected `<{expected}>` opening tag, found `<{name}>`");
+        }
+        if self_closing {
+            return err!("unexpected `<{expected}>` as self closing tag");
+        }
+        Ok(attrs)
+    }
+
+    fn assert_close_tag(&mut self, expected: &str) -> Result<(), Error> {
+        let tag_string = self.next_tag_string()?;
+        let (tag, rest) = tag_string.split_at(2);
+        if tag != "</" {
+            return err!("expected `<{expected}>` as closing tag");
+        }
+        let (name, _) = rest.split_at(rest.len() - 1);
+        if name != expected {
+            return err!("expected `<{expected}>` closing tag, found `<{name}>`");
+        }
+        Ok(())
+    }
+
+    fn assert_self_closing_tag(&mut self, expected: &str) -> Result<Str, Error> {
+        let (name, attrs, self_closing) = self.next_tag()?;
+        if &*name != expected {
+            return err!("expected `<{expected}>` opening tag, found `<{name}>`");
+        }
+        if !self_closing {
+            return err!("expected `<{expected}>` as self closing tag");
+        }
+        Ok(attrs)
     }
 }
 
-pub struct Attr {
-    string: Str,
+trait MapExt {
+    fn get_attr(&self, cx: &'static str) -> Result<Str, Error>;
 }
 
-impl Attr {
-    // pub fn name(&self) -> Bytes {
-    //     Bytes::new(self.name_slice())
-    // }
-    //
-    // pub fn name_str(&self) -> &str {
-    //     let len = self.string.find('=').expect("no value attribute");
-    //     &self.string[..len]
-    // }
-
-    pub fn value(&self) -> Str {
-        let len = self
-            .string
-            .find('=')
-            .expect("no value attribute");
-        self.string.slice(len + 2..self.string.len() - 1)
-    }
-
-    // pub fn value_bytes(&self) -> &[u8] {
-    //     let len = self
-    //         .string
-    //         .find('=')
-    //         .expect("no value attribute");
-    //     &self.string.as_bytes()[len + 2..self.string.len() - 1]
-    // }
-    //
-    // pub fn value_str(&self) -> &str {
-    //     let len = self
-    //         .string
-    //         .find('=')
-    //         .expect("no value attribute");
-    //     &self.string[len + 2..self.string.len() - 1]
-    // }
-}
-
-impl std::fmt::Debug for Parser {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("Parser")
-            .field(
-                "buffer",
-                &&self.buffer[..cmp::min(self.buffer.len(), 512)],
-            )
-            .finish()
+impl MapExt for HashMap<Str, Str> {
+    fn get_attr(&self, cx: &'static str) -> Result<Str, Error> {
+        match self.get(&cx.into()) {
+            Some(ok) => Ok(ok.clone()),
+            None => err!("no `{cx}`")
+        }
     }
 }
