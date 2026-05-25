@@ -2,7 +2,7 @@ use std::ptr::NonNull;
 use std::{mem, slice};
 
 use crate::alloc;
-use crate::buffer::SmallBuf;
+use crate::small_buf::SmallBuf;
 use crate::conn::Connection;
 use crate::epoll::Epoll;
 use crate::objects::Objects;

@@ -42,6 +42,7 @@ mod listener;
 mod alloc;
 mod buffer;
 mod fd_buffer;
+mod small_buf;
 // ===== app =======
 mod objects;
 mod wayland;
