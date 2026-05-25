@@ -59,12 +59,21 @@ const MAX_EPOLL_EVENT: usize = 128;
 const MAX_FD: u32 = 32;
 const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
+pub struct FatalError;
+
+impl<E: std::fmt::Display> From<E> for FatalError {
+    fn from(value: E) -> Self {
+        log::error!(setup, "{value}");
+        Self
+    }
+}
+
 fn main() -> ExitCode {
     let _guard = log::init();
     <_>::from(event_loop().is_err() as u8)
 }
 
-fn event_loop() -> Result<(), PrintError> {
+fn event_loop() -> Result<(), FatalError> {
     // ===== os =====
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
@@ -168,7 +177,12 @@ fn event_loop() -> Result<(), PrintError> {
                 let result = if id.is_display() {
                     handle_wl_display(op, body, &mut client, &mut write_buffer)
                 } else {
-                    handle_message(id, op, body, &mut client)
+                    let state = State {
+                        write_buffer: &mut write_buffer,
+                        read_fd: &mut fds_buffer,
+                        write_fd: &mut write_fd,
+                    };
+                    handle_message(id, op, body, &mut client, state)
                 };
                 // TODO: checks for recoverable error
                 if let Err(err) = result {
@@ -272,7 +286,13 @@ fn handle_wl_display(
     Ok(())
 }
 
-fn handle_message(id: Id, op: u16, body: &[u8], client: &mut ClientMut<'_>) -> Result<(), WlError> {
+fn handle_message(
+    id: Id,
+    op: u16,
+    body: &[u8],
+    client: &mut ClientMut<'_>,
+    state: State,
+) -> Result<(), WlError> {
     use wayland::Interface as I;
 
     let Some(object) = client.objects_mut().get_mut(id) else {
@@ -285,49 +305,55 @@ fn handle_message(id: Id, op: u16, body: &[u8], client: &mut ClientMut<'_>) -> R
         I::WlRegistry => {
             use wayland::wl_registry::RequestOp as Op;
             match Op::from_request(op)? {
-                Op::Bind(decoder) => {
-                    let bind = decoder.decode(body)?;
-                    log::trace!(
-                        client,
-                        "<- wl_registry@bind {{ name:{}, id:{}, global: ({}, v{}) }}",
-                        bind.name,
-                        bind.id,
-                        bind.id_name,
-                        bind.id_version,
-                    );
-                    let Some((bind_name, version, iface)) = wayland::GLOBALS.get(bind.name as usize) else {
-                        return Err(WlError::UnknownBind);
-                    };
-                    if bind.id_name != *bind_name {
-                        return Err(WlError::UnknownBind);
-                    }
-                    if bind.id_version > *version as u32 {
-                        return Err(WlError::UnknownBind);
-                    }
-                    client.objects_mut().insert(bind.id, *iface)?;
-                }
+                Op::Bind(d) => EventHandler::handle(state, d.decode(body)?, client),
             }
         }
         I::WlShm => {
-            log::error!(client, "`{iface:?}` is not yet implemented");
-            return WlError::todo()
+            log::error!(client, "`{iface:?}::{op}` is not yet implemented");
+            WlError::todo()
         }
         _ => {
-            log::error!(client, "`{iface:?}` is not yet implemented");
-            return WlError::todo()
-        },
+            log::error!(client, "`{iface:?}::{op}` is not yet implemented");
+            WlError::todo()
+        }
     }
-
-    Ok(())
 }
 
-// ===== Error =====
+// ===== EventHandler =====
 
-pub struct PrintError;
+use wayland::wl_registry::Bind;
 
-impl<E: std::fmt::Display> From<E> for PrintError {
-    fn from(value: E) -> Self {
-        log::error!(setup, "{value}");
-        Self
+#[allow(dead_code)]
+struct State<'a> {
+    write_buffer: &'a mut Buffer,
+    read_fd: &'a mut Buffer,
+    write_fd: &'a mut FdBuffer,
+}
+
+trait EventHandler<Event> {
+    fn handle(self, event: Event, client: &mut ClientMut) -> Result<(), WlError>;
+}
+
+impl<'a> EventHandler<Bind<'a>> for State<'a> {
+    fn handle(self, bind: Bind<'a>, client: &mut ClientMut) -> Result<(), WlError> {
+        log::trace!(
+            client,
+            "<- wl_registry@bind {{ name:{}, id:{}, global: ({}, v{}) }}",
+            bind.name,
+            bind.id,
+            bind.id_name,
+            bind.id_version,
+        );
+        let Some((bind_name, version, iface)) = wayland::GLOBALS.get(bind.name as usize) else {
+            return Err(WlError::UnknownBind);
+        };
+        if bind.id_name != *bind_name {
+            return Err(WlError::UnknownBind);
+        }
+        if bind.id_version > *version as u32 {
+            return Err(WlError::UnknownBind);
+        }
+        client.objects_mut().insert(bind.id, *iface)?;
+        Ok(())
     }
 }
