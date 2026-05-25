@@ -43,10 +43,24 @@ impl Objects {
     }
 
     pub fn insert_object<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
-        self.insert(object.id(), O::INTERFACE)
+        self.insert_inner(
+            object.id(),
+            Some(Object {
+                interface: O::INTERFACE,
+            }),
+        )
     }
 
     pub fn insert(&mut self, id: Id, interface: Interface) -> Result<(), WlError> {
+        self.insert_inner(id, Some(Object { interface }))
+    }
+
+    /// This has the same effect of inserting the id and immediately remove it.
+    pub fn use_one(&mut self, id: Id) -> Result<(), WlError> {
+        self.insert_inner(id, None)
+    }
+
+    fn insert_inner(&mut self, id: Id, object: Option<Object>) -> Result<(), WlError> {
         debug_assert!(!id.is_display());
         let idx = id.to_u32() - 2;
 
@@ -57,7 +71,7 @@ impl Objects {
         }
 
         // SAFETY: `idx <= len`, and the `len`-nth entry is always initialized
-        let entry_mut = unsafe { self.ptr.add(idx as usize).replace(Some(Object { interface })) };
+        let entry_mut = unsafe { self.ptr.add(idx as usize).replace(object) };
         if entry_mut.is_some() {
             return Err(WlError::InvalidNewId);
         }

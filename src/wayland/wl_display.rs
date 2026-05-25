@@ -29,6 +29,10 @@ pub struct Sync {
 }
 
 impl Sync {
+    pub fn wl_callback_id(&self) -> Id {
+        self.wl_callback_id
+    }
+
     /// Write `wl_callback::done` and `wl_display::delete_id`  event.
     pub fn reply(self, callback_data: u32, buffer: &mut Buffer) {
         unsafe {

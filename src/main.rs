@@ -311,7 +311,9 @@ impl<'a> Header<'a> {
 
         match Op::from_request(op)? {
             Op::Sync(decoder) => {
-                decoder.decode(body, read_fd)?.reply(0, state.write_buffer);
+                let sync = decoder.decode(body, read_fd)?;
+                state.client.objects_mut().use_one(sync.wl_callback_id())?;
+                sync.reply(0, state.write_buffer);
                 log::trace!(client, "<- wl_display::sync");
             }
             Op::GetRegistry(decoder) => {
@@ -371,8 +373,7 @@ impl<'a> EventHandler<Bind<'a>> for State<'a> {
         if bind.id_version > *version as u32 {
             return Err(WlError::UnknownBind);
         }
-        self.client.objects_mut().insert(bind.id, *iface)?;
-        Ok(())
+        self.client.objects_mut().insert(bind.id, *iface)
     }
 }
 
