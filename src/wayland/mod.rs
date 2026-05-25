@@ -13,7 +13,7 @@ pub mod wl_display;
 pub mod wl_registry;
 pub mod wl_shm;
 pub mod wl_seat;
-pub mod wl_data;
+pub mod wl_data_device_manager;
 
 mod interface;
 

@@ -281,7 +281,7 @@ impl<'a> Header<'a> {
         use wayland::InterfaceOp as Op;
         use wayland::wl_registry::RequestOp as RegOp;
         use wayland::wl_shm::RequestOp as ShmOp;
-        use wayland::wl_data::RequestOp as DdmOp;
+        use wayland::wl_data_device_manager::RequestOp as DdmOp;
 
         if self.id.is_display() {
             return self.handle_wl_display(read_fd, state);
@@ -302,10 +302,12 @@ impl<'a> Header<'a> {
             }
             Op::WlShm(reg) => match reg.request(op)? {
                 ShmOp::CreatePool(d) => state.handle(d.decode(body, read_fd)?),
+                ShmOp::Release(_) => WlError::todo(),
             }
             Op::WlDataDeviceManager(reg) => match reg.request(op)? {
                 DdmOp::CreateDataSource => WlError::todo(),
                 DdmOp::GetDataDevice(d) => state.handle(d.decode(body, read_fd)?),
+                DdmOp::Release => WlError::todo(),
             }
             _ => {
                 log::error!(client, "`{iface:?}::{op}` is not yet implemented");
@@ -352,7 +354,7 @@ impl<'a> Header<'a> {
 
 use wayland::wl_registry::Bind;
 
-use crate::wayland::{wl_data, wl_shm};
+use crate::wayland::{wl_data_device_manager, wl_shm};
 
 #[allow(dead_code)]
 struct State<'a> {
@@ -408,8 +410,8 @@ impl EventHandler<wl_shm::CreatePool> for State<'_> {
     }
 }
 
-impl EventHandler<wl_data::GetDataDevice> for State<'_> {
-    fn handle(self, event: wl_data::GetDataDevice) -> Result<(), WlError> {
+impl EventHandler<wl_data_device_manager::GetDataDevice> for State<'_> {
+    fn handle(self, event: wl_data_device_manager::GetDataDevice) -> Result<(), WlError> {
         let _ = event.seat;
         log::trace!(
             client,

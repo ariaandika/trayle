@@ -11,6 +11,7 @@ impl FromOpCode for Op {
         use RequestOp as Op;
         match op {
             0 => Ok(Op::CreatePool(Decoder::new())),
+            1 => Ok(Op::Release(Decoder::new())),
             _ => Err(WlError::UnknownOp),
         }
     }
@@ -18,6 +19,7 @@ impl FromOpCode for Op {
 
 pub enum RequestOp {
     CreatePool(Decoder<CreatePool>),
+    Release(Decoder<Release>),
 }
 
 // ===== CreatePool =====
@@ -38,6 +40,18 @@ impl Decode for CreatePool {
             fd: reader.read_fd()?,
             size: reader.read_int()?,
         })
+    }
+}
+
+// ===== Release =====
+
+pub struct Release;
+
+impl Decode for Release {
+    type Output<'a> = Self;
+
+    fn decode<'a>(_: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self)
     }
 }
 

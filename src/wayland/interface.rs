@@ -1,4 +1,4 @@
-use crate::wayland::{Op, wl_data, wl_registry, wl_shm};
+use crate::wayland::{Op, wl_data_device_manager, wl_registry, wl_shm};
 
 // commented entry are exists but never constructed
 #[derive(Debug, Clone, Copy)]
@@ -53,7 +53,7 @@ pub enum InterfaceOp {
     WlDataOffer(Op<wl_registry::Op>),
     WlDataSource(Op<wl_registry::Op>),
     WlDataDevice(Op<wl_registry::Op>),
-    WlDataDeviceManager(Op<wl_data::Op>),
+    WlDataDeviceManager(Op<wl_data_device_manager::Op>),
     // WlShell, /// deprecated
     WlShellSurface(Op<wl_registry::Op>),
     WlSurface(Op<wl_registry::Op>),

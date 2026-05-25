@@ -12,6 +12,7 @@ impl FromOpCode for Op {
         match op {
             0 => Ok(RequestOp::CreateDataSource),
             1 => Ok(RequestOp::GetDataDevice(Decoder::new())),
+            2 => Ok(RequestOp::Release),
             _ => Err(WlError::UnknownOp),
         }
     }
@@ -20,6 +21,7 @@ impl FromOpCode for Op {
 pub enum RequestOp {
     CreateDataSource,
     GetDataDevice(Decoder<GetDataDevice>),
+    Release,
 }
 
 // ===== GetDataDevice =====
