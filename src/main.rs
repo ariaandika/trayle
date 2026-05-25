@@ -281,6 +281,7 @@ impl<'a> Header<'a> {
         use wayland::InterfaceOp as Op;
         use wayland::wl_registry::RequestOp as RegOp;
         use wayland::wl_shm::RequestOp as ShmOp;
+        use wayland::wl_data::RequestOp as DdmOp;
 
         if self.id.is_display() {
             return self.handle_wl_display(read_fd, state);
@@ -301,6 +302,10 @@ impl<'a> Header<'a> {
             }
             Op::WlShm(reg) => match reg.request(op)? {
                 ShmOp::CreatePool(d) => state.handle(d.decode(body, read_fd)?),
+            }
+            Op::WlDataDeviceManager(reg) => match reg.request(op)? {
+                DdmOp::CreateDataSource => WlError::todo(),
+                DdmOp::GetDataDevice(d) => state.handle(d.decode(body, read_fd)?),
             }
             _ => {
                 log::error!(client, "`{iface:?}::{op}` is not yet implemented");
@@ -347,7 +352,7 @@ impl<'a> Header<'a> {
 
 use wayland::wl_registry::Bind;
 
-use crate::wayland::wl_shm;
+use crate::wayland::{wl_data, wl_shm};
 
 #[allow(dead_code)]
 struct State<'a> {
@@ -364,7 +369,7 @@ impl<'a> EventHandler<Bind<'a>> for State<'a> {
     fn handle(self, bind: Bind<'a>) -> Result<(), WlError> {
         log::trace!(
             client,
-            "<- wl_registry@bind {{ name:{}, id:{}, global: ({}, v{}) }}",
+            "<- wl_registry::bind {{ name:{}, id:{}, global: ({}, v{}) }}",
             bind.name,
             bind.id,
             bind.id_name,
@@ -394,11 +399,27 @@ impl EventHandler<wl_shm::CreatePool> for State<'_> {
     fn handle(self, bind: wl_shm::CreatePool) -> Result<(), WlError> {
         log::trace!(
             client,
-            "<- wl_shm@create_pool {{ id:{}, fd:{}, size:{} }}",
+            "<- wl_shm::create_pool {{ id:{}, fd:{}, size:{} }}",
             bind.id,
             bind.fd,
             bind.size,
         );
         WlError::todo()
+    }
+}
+
+impl EventHandler<wl_data::GetDataDevice> for State<'_> {
+    fn handle(self, event: wl_data::GetDataDevice) -> Result<(), WlError> {
+        let _ = event.seat;
+        log::trace!(
+            client,
+            "<- wl_data_device_manager::get_data_device {{ id:{}, seat:{} }}",
+            event.id,
+            event.seat
+        );
+        self.client
+            .objects_mut()
+            .insert(event.id, wayland::Interface::WlDataDevice)?;
+        Ok(())
     }
 }
