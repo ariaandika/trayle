@@ -104,6 +104,7 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
         E::InvalidNewId => SEMANTIC,
         E::ZeroId => SEMANTIC,
         E::Null => SEMANTIC,
+        E::MissingFd => MALFORMED,
         E::Internal => (Id::wl_display(), IMPLEMENTATION),
     };
 

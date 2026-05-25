@@ -1,4 +1,4 @@
-use crate::wayland::{WlError, Id, roundup4};
+use crate::{fd_buffer::FdBuffer, wayland::{Id, WlError, roundup4}};
 
 // ===== trait =====
 
@@ -25,8 +25,12 @@ impl<D> Decoder<D> {
 }
 
 impl<D: Decode> Decoder<D> {
-    pub fn decode(self, bytes: &[u8]) -> Result<D::Output<'_>, WlError> {
-        let mut reader = Reader::new(bytes);
+    pub fn decode<'a>(
+        self,
+        bytes: &'a [u8],
+        read_fd: &'a mut FdBuffer,
+    ) -> Result<D::Output<'a>, WlError> {
+        let mut reader = Reader::new(bytes, read_fd);
         let ok = D::decode(&mut reader)?;
         if reader.bytes.is_empty() {
             Ok(ok)
@@ -40,14 +44,15 @@ impl<D: Decode> Decoder<D> {
 
 pub struct Reader<'a> {
     bytes: &'a [u8],
+    read_fd: &'a mut FdBuffer,
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(bytes: &'a [u8]) -> Self {
-        Self { bytes }
+    pub fn new(bytes: &'a [u8], read_fd: &'a mut FdBuffer) -> Self {
+        Self { bytes, read_fd }
     }
 
-    pub fn as_array<const N: usize>(&mut self) -> Result<[u8; N], WlError> {
+    fn as_array<const N: usize>(&mut self) -> Result<[u8; N], WlError> {
         let Some((chunk, rest)) = self.bytes.split_first_chunk() else {
             return Err(WlError::InvalidSize);
         };
@@ -57,6 +62,18 @@ impl<'a> Reader<'a> {
 
     pub fn read<T: PrimitiveDecode<'a>>(&mut self) -> Result<T, WlError> {
         T::decode(self)
+    }
+
+    pub fn read_fd(&mut self) -> Result<i32, WlError> {
+        match self.read_fd.pop_front() {
+            Some(ok) => Ok(ok),
+            None => Err(WlError::MissingFd),
+        }
+    }
+
+    /// Not as generic `read` to separate with `i32` fd.
+    pub fn read_int(&mut self) -> Result<i32, WlError> {
+        Ok(i32::from_ne_bytes(self.as_array()?))
     }
 
     fn read_bytes(&mut self, len: usize) -> Result<&'a [u8], WlError> {

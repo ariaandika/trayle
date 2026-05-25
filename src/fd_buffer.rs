@@ -66,12 +66,12 @@ impl FdBuffer {
         self.len == 0
     }
 
-    // fn advance_one(&mut self) {
-    //     debug_assert!(self.len != 0);
-    //     self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
-    //     self.off += 1;
-    //     self.len -= 1;
-    // }
+    fn advance_one(&mut self) {
+        debug_assert!(self.len != 0);
+        self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
+        self.off += 1;
+        self.len -= 1;
+    }
 
     /// # Safety
     ///
@@ -94,15 +94,15 @@ impl FdBuffer {
     //     }
     //     true
     // }
-    //
-    // pub fn pop_front(&mut self) -> Option<RawFd> {
-    //     if self.len == 0 {
-    //         return None;
-    //     }
-    //     let fd = unsafe { self.ptr.cast().read_unaligned() };
-    //     self.advance_one();
-    //     Some(fd)
-    // }
+
+    pub fn pop_front(&mut self) -> Option<RawFd> {
+        if self.len == 0 {
+            return None;
+        }
+        let fd = unsafe { self.ptr.cast().read_unaligned() };
+        self.advance_one();
+        Some(fd)
+    }
 
     /// Clear the buffer, retaining leftover capacity.
     ///

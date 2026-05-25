@@ -1,4 +1,4 @@
-use crate::wayland::{Op, wl_registry};
+use crate::wayland::{Op, wl_registry, wl_shm};
 
 // commented entry are exists but never constructed
 #[derive(Debug, Clone, Copy)]
@@ -48,7 +48,7 @@ pub enum InterfaceOp {
     // WlCallback,
     WlCompositor(Op<wl_registry::Op>),
     WlShmPool(Op<wl_registry::Op>),
-    WlShm(Op<wl_registry::Op>),
+    WlShm(Op<wl_shm::Op>),
     WlBuffer(Op<wl_registry::Op>),
     WlDataOffer(Op<wl_registry::Op>),
     WlDataSource(Op<wl_registry::Op>),

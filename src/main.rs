@@ -159,10 +159,9 @@ fn event_loop() -> Result<(), FatalError> {
                     Ready(Ok(header)) => {
                         let id = header.id;
                         let total_len = header.body.len() + 8;
-                        match header.handle(State {
+                        match header.handle(&mut read_fd, State {
                             client,
                             write_buffer: &mut write_buffer,
-                            read_fd: &mut read_fd,
                             write_fd: &mut write_fd,
                         }) {
                             Ok(()) => read_buffer.advance(total_len as u32),
@@ -273,12 +272,13 @@ impl<'a> Header<'a> {
         Ready(Ok(Self { id, op, body }))
     }
 
-    fn handle(self, state: State) -> Result<(), WlError> {
+    fn handle(self, read_fd: &mut FdBuffer, state: State) -> Result<(), WlError> {
         use wayland::InterfaceOp as Op;
         use wayland::wl_registry::RequestOp as RegOp;
+        use wayland::wl_shm::RequestOp as ShmOp;
 
         if self.id.is_display() {
-            return self.handle_wl_display(state);
+            return self.handle_wl_display(read_fd, state);
         }
 
         let Header { id, op, body } = self;
@@ -291,7 +291,10 @@ impl<'a> Header<'a> {
 
         match iface.op() {
             Op::WlRegistry(reg) => match reg.request(op)? {
-                RegOp::Bind(d) => state.handle(d.decode(body)?),
+                RegOp::Bind(d) => state.handle(d.decode(body, read_fd)?),
+            }
+            Op::WlShm(reg) => match reg.request(op)? {
+                ShmOp::CreatePool(d) => state.handle(d.decode(body, read_fd)?),
             }
             _ => {
                 log::error!(client, "`{iface:?}::{op}` is not yet implemented");
@@ -300,7 +303,7 @@ impl<'a> Header<'a> {
         }
     }
 
-    fn handle_wl_display(self, state: State) -> Result<(), WlError> {
+    fn handle_wl_display(self, read_fd: &mut FdBuffer, state: State) -> Result<(), WlError> {
         use wayland::WlObject;
         use wayland::wl_display::Op;
 
@@ -308,11 +311,11 @@ impl<'a> Header<'a> {
 
         match Op::from_request(op)? {
             Op::Sync(decoder) => {
-                decoder.decode(body)?.reply(0, state.write_buffer);
+                decoder.decode(body, read_fd)?.reply(0, state.write_buffer);
                 log::trace!(client, "<- wl_display::sync");
             }
             Op::GetRegistry(decoder) => {
-                let get_registry = decoder.decode(body)?;
+                let get_registry = decoder.decode(body, read_fd)?;
                 let wl_registry = get_registry.wl_registry();
                 state.client.objects_mut().insert_object(&wl_registry)?;
 
@@ -336,11 +339,12 @@ impl<'a> Header<'a> {
 
 use wayland::wl_registry::Bind;
 
+use crate::wayland::wl_shm;
+
 #[allow(dead_code)]
 struct State<'a> {
     client: &'a mut Client,
     write_buffer: &'a mut Buffer,
-    read_fd: &'a mut FdBuffer,
     write_fd: &'a mut FdBuffer,
 }
 
@@ -369,5 +373,18 @@ impl<'a> EventHandler<Bind<'a>> for State<'a> {
         }
         self.client.objects_mut().insert(bind.id, *iface)?;
         Ok(())
+    }
+}
+
+impl EventHandler<wl_shm::CreatePool> for State<'_> {
+    fn handle(self, bind: wl_shm::CreatePool) -> Result<(), WlError> {
+        log::trace!(
+            client,
+            "<- wl_shm@create_pool {{ id:{}, fd:{}, size:{} }}",
+            bind.id,
+            bind.fd,
+            bind.size,
+        );
+        WlError::todo()
     }
 }
