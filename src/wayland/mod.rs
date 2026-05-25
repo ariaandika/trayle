@@ -1,7 +1,10 @@
 pub use id::Id;
+pub use op::Op;
 pub use error::WlError;
+pub use interface::{Interface, InterfaceOp};
 
 mod id;
+mod op;
 mod error;
 mod decode;
 mod encode;
@@ -9,12 +12,16 @@ mod encode;
 pub mod wl_display;
 pub mod wl_registry;
 
+mod interface;
+
 mod prelude {
-    pub use super::{WlObject, Interface};
+    pub use super::WlObject;
     pub use super::id::Id;
+    pub use super::op::FromOpCode;
     pub use super::error::WlError;
     pub use super::decode::{Reader, Decode, Decoder};
     pub use super::encode::{PtrWrite, Encoder};
+    pub use super::interface::Interface;
     pub use crate::buffer::Buffer;
 
     pub(super) use super::roundup4;
@@ -24,44 +31,6 @@ pub trait WlObject {
     const INTERFACE: Interface;
 
     fn id(&self) -> Id;
-}
-
-// commented entry are exists but never constructed
-#[derive(Debug, Clone, Copy)]
-#[repr(u16)]
-#[allow(dead_code)]
-pub enum Interface {
-    // WlDisplay,
-    WlRegistry,
-    // WlCallback,
-    WlCompositor,
-    WlShmPool,
-    WlShm,
-    WlBuffer,
-    WlDataOffer,
-    WlDataSource,
-    WlDataDevice,
-    WlDataDeviceManager,
-    // WlShell, /// deprecated
-    WlShellSurface,
-    WlSurface,
-    WlSeat,
-    WlPointer,
-    WlKeyboard,
-    WlTouch,
-    WlOutput,
-    WlRegion,
-    WlSubCompositor,
-    WlSubSurface,
-    WlFixes,
-    ZwpLinuxDmabufV1,
-    ZwpLinuxBufferParamsV1,
-    ZwpLinuxDmabufFeedbackV1,
-    XdgWmBase,
-    XdgPositioner,
-    XdgSurface,
-    XdgToplevel,
-    XdgPopup,
 }
 
 pub static GLOBALS: [(&str, u16, Interface); 9] = [

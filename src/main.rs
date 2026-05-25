@@ -275,7 +275,8 @@ impl<'a> Header<'a> {
     }
 
     fn handle(self, state: State) -> Result<(), WlError> {
-        use wayland::Interface as I;
+        use wayland::InterfaceOp as Op;
+        use wayland::wl_registry::RequestOp as RegOp;
 
         if self.id.is_display() {
             return self.handle_wl_display(state);
@@ -289,12 +290,9 @@ impl<'a> Header<'a> {
 
         let iface = object.interface();
 
-        match iface {
-            I::WlRegistry => {
-                use wayland::wl_registry::RequestOp as Op;
-                match Op::from_request(op)? {
-                    Op::Bind(d) => state.handle(d.decode(body)?),
-                }
+        match iface.op() {
+            Op::WlRegistry(reg) => match reg.request(op)? {
+                RegOp::Bind(d) => state.handle(d.decode(body)?),
             }
             _ => {
                 log::error!(client, "`{iface:?}::{op}` is not yet implemented");

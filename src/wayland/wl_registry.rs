@@ -37,17 +37,22 @@ impl WlRegistry {
 
 // ===== Op =====
 
-pub enum RequestOp {
-    Bind(Decoder<Bind<'static>>),
-}
+pub struct Op;
 
-impl RequestOp {
-    pub fn from_request(op: u16) -> Result<RequestOp, WlError> {
+impl FromOpCode for Op {
+    type RequestOp = RequestOp;
+
+    fn from_request_op(op: u16) -> Result<Self::RequestOp, WlError> {
+        use RequestOp as Op;
         match op {
-            0 => Ok(Self::Bind(Decoder::new())),
+            0 => Ok(Op::Bind(Decoder::new())),
             _ => Err(WlError::UnknownOp),
         }
     }
+}
+
+pub enum RequestOp {
+    Bind(Decoder<Bind<'static>>),
 }
 
 // ===== Bind =====
