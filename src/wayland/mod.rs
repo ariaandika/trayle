@@ -12,6 +12,7 @@ mod encode;
 pub mod wl_display;
 pub mod wl_registry;
 pub mod wl_shm;
+pub mod wl_seat;
 
 mod interface;
 

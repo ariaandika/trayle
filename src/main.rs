@@ -31,6 +31,7 @@ use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
+use wayland::wl_seat::Capability;
 
 // ===== os ========
 mod errno;
@@ -57,6 +58,8 @@ const LISTENER_ID: u64 = STATIC_ID_MASK | 1;
 const SIGFD_ID: u64 = STATIC_ID_MASK | 2;
 
 const MAX_EPOLL_EVENT: usize = 128;
+
+const CAPABILITIES: Capability = Capability::new().add_pointer().add_keyboard();
 
 pub struct FatalError;
 
@@ -167,12 +170,14 @@ fn event_loop() -> Result<(), FatalError> {
                             Ok(()) => read_buffer.advance(total_len as u32),
                             Err(err) => {
                                 encode_error(id, err, &mut write_buffer);
+                                log::error!(client, "{err}");
                                 break Err(());
                             },
                         }
                     },
                     Ready(Err(err)) => {
                         encode_error(Id::wl_display(), err, &mut write_buffer);
+                        log::error!(client, "{err}");
                         break Err(());
                     },
                     Pending => {
@@ -289,6 +294,7 @@ impl<'a> Header<'a> {
 
         let iface = object.interface();
 
+        // this match act as a router
         match iface.op() {
             Op::WlRegistry(reg) => match reg.request(op)? {
                 RegOp::Bind(d) => state.handle(d.decode(body, read_fd)?),
@@ -373,7 +379,14 @@ impl<'a> EventHandler<Bind<'a>> for State<'a> {
         if bind.id_version > *version as u32 {
             return Err(WlError::UnknownBind);
         }
-        self.client.objects_mut().insert(bind.id, *iface)
+        self.client.objects_mut().insert(bind.id, *iface)?;
+
+        // some interface has side-effect after binding
+        if let wayland::Interface::WlSeat = iface {
+            CAPABILITIES.encode(bind.id, self.write_buffer);
+        }
+
+        Ok(())
     }
 }
 
