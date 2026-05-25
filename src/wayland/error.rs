@@ -20,8 +20,8 @@ pub enum WlError {
     Null,
     /// No fd in ancillary data.
     MissingFd,
-    /// Internal compositor error.
-    Internal,
+    /// Not yet implemented.
+    NotYetImplemented,
 }
 
 impl WlError {
@@ -36,13 +36,12 @@ impl WlError {
             Self::ZeroId => "invalid object id of `0`",
             Self::Null => "invalid null value",
             Self::MissingFd => "no fd in ancillary data",
-            Self::Internal => "internal error",
+            Self::NotYetImplemented => "not yet implemented",
         }
     }
 
-    #[allow(unused)]
     pub const fn todo<T>() -> Result<T, WlError> {
-        Err(WlError::Internal)
+        Err(WlError::NotYetImplemented)
     }
 }
 

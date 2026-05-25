@@ -109,7 +109,7 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
         E::ZeroId => SEMANTIC,
         E::Null => SEMANTIC,
         E::MissingFd => MALFORMED,
-        E::Internal => (Id::wl_display(), IMPLEMENTATION),
+        E::NotYetImplemented => (Id::wl_display(), IMPLEMENTATION),
     };
 
     let message = error.message();
