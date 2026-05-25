@@ -38,7 +38,7 @@ impl WlRegistry {
 // ===== Op =====
 
 pub enum RequestOp {
-    Bind(Decoder<marker::Bind>),
+    Bind(Decoder<Bind<'static>>),
 }
 
 impl RequestOp {
@@ -48,10 +48,6 @@ impl RequestOp {
             _ => Err(WlError::UnknownOp),
         }
     }
-}
-
-mod marker {
-    pub struct Bind;
 }
 
 // ===== Bind =====
@@ -64,7 +60,7 @@ pub struct Bind<'a> {
     pub id: Id,
 }
 
-impl Decode for marker::Bind {
+impl Decode for Bind<'static> {
     type Output<'a> = Bind<'a>;
 
     fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
