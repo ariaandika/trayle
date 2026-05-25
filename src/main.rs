@@ -57,8 +57,6 @@ const LISTENER_ID: u64 = STATIC_ID_MASK | 1;
 const SIGFD_ID: u64 = STATIC_ID_MASK | 2;
 
 const MAX_EPOLL_EVENT: usize = 128;
-const MAX_FD: u32 = 32;
-const MAX_FD_SIZE: u32 = MAX_FD * size_of::<i32>() as u32;
 
 pub struct FatalError;
 
@@ -88,8 +86,8 @@ fn event_loop() -> Result<(), FatalError> {
     let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
     let mut read_buffer = Buffer::with_capacity(1024);
     let mut write_buffer = Buffer::with_capacity(1024);
-    let mut fds_buffer = Buffer::with_capacity(MAX_FD_SIZE);
-    let mut write_fd = FdBuffer::new::<16>();
+    let mut read_fd = FdBuffer::new();
+    let mut write_fd = FdBuffer::new();
 
     // ===== app =====
     let mut clients = Clients::with_capacity(8);
@@ -164,7 +162,7 @@ fn event_loop() -> Result<(), FatalError> {
                         match header.handle(State {
                             client,
                             write_buffer: &mut write_buffer,
-                            read_fd: &mut fds_buffer,
+                            read_fd: &mut read_fd,
                             write_fd: &mut write_fd,
                         }) {
                             Ok(()) => read_buffer.advance(total_len as u32),
@@ -179,7 +177,7 @@ fn event_loop() -> Result<(), FatalError> {
                         break Err(());
                     },
                     Pending => {
-                        match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
+                        match client.conn().poll_read(&mut read_buffer, &mut read_fd){
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
                                 log::debug!(client, "{err}");
@@ -342,7 +340,7 @@ use wayland::wl_registry::Bind;
 struct State<'a> {
     client: &'a mut Client,
     write_buffer: &'a mut Buffer,
-    read_fd: &'a mut Buffer,
+    read_fd: &'a mut FdBuffer,
     write_fd: &'a mut FdBuffer,
 }
 

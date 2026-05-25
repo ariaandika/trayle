@@ -1,7 +1,6 @@
-use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::task::Poll;
-use std::{ptr, slice};
+use std::ptr;
 
 use crate::buffer::Buffer;
 use crate::errno::{Errno, simple_errno};
@@ -24,7 +23,11 @@ impl AsRawFd for Connection {
 
 impl Connection {
     /// Read data to the read buffer.
-    pub fn poll_read(&self, buffer: &mut Buffer, fds: &mut Buffer) -> Poll<Result<(), ReadError>> {
+    pub fn poll_read(
+        &self,
+        buffer: &mut Buffer,
+        fds: &mut FdBuffer,
+    ) -> Poll<Result<(), ReadError>> {
         recvmsg(buffer, fds, self.0.as_raw_fd())
     }
 
@@ -48,16 +51,7 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
 
     debug_assert!(!buffer.is_empty());
 
-    let (cmsg_ptr, cmsg_len) = if fds.is_empty() {
-        (ptr::null_mut(), 0)
-    } else {
-        let cmsg = fds.as_cmsg();
-
-        debug_assert!(cmsg.len() as u32 == unsafe { libc::CMSG_LEN(fds.len() * size_of::<RawFd>() as u32) });
-
-        (cmsg.as_ptr().cast_mut(), cmsg.len() as u32)
-    };
-
+    let (msg_control, msg_controllen) = fds.as_control();
 
     // https://linux.die.net/man/3/cmsg
 
@@ -69,14 +63,16 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
             iov_len: buffer.len(),
         },
         msg_iovlen: 1,
-        msg_control: cmsg_ptr.cast(),
-        msg_controllen: cmsg_len as usize,
+        msg_control,
+        msg_controllen,
         msg_flags: 0,
     };
 
     if !fds.is_empty() {
-        let cmsg = unsafe { &mut *CMSG_FIRSTHDR(&msghdr) };
-        cmsg.cmsg_len = cmsg_len as usize;
+        let ptr = unsafe { CMSG_FIRSTHDR(&msghdr) };
+        debug_assert!(ptr.is_aligned());
+        let cmsg = unsafe { &mut *ptr };
+        cmsg.cmsg_len = msg_controllen;
         cmsg.cmsg_level = SOL_SOCKET;
         cmsg.cmsg_type = SCM_RIGHTS;
         // payload initialized by FdBuffer
@@ -115,16 +111,16 @@ fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
+fn recvmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
     use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
     use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
     use ReadError as E;
 
-    const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
+    // const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
 
     let spare_buf = buffer.spare_capacity_mut();
+    let (msg_control, msg_controllen) = fds.as_spare_control_mut();
 
-    let mut cmsg_buf = [const { MaybeUninit::<u8>::uninit() }; CMSG_SPACE as usize];
     let mut iov = iovec {
         iov_base: spare_buf.as_mut_ptr().cast(),
         iov_len: spare_buf.len(),
@@ -134,8 +130,8 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<
         msg_namelen: 0,
         msg_iov: &mut iov,
         msg_iovlen: 1,
-        msg_control: cmsg_buf.as_mut_ptr().cast(),
-        msg_controllen: cmsg_buf.len(),
+        msg_control,
+        msg_controllen,
         msg_flags: 0,
     };
 
@@ -161,10 +157,15 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut Buffer, socket: RawFd) -> Poll<Result<
                 return Poll::Ready(Err(E::ControlDataType));
             };
 
-            let bytes_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
-            let bytes = slice::from_raw_parts(CMSG_DATA(&cmsg), bytes_len);
+            let data = CMSG_DATA(&cmsg);
+            let data_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
+            let fd_count = data_len / size_of::<RawFd>();
+            debug_assert!(
+                msg_control.addr() == data.sub(size_of::<libc::cmsghdr>()).addr()
+            );
 
-            fds.extend_from_slice(bytes);
+            data.sub(size_of::<libc::cmsghdr>()).copy_from(data, data_len);
+            fds.advance_mut(fd_count as u32);
 
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }
