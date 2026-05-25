@@ -32,32 +32,26 @@ impl std::fmt::Display for ClientId {
     }
 }
 
-// ===== ClientMut =====
+// ===== Client =====
 
-pub struct ClientMut<'a> {
-    state: &'a mut ClientState,
-}
-
-impl<'a> ClientMut<'a> {
-    pub fn conn(&self) -> &Connection {
-        &self.state.conn
-    }
-
-    pub fn objects_mut(&mut self) -> &mut Objects {
-        &mut self.state.objects
-    }
-
-    pub fn buffer_mut(&mut self) -> &mut SmallBuf {
-        &mut self.state.buffer
-    }
-}
-
-// ===== ClientState =====
-
-pub struct ClientState {
+pub struct Client {
     conn: Connection,
     objects: Objects,
     buffer: SmallBuf,
+}
+
+impl Client {
+    pub fn conn(&self) -> &Connection {
+        &self.conn
+    }
+
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.objects
+    }
+
+    pub fn buffer_mut(&mut self) -> &mut SmallBuf {
+        &mut self.buffer
+    }
 }
 
 // ===== Clients =====
@@ -81,7 +75,7 @@ impl Drop for Clients {
 }
 
 enum Entry {
-    Some(ClientState),
+    Some(Client),
     None(u32)
 }
 
@@ -119,7 +113,7 @@ impl Clients {
         if self.len == self.cap {
             self.cap = alloc::grow(&mut self.ptr, self.cap, 0);
         }
-        let new_entry = Entry::Some(ClientState {
+        let new_entry = Entry::Some(Client {
             conn,
             objects: Objects::new(),
             buffer: SmallBuf::new(),
@@ -140,11 +134,11 @@ impl Clients {
 }
 
 impl Clients {
-    pub fn get_mut(&mut self, id: ClientId) -> Option<ClientMut<'_>> {
+    pub fn get_mut(&mut self, id: ClientId) -> Option<&mut Client> {
         let (idx, _) = Self::destruct_id(id.0);
         if idx < self.len {
             match unsafe { self.ptr.add(idx as usize).as_mut() } {
-                Entry::Some(state) => Some(ClientMut { state }),
+                Entry::Some(state) => Some(state),
                 Entry::None(_) => None,
             }
         } else {

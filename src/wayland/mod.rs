@@ -76,19 +76,6 @@ pub static GLOBALS: [(&str, u16, Interface); 9] = [
     ("xdg_wm_base", 7, Interface::XdgWmBase),
 ];
 
-/// `(id, op, len)`
-pub fn header(bytes: &[u8]) -> Option<(u32, u16, u16, &[u8])> {
-    let (header, rest) = bytes.split_first_chunk::<8>()?;
-    let ptr = header.as_ptr();
-    unsafe {
-        let id = u32::from_ne_bytes(*ptr.cast::<[u8; _]>());
-        let op = u16::from_ne_bytes(*ptr.add(4).cast::<[u8; _]>());
-        let len = u16::from_ne_bytes(*ptr.add(6).cast::<[u8; _]>());
-        let body_len = len.saturating_sub(8) as usize;
-        Some((id, op, len, rest.get(..body_len)?))
-    }
-}
-
 macro_rules! roundup4 {
     ($e:expr) => {
         ($e + 3) & (u16::MAX << 2)

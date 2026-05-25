@@ -22,10 +22,10 @@
 //!
 //! - [`error`] error handling
 use std::process::ExitCode;
-use std::task::Poll::*;
+use std::task::Poll::{self, *};
 
 use buffer::Buffer;
-use clients::{ClientId, ClientMut, Clients};
+use clients::{Client, ClientId, Clients};
 use epoll::Epoll;
 use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
@@ -143,7 +143,7 @@ fn event_loop() -> Result<(), FatalError> {
             continue;
         }
 
-        let Some(mut client) = clients.get_mut(id) else {
+        let Some(client) = clients.get_mut(id) else {
             log::warn!(epoll, "unknown dynamic key: {id}");
             continue;
         };
@@ -156,52 +156,47 @@ fn event_loop() -> Result<(), FatalError> {
         if interest.is_read() {
             let result = loop {
                 use wayland::wl_display::encode_error;
-
-                let Some((id, op, len, body)) = wayland::header(&read_buffer) else {
-                    match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
-                        Ready(Ok(())) => continue,
-                        Ready(Err(err)) => break Err(Some(err)),
-                        Pending => break Ok(()),
-                    };
-                };
-                if len < 8 {
-                    encode_error(Id::wl_display(), WlError::InvalidSize, &mut write_buffer);
-                    log::error!(client, "{}", WlError::InvalidSize);
-                    break Err(None);
+                match Header::from_bytes(&read_buffer) {
+                    Ready(Ok(header)) => {
+                        let id = header.id;
+                        let total_len = header.body.len() + 8;
+                        match header.handle(State {
+                            client,
+                            write_buffer: &mut write_buffer,
+                            read_fd: &mut fds_buffer,
+                            write_fd: &mut write_fd,
+                        }) {
+                            Ok(()) => read_buffer.advance(total_len as u32),
+                            Err(err) => {
+                                encode_error(id, err, &mut write_buffer);
+                                break Err(());
+                            },
+                        }
+                    },
+                    Ready(Err(err)) => {
+                        encode_error(Id::wl_display(), err, &mut write_buffer);
+                        break Err(());
+                    },
+                    Pending => {
+                        match client.conn().poll_read(&mut read_buffer, &mut fds_buffer){
+                            Ready(Ok(())) => continue,
+                            Ready(Err(err)) => {
+                                log::debug!(client, "{err}");
+                                break Err(());
+                            },
+                            Pending => {
+                                break Ok(());
+                            },
+                        };
+                    }
                 }
-                let Ok(id) = Id::new(id) else {
-                    encode_error(Id::wl_display(), WlError::ZeroId, &mut write_buffer);
-                    log::error!(client, "{}", WlError::ZeroId);
-                    break Err(None);
-                };
-                let result = if id.is_display() {
-                    handle_wl_display(op, body, &mut client, &mut write_buffer)
-                } else {
-                    let state = State {
-                        write_buffer: &mut write_buffer,
-                        read_fd: &mut fds_buffer,
-                        write_fd: &mut write_fd,
-                    };
-                    handle_message(id, op, body, &mut client, state)
-                };
-                // TODO: checks for recoverable error
-                if let Err(err) = result {
-                    encode_error(id, err, &mut write_buffer);
-                    log::error!(client, "id={id}, {err}");
-                    break Err(None);
-                }
-                read_buffer.advance(len as u32);
             };
 
-            if let Err(err) = result {
-                match err {
-                    Some(conn::ReadError::ConnectionAborted) => {}
-                    Some(read_err) => log::error!(client, "{read_err}"),
-                    None => {
-                        let _ = client
-                            .conn()
-                            .poll_write_all(&mut write_buffer, &mut write_fd);
-                    },
+            if result.is_err() {
+                if !write_buffer.is_empty() {
+                    let _ = client
+                        .conn()
+                        .poll_write_all(&mut write_buffer, &mut write_fd);
                 }
                 read_buffer.clear();
                 write_buffer.clear();
@@ -256,66 +251,87 @@ fn event_loop() -> Result<(), FatalError> {
 
 // ===== wayland =====
 
-fn handle_wl_display(
-    op: u16,
-    body: &[u8],
-    client: &mut ClientMut<'_>,
-    write_buffer: &mut Buffer,
-) -> Result<(), WlError> {
-    use wayland::wl_display::Op;
-    use wayland::WlObject;
-
-    match Op::from_request(op)? {
-        Op::Sync(decoder) => {
-            decoder.decode(body)?.reply(0, write_buffer);
-            log::trace!(client, "<- wl_display::sync");
-        }
-        Op::GetRegistry(decoder) => {
-            let get_registry = decoder.decode(body)?;
-            let wl_registry = get_registry.wl_registry();
-            client.objects_mut().insert_object(&wl_registry)?;
-
-            // FEAT: encode globals at startup
-            for ((iface, version, _), i) in wayland::GLOBALS.into_iter().zip(0..) {
-                wl_registry.global(i, iface, version as u32, &mut *write_buffer);
-            }
-
-            log::trace!(client, "<- wl_display::get_registry id={}", wl_registry.id());
-        }
-    }
-    Ok(())
-}
-
-fn handle_message(
+struct Header<'a> {
     id: Id,
     op: u16,
-    body: &[u8],
-    client: &mut ClientMut<'_>,
-    state: State,
-) -> Result<(), WlError> {
-    use wayland::Interface as I;
+    body: &'a [u8],
+}
 
-    let Some(object) = client.objects_mut().get_mut(id) else {
-        return Err(WlError::UnknownObject);
-    };
+impl<'a> Header<'a> {
+    fn from_bytes(bytes: &'a [u8]) -> Poll<Result<Self, WlError>> {
+        let Some((header, rest)) = bytes.split_first_chunk::<8>() else {
+            return Pending;
+        };
+        let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
+        let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
+        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
+        let Some(body_len) = len.checked_sub(8) else {
+            return Ready(Err(WlError::InvalidSize));
+        };
+        let Some(body) = rest.get(..body_len as usize) else {
+            return Pending;
+        };
+        Ready(Ok(Self { id, op, body }))
+    }
 
-    let iface = object.interface();
+    fn handle(self, state: State) -> Result<(), WlError> {
+        use wayland::Interface as I;
 
-    match iface {
-        I::WlRegistry => {
-            use wayland::wl_registry::RequestOp as Op;
-            match Op::from_request(op)? {
-                Op::Bind(d) => EventHandler::handle(state, d.decode(body)?, client),
+        if self.id.is_display() {
+            return self.handle_wl_display(state);
+        }
+
+        let Header { id, op, body } = self;
+
+        let Some(object) = state.client.objects_mut().get_mut(id) else {
+            return Err(WlError::UnknownObject);
+        };
+
+        let iface = object.interface();
+
+        match iface {
+            I::WlRegistry => {
+                use wayland::wl_registry::RequestOp as Op;
+                match Op::from_request(op)? {
+                    Op::Bind(d) => state.handle(d.decode(body)?),
+                }
+            }
+            _ => {
+                log::error!(client, "`{iface:?}::{op}` is not yet implemented");
+                WlError::todo()
             }
         }
-        I::WlShm => {
-            log::error!(client, "`{iface:?}::{op}` is not yet implemented");
-            WlError::todo()
+    }
+
+    fn handle_wl_display(self, state: State) -> Result<(), WlError> {
+        use wayland::WlObject;
+        use wayland::wl_display::Op;
+
+        let Header { op, body, .. } = self;
+
+        match Op::from_request(op)? {
+            Op::Sync(decoder) => {
+                decoder.decode(body)?.reply(0, state.write_buffer);
+                log::trace!(client, "<- wl_display::sync");
+            }
+            Op::GetRegistry(decoder) => {
+                let get_registry = decoder.decode(body)?;
+                let wl_registry = get_registry.wl_registry();
+                state.client.objects_mut().insert_object(&wl_registry)?;
+
+                // FEAT: encode globals at startup
+                for ((iface, version, _), i) in wayland::GLOBALS.into_iter().zip(0..) {
+                    wl_registry.global(i, iface, version as u32, state.write_buffer);
+                }
+
+                log::trace!(
+                    client,
+                    "<- wl_display::get_registry id={}",
+                    wl_registry.id()
+                );
+            }
         }
-        _ => {
-            log::error!(client, "`{iface:?}::{op}` is not yet implemented");
-            WlError::todo()
-        }
+        Ok(())
     }
 }
 
@@ -325,17 +341,18 @@ use wayland::wl_registry::Bind;
 
 #[allow(dead_code)]
 struct State<'a> {
+    client: &'a mut Client,
     write_buffer: &'a mut Buffer,
     read_fd: &'a mut Buffer,
     write_fd: &'a mut FdBuffer,
 }
 
 trait EventHandler<Event> {
-    fn handle(self, event: Event, client: &mut ClientMut) -> Result<(), WlError>;
+    fn handle(self, event: Event) -> Result<(), WlError>;
 }
 
 impl<'a> EventHandler<Bind<'a>> for State<'a> {
-    fn handle(self, bind: Bind<'a>, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(self, bind: Bind<'a>) -> Result<(), WlError> {
         log::trace!(
             client,
             "<- wl_registry@bind {{ name:{}, id:{}, global: ({}, v{}) }}",
@@ -353,7 +370,7 @@ impl<'a> EventHandler<Bind<'a>> for State<'a> {
         if bind.id_version > *version as u32 {
             return Err(WlError::UnknownBind);
         }
-        client.objects_mut().insert(bind.id, *iface)?;
+        self.client.objects_mut().insert(bind.id, *iface)?;
         Ok(())
     }
 }
