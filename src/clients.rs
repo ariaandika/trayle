@@ -9,6 +9,7 @@ use crate::objects::Objects;
 
 // ===== ClientId =====
 
+/// Unique id for client.
 #[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct ClientId(u64);
@@ -56,13 +57,29 @@ impl Client {
 
 // ===== Clients =====
 
+const INITIAL_CAP: usize = 8;
+
+enum Entry {
+    Some(Client),
+    None(usize)
+}
+
+/// A list of clients.
+///
+/// This is a slab, where insertion will returns an id that is required for other operation.
+///
+/// The id is unique and unchanged for each client. Even after deletion, the slot is reused but the
+/// id will have a new unique value. When the integer overflows, it will start reusing old id.
+///
+/// This also integrates with epoll, where insertion or deletion will trigger corresponding
+/// operation to the epoll.
 pub struct Clients {
     ptr: NonNull<Entry>,
     id: u32,
-    len: u32,
-    cap: u32,
+    len: usize,
+    cap: usize,
     /// represent a linked list of deleted entry that ends in one after the last entry
-    last_delete: u32,
+    last_delete: usize,
 }
 
 impl Drop for Clients {
@@ -70,24 +87,27 @@ impl Drop for Clients {
         for entry in self.as_mut_slice() {
             drop(std::mem::replace(entry, Entry::None(0)));
         }
-        alloc::deallocate(self.ptr, self.cap);
+        alloc::deallocate(self.ptr);
     }
 }
 
-enum Entry {
-    Some(Client),
-    None(u32)
-}
-
 impl Clients {
-    pub fn with_capacity(cap: u32) -> Self {
+    pub fn new() -> Self {
         Self {
-            ptr: alloc::allocate(cap),
+            ptr: alloc::allocate(INITIAL_CAP),
             id: 0,
             len: 0,
-            cap,
+            cap: INITIAL_CAP,
             last_delete: 0,
         }
+    }
+
+    #[cold]
+    #[inline(never)]
+    fn grow(&mut self) {
+        let new_cap = alloc::calc_exp(self.cap);
+        self.ptr = alloc::reallocate(self.ptr, new_cap);
+        self.cap = new_cap;
     }
 
     /// (idx, id)
@@ -102,7 +122,7 @@ impl Clients {
     }
 
     fn as_mut_slice(&mut self) -> &mut [Entry] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len as usize) }
+        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
     }
 }
 
@@ -111,14 +131,14 @@ impl Clients {
         let id = self.construct_id();
         epoll.add(id, &conn);
         if self.len == self.cap {
-            self.cap = alloc::grow(&mut self.ptr, self.cap, 0);
+            self.grow();
         }
         let new_entry = Entry::Some(Client {
             conn,
             objects: Objects::new(),
             buffer: SmallBuf::new(),
         });
-        let entry = unsafe { self.ptr.add(self.last_delete as usize).as_mut() };
+        let entry = unsafe { self.ptr.add(self.last_delete).as_mut() };
         let Entry::None(next_delete) = mem::replace(entry, new_entry) else {
             unreachable!("corrupted clients list");
         };
@@ -136,7 +156,7 @@ impl Clients {
 impl Clients {
     pub fn get_mut(&mut self, id: ClientId) -> Option<&mut Client> {
         let (idx, _) = Self::destruct_id(id.0);
-        if idx < self.len {
+        if (idx as usize) < self.len {
             match unsafe { self.ptr.add(idx as usize).as_mut() } {
                 Entry::Some(state) => Some(state),
                 Entry::None(_) => None,
@@ -150,7 +170,7 @@ impl Clients {
         if self.len == 0 {
             return None;
         }
-        let (idx, _) = Self::destruct_id(id.0);
+        let idx = Self::destruct_id(id.0).0 as usize;
         if idx >= self.len {
             return None;
         }
@@ -161,7 +181,7 @@ impl Clients {
         //     dbg!((client.id(), id));
         //     return None;
         // }
-        let entry = unsafe { self.ptr.add(idx as usize).as_mut() };
+        let entry = unsafe { self.ptr.add(idx).as_mut() };
         let Entry::Some(client) = mem::replace(entry, Entry::None(self.last_delete)) else {
             unsafe { std::hint::unreachable_unchecked() };
         };

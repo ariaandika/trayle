@@ -7,10 +7,10 @@ pub trait Encoder {
 
 impl Encoder for Buffer {
     fn message(&mut self, object_id: Id, op: u16, len: u16) -> *mut u8 {
-        self.reserve(len as u32);
+        self.reserve(len as usize);
         let ptr = self.spare_capacity_mut().as_mut_ptr().cast::<u8>();
         unsafe {
-            self.advance_mut(len as u32);
+            self.advance_mut(len as usize);
             ptr.put(object_id).put(op).put(len)
         }
     }

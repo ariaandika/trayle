@@ -5,43 +5,43 @@ use crate::alloc;
 
 // perhaps this might be simpler to use union but, cheese butter
 
-const PTRALIGN: u32 = align_of::<usize>() as u32;
-const PTRSIZE: u32 = size_of::<usize>() as u32;
+const PTRALIGN: usize = align_of::<usize>() as usize;
+const PTRSIZE: usize = size_of::<usize>() as usize;
 
-const HDRSIZE: u32 = size_of::<libc::cmsghdr>() as u32;
-const HDRALIGN: u32 = align_of::<libc::cmsghdr>() as u32;
-const HDRINFD: u32 = HDRSIZE / FDSIZE;
+const HDRSIZE: usize = size_of::<libc::cmsghdr>() as usize;
+const HDRALIGN: usize = align_of::<libc::cmsghdr>() as usize;
+const HDRINFD: usize = HDRSIZE / FDSIZE;
 
-const FDSIZE: u32 = size_of::<RawFd>() as u32;
+const FDSIZE: usize = size_of::<RawFd>() as usize;
 
 const _: () = assert!(PTRSIZE * 2 == HDRSIZE);
 const _: () = assert!(PTRALIGN == HDRALIGN);
 
-const fn bytes_to_ptr(value: u32) -> u32 {
+const fn bytes_to_ptr(value: usize) -> usize {
     value / PTRALIGN
 }
 
 // random tbr
-const MAX_FD: u32 = 64 - HDRINFD;
+const MAX_FD: usize = 64 - HDRINFD;
 
 // cmsg buffer *alignment* need to be the same as `cmsghdr`, in this case is *pointer* alignment,
 // but the `CMSG_SPACE` returns size, with the header, is in *bytes* size,
 // thus manual layout calculation is required
 //
 // this represent the allocation size with *pointer* alignment
-const TOTAL_SIZE: u32 = bytes_to_ptr(unsafe { libc::CMSG_SPACE(MAX_FD * FDSIZE) });
+const TOTAL_SIZE: usize = bytes_to_ptr(unsafe { libc::CMSG_SPACE((MAX_FD * FDSIZE) as u32) as usize });
 
 pub struct FdBuffer {
     ptr: NonNull<RawFd>,
-    off: u32,
-    len: u32,
+    off: usize,
+    len: usize,
 }
 
 impl Drop for FdBuffer {
     fn drop(&mut self) {
         unsafe {
-            let ptr = self.ptr.sub((self.off + HDRINFD) as usize);
-            alloc::deallocate::<usize>(ptr.cast(), TOTAL_SIZE);
+            let ptr = self.ptr.sub(self.off + HDRINFD);
+            alloc::deallocate::<usize>(ptr.cast());
         }
     }
 }
@@ -50,7 +50,7 @@ impl FdBuffer {
     /// Note that `FdBuffer` does not close fds on drop.
     pub fn new() -> Self {
         let ptr = alloc::allocate::<usize>(TOTAL_SIZE).cast();
-        let ptr = unsafe { ptr.add(HDRINFD as usize) };
+        let ptr = unsafe { ptr.add(HDRINFD) };
         Self {
             ptr,
             off: 0,
@@ -58,7 +58,7 @@ impl FdBuffer {
         }
     }
 
-    // pub const fn len(&self) -> u32 {
+    // pub const fn len(&self) -> usize {
     //     self.len
     // }
 
@@ -68,7 +68,7 @@ impl FdBuffer {
 
     fn advance_one(&mut self) {
         debug_assert!(self.len != 0);
-        self.ptr = unsafe { self.ptr.add(FDSIZE as usize) };
+        self.ptr = unsafe { self.ptr.add(FDSIZE) };
         self.off += 1;
         self.len -= 1;
     }
@@ -76,7 +76,7 @@ impl FdBuffer {
     /// # Safety
     ///
     /// `cnt` element after the last element must be initialized.
-    pub unsafe fn advance_mut(&mut self, cnt: u32) {
+    pub unsafe fn advance_mut(&mut self, cnt: usize) {
         self.len += cnt;
         debug_assert!(self.len <= MAX_FD);
     }
@@ -108,7 +108,7 @@ impl FdBuffer {
     ///
     /// Note that this does not close remaining fds.
     pub fn clear(&mut self) {
-        self.ptr = unsafe { self.ptr.sub((self.off * FDSIZE) as usize) };
+        self.ptr = unsafe { self.ptr.sub(self.off * FDSIZE) };
         self.len = 0;
         self.off = 0;
     }
@@ -121,19 +121,19 @@ impl FdBuffer {
         }
         if self.off != 0 {
             unsafe {
-                self.ptr = self.ptr.sub(self.off as usize);
+                self.ptr = self.ptr.sub(self.off);
                 self.ptr
-                    .copy_from(self.ptr.add(self.off as usize), self.len as usize);
+                    .copy_from(self.ptr.add(self.off), self.len);
             }
             self.off = 0;
         }
-        let ptr = unsafe { self.ptr.sub(HDRSIZE as usize) };
-        (ptr.cast().as_ptr(), (self.len * FDSIZE) as usize)
+        let ptr = unsafe { self.ptr.sub(HDRSIZE) };
+        (ptr.cast().as_ptr(), self.len * FDSIZE)
     }
 
     pub fn as_spare_control_mut(&mut self) -> (*mut std::ffi::c_void, usize) {
-        let ptr = unsafe { self.ptr.add(self.len as usize) };
+        let ptr = unsafe { self.ptr.add(self.len) };
         let rem = (MAX_FD - self.off - self.len) * FDSIZE;
-        (ptr.cast().as_ptr(), rem as usize)
+        (ptr.cast().as_ptr(), rem)
     }
 }

@@ -165,7 +165,7 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
             );
 
             data.sub(size_of::<libc::cmsghdr>()).copy_from(data, data_len);
-            fds.advance_mut(fd_count as u32);
+            fds.advance_mut(fd_count);
 
             cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
         }

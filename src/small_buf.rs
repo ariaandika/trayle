@@ -14,8 +14,7 @@ pub struct SmallBuf {
 impl Drop for SmallBuf {
     fn drop(&mut self) {
         if let Some(ptr) = NonNull::new(self.ptr) {
-            let cap = unsafe { ptr.cast().read_unaligned() };
-            alloc::deallocate(ptr, cap);
+            alloc::deallocate(ptr);
         }
     }
 }
@@ -40,7 +39,7 @@ impl SmallBuf {
         let read_len = read_buf.len() as u32;
         let write_len = write_buf.len() as u32;
         let cap = HEADER as u32 + read_len + write_len;
-        let ptr = alloc::allocate::<u8>(cap).as_ptr();
+        let ptr = alloc::allocate::<u8>(cap as usize).as_ptr();
 
         unsafe {
             let hptr = ptr.cast::<u32>();

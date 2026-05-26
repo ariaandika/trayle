@@ -43,10 +43,12 @@ mod alloc;
 mod buffer;
 mod fd_buffer;
 mod small_buf;
-// ===== app =======
+// ===== collections =====
 mod objects;
-mod wayland;
 mod clients;
+// ===== protocol =======
+mod wayland;
+// ===== app =====
 mod handler;
 // ===== util ====
 mod log;
@@ -91,7 +93,7 @@ fn event_loop() -> Result<(), FatalError> {
     let mut write_fd = FdBuffer::new();
 
     // ===== app =====
-    let mut clients = Clients::with_capacity(8);
+    let mut clients = Clients::new();
 
     // ===== event loop =====
 
@@ -274,7 +276,7 @@ impl<'a> Message<'a> {
         let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
         let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
         let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
-        let Some(msg) = bytes.try_split_to(len as u32) else {
+        let Some(msg) = bytes.try_split_to(len as usize) else {
             return Pending;
         };
         let Some(body) = msg.get(8..) else {
