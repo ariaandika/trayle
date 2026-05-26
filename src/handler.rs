@@ -1,6 +1,6 @@
 use crate::fd_buffer::FdBuffer;
 use crate::wayland::wl_seat::Capability;
-use crate::wayland::{Decode, FromOp, InterfaceId, Object, WlError};
+use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
 use crate::{Message, State, log};
 
 use crate::wayland::wl_display as WlDisplay;
@@ -8,11 +8,6 @@ use crate::wayland::wl_registry as WlRegistry;
 use crate::wayland::wl_shm as WlShm;
 use crate::wayland::wl_seat as WlSeat;
 use crate::wayland::wl_data_device_manager as WlDataDeviceManager;
-
-struct Fallback {
-    interface: InterfaceId,
-    op: u16,
-}
 
 const CAPABILITIES: Capability = Capability::new().add_pointer().add_keyboard();
 
@@ -42,19 +37,21 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
 
     macro_rules! handle_me {
         (@ARM $iface:ident { $($req:ident),* $(,)? }) => {
-            match <_>::from_op(op)? {
-                $(
-                    $iface::RequestOp::$req =>
-                    state.handle($iface::$req::decode_with(body, read_fd)?),
-                )*
-            }
+            match <_>::from_op(op)? { $(
+                $iface::RequestOp::$req => {
+                    #[cfg(debug_assertions)]
+                    { state.handle_trace(interface, $iface::$req::decode_with(body, read_fd)?) }
+                    #[cfg(not(debug_assertions))]
+                    { state.handle(interface, $iface::$req::decode_with(body, read_fd)?) }
+                }
+            )* }
         };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
                 $(
                     InterfaceId::$iface => handle_me!(@ARM $iface {$($tt)*}),
                 )*
-                _ => state.handle(Fallback { interface, op }),
+                _ => state.not_yet_implemented(interface, op),
             }
         };
     }
@@ -82,13 +79,28 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
 
 trait RequestHandler<Request>: Sized {
     fn handle(self, request: Request) -> Result<(), WlError>;
+
+    #[cfg(debug_assertions)]
+    fn handle_trace(self, interface: InterfaceId, request: Request) -> Result<(), WlError>
+    where
+        Request: std::fmt::Debug,
+    {
+        log::trace!(client, "<- {interface:?}::{request:?}");
+        self.handle(request)
+    }
+}
+
+impl State<'_> {
+    fn not_yet_implemented(self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
+        log::error!(client, "<- `{interface:?}::{op}` is not yet implemented");
+        WlError::todo()
+    }
 }
 
 impl RequestHandler<WlDisplay::Sync> for State<'_> {
     fn handle(self, sync: WlDisplay::Sync) -> Result<(), WlError> {
         self.client.objects_mut().use_one(sync.wl_callback_id())?;
         sync.reply(0, self.write_buffer);
-        log::trace!(client, "<- wl_display::sync");
         Ok(())
     }
 }
@@ -102,26 +114,12 @@ impl RequestHandler<WlDisplay::GetRegistry> for State<'_> {
         for ((iface, version, _), i) in GLOBALS.into_iter().zip(0..) {
             wl_registry.global(i, iface, version as u32, self.write_buffer);
         }
-
-        log::trace!(
-            client,
-            "<- wl_display::get_registry id={}",
-            wl_registry.id()
-        );
         Ok(())
     }
 }
 
 impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
     fn handle(self, bind: WlRegistry::Bind<'a>) -> Result<(), WlError> {
-        log::trace!(
-            client,
-            "<- wl_registry::bind {{ name:{}, id:{}, global: ({}, v{}) }}",
-            bind.name,
-            bind.id,
-            bind.id_name,
-            bind.id_version,
-        );
         let Some((bind_name, version, iface)) = GLOBALS.get(bind.name as usize) else {
             return Err(WlError::UnknownBind);
         };
@@ -157,20 +155,13 @@ impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
 }
 
 impl RequestHandler<WlShm::CreatePool> for State<'_> {
-    fn handle(self, req: WlShm::CreatePool) -> Result<(), WlError> {
-        log::trace!(
-            client,
-            "<- wl_shm::create_pool {{ id:{}, fd:{}, size:{} }}",
-            req.id,
-            req.fd,
-            req.size,
-        );
+    fn handle(self, _: WlShm::CreatePool) -> Result<(), WlError> {
         WlError::todo()
     }
 }
 
 impl RequestHandler<WlShm::Release> for State<'_> {
-    fn handle(self, _req: WlShm::Release) -> Result<(), WlError> {
+    fn handle(self, _: WlShm::Release) -> Result<(), WlError> {
         WlError::todo()
     }
 }
@@ -184,12 +175,6 @@ impl RequestHandler<WlDataDeviceManager::CreateDataSource> for State<'_> {
 impl RequestHandler<WlDataDeviceManager::GetDataDevice> for State<'_> {
     fn handle(self, req: WlDataDeviceManager::GetDataDevice) -> Result<(), WlError> {
         let _ = req.seat;
-        log::trace!(
-            client,
-            "<- wl_data_device_manager::get_data_device {{ id:{}, seat:{} }}",
-            req.id,
-            req.seat
-        );
         self.client
             .objects_mut()
             .insert(req.id, crate::wayland::InterfaceId::WlDataDevice)?;
@@ -199,13 +184,6 @@ impl RequestHandler<WlDataDeviceManager::GetDataDevice> for State<'_> {
 
 impl RequestHandler<WlDataDeviceManager::Release> for State<'_> {
     fn handle(self, _: WlDataDeviceManager::Release) -> Result<(), WlError> {
-        WlError::todo()
-    }
-}
-
-impl RequestHandler<Fallback> for State<'_> {
-    fn handle(self, req: Fallback) -> Result<(), WlError> {
-        log::error!(client, "`{:?}::{}` is not yet implemented", req.interface, req.op);
         WlError::todo()
     }
 }

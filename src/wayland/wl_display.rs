@@ -24,13 +24,14 @@ impl FromOp for RequestOp {
 
 // ===== Sync =====
 
+#[derive(Debug)]
 pub struct Sync {
-    wl_callback_id: Id,
+    callback: Id,
 }
 
 impl Sync {
     pub fn wl_callback_id(&self) -> Id {
-        self.wl_callback_id
+        self.callback
     }
 
     /// Write `wl_callback::done` and `wl_display::delete_id`  event.
@@ -38,12 +39,12 @@ impl Sync {
         unsafe {
             // wl_callback::done(callback_data: uint)
             buffer
-                .message(self.wl_callback_id, DONE_OP, 12)
+                .message(self.callback, DONE_OP, 12)
                 .put(callback_data);
             // wl_display::delete_id(id: uint)
             buffer
                 .message(Id::wl_display(), DELETE_ID_OP, 12)
-                .put(self.wl_callback_id);
+                .put(self.callback);
         };
     }
 }
@@ -53,7 +54,7 @@ impl Decode for Sync {
 
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         Ok(Self {
-            wl_callback_id: reader.read()?,
+            callback: reader.read()?,
         })
     }
 }
@@ -62,12 +63,12 @@ impl Decode for Sync {
 
 #[derive(Debug)]
 pub struct GetRegistry {
-    wl_registry_id: Id,
+    registry: Id,
 }
 
 impl GetRegistry {
     pub fn wl_registry(&self) -> Registry {
-        Registry::new(self.wl_registry_id)
+        Registry::new(self.registry)
     }
 }
 
@@ -76,7 +77,7 @@ impl Decode for GetRegistry {
 
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         Ok(Self {
-            wl_registry_id: reader.read()?,
+            registry: reader.read()?,
         })
     }
 }

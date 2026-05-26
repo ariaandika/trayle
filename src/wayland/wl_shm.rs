@@ -19,6 +19,8 @@ impl FromOp for RequestOp {
 
 // ===== CreatePool =====
 
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct CreatePool {
     /// <wl_shm_pool>
     pub id: Id,
@@ -40,6 +42,7 @@ impl Decode for CreatePool {
 
 // ===== Release =====
 
+#[derive(Debug)]
 pub struct Release;
 
 impl Decode for Release {

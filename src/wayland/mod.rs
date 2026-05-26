@@ -13,10 +13,10 @@ mod encode;
 pub mod wl_display;
 pub mod wl_registry;
 pub mod wl_shm;
+pub mod wl_data_device_manager;
 pub mod wl_seat;
 pub mod wl_pointer;
 pub mod wl_keyboard;
-pub mod wl_data_device_manager;
 
 mod interface;
 

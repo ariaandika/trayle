@@ -21,20 +21,24 @@ impl FromOp for RequestOp {
 
 // ===== CreateDataSource =====
 
+#[derive(Debug)]
+#[allow(dead_code)]
 pub struct CreateDataSource {
-
+    // wl_data_source
+    pub id: Id,
 }
 
 impl Decode for CreateDataSource {
     type Output<'a> = Self;
 
-    fn decode<'a>(_: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
-        todo!()
+    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self { id: reader.read()? })
     }
 }
 
 // ===== GetDataDevice =====
 
+#[derive(Debug)]
 pub struct GetDataDevice {
     // <wl_data_device>
     pub id: Id,
@@ -55,6 +59,7 @@ impl Decode for GetDataDevice {
 
 // ===== Release =====
 
+#[derive(Debug)]
 pub struct Release;
 
 impl Decode for Release {
