@@ -1,6 +1,5 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::Keyboard;
-use crate::wayland::wl_pointer::Pointer;
 
 // ===== capability =====
 
@@ -50,30 +49,6 @@ impl FromOp for RequestOp {
         }
     }
 }
-
-// ===== GetPointer =====
-
-#[derive(Debug)]
-pub struct GetPointer {
-    id: Id,
-}
-
-impl GetPointer {
-    pub fn pointer(self) -> Pointer {
-        Pointer::new(self.id)
-    }
-}
-
-impl Decode for GetPointer {
-    type Output<'a> = Self;
-
-    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        Ok(Self {
-            id: reader.read()?,
-        })
-    }
-}
-
 
 // ===== GetKeyboard =====
 

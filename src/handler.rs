@@ -36,22 +36,26 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
     };
 
     macro_rules! handle_me {
-        (@ARM $iface:ident { $($req:ident),* $(,)? }) => {
+        (@OP $iface:ident { $($req:ident $($flag:ident)?),* $(,)? }) => {
             match <_>::from_op(op)? { $(
-                $iface::RequestOp::$req => {
-                    #[cfg(debug_assertions)]
-                    { state.handle_trace(interface, $iface::$req::decode_with(body, read_fd)?) }
-                    #[cfg(not(debug_assertions))]
-                    { state.handle(interface, $iface::$req::decode_with(body, read_fd)?) }
-                }
+                $iface::RequestOp::$req => handle_me!(@CALL $iface $req $($flag)?),
             )* }
         };
+        (@CALL $iface:ident $req:ident todo) => {{
+            state.todo(interface, op)
+        }};
+        (@CALL $iface:ident $req:ident) => {{
+            #[cfg(debug_assertions)]
+            { state.handle_trace(interface, $iface::$req::decode_with(body, read_fd)?) }
+            #[cfg(not(debug_assertions))]
+            { state.handle(interface, $iface::$req::decode_with(body, read_fd)?) }
+        }};
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
                 $(
-                    InterfaceId::$iface => handle_me!(@ARM $iface {$($tt)*}),
+                    InterfaceId::$iface => handle_me!(@OP $iface {$($tt)*}),
                 )*
-                _ => state.not_yet_implemented(interface, op),
+                _ => state.todo(interface, op),
             }
         };
     }
@@ -60,17 +64,17 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
         WlDisplay { Sync, GetRegistry }
         WlRegistry { Bind }
         WlShm {
-            CreatePool,
-            Release,
+            CreatePool todo,
+            Release todo,
         }
         WlSeat {
-            GetPointer,
+            GetPointer todo,
             GetKeyboard,
         }
         WlDataDeviceManager {
-            CreateDataSource,
+            CreateDataSource todo,
             GetDataDevice,
-            Release,
+            Release todo,
         }
     }
 }
@@ -91,7 +95,7 @@ trait RequestHandler<Request>: Sized {
 }
 
 impl State<'_> {
-    fn not_yet_implemented(self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
+    fn todo(self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
         log::error!(client, "<- `{interface:?}::{op}` is not yet implemented");
         WlError::todo()
     }
@@ -114,6 +118,7 @@ impl RequestHandler<WlDisplay::GetRegistry> for State<'_> {
         for ((iface, version, _), i) in GLOBALS.into_iter().zip(0..) {
             wl_registry.global(i, iface, version as u32, self.write_buffer);
         }
+
         Ok(())
     }
 }
@@ -140,35 +145,10 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
     }
 }
 
-impl RequestHandler<WlSeat::GetPointer> for State<'_> {
-    fn handle(self, req: WlSeat::GetPointer) -> Result<(), WlError> {
-        let _pointer = req.pointer();
-        WlError::todo()
-    }
-}
-
 impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
     fn handle(self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
         let keyboard = req.keyboard();
         self.client.objects_mut().insert_object(&keyboard)
-    }
-}
-
-impl RequestHandler<WlShm::CreatePool> for State<'_> {
-    fn handle(self, _: WlShm::CreatePool) -> Result<(), WlError> {
-        WlError::todo()
-    }
-}
-
-impl RequestHandler<WlShm::Release> for State<'_> {
-    fn handle(self, _: WlShm::Release) -> Result<(), WlError> {
-        WlError::todo()
-    }
-}
-
-impl RequestHandler<WlDataDeviceManager::CreateDataSource> for State<'_> {
-    fn handle(self, _: WlDataDeviceManager::CreateDataSource) -> Result<(), WlError> {
-        WlError::todo()
     }
 }
 
@@ -179,11 +159,5 @@ impl RequestHandler<WlDataDeviceManager::GetDataDevice> for State<'_> {
             .objects_mut()
             .insert(req.id, crate::wayland::InterfaceId::WlDataDevice)?;
         Ok(())
-    }
-}
-
-impl RequestHandler<WlDataDeviceManager::Release> for State<'_> {
-    fn handle(self, _: WlDataDeviceManager::Release) -> Result<(), WlError> {
-        WlError::todo()
     }
 }

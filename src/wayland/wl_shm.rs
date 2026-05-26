@@ -39,17 +39,3 @@ impl Decode for CreatePool {
         })
     }
 }
-
-// ===== Release =====
-
-#[derive(Debug)]
-pub struct Release;
-
-impl Decode for Release {
-    type Output<'a> = Self;
-
-    fn decode<'a>(_: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self)
-    }
-}
-
