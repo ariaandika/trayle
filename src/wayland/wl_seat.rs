@@ -1,4 +1,6 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_keyboard::Keyboard;
+use crate::wayland::wl_pointer::Pointer;
 
 // ===== capability =====
 
@@ -31,3 +33,68 @@ impl Capability {
         unsafe { write.message(wl_seat, EVENT_CAPABILITIES, 12).put(self.0) };
     }
 }
+
+// ===== op =====
+
+pub enum RequestOp {
+    GetPointer,
+    GetKeyboard,
+}
+
+impl FromOp for RequestOp {
+    fn from_op(op:u16) -> Result<Self,WlError>{
+        match op {
+            0 => Ok(Self::GetPointer),
+            1 => Ok(Self::GetKeyboard),
+            _ => Err(WlError::UnknownOp),
+        }
+    }
+}
+
+// ===== GetPointer =====
+
+#[derive(Debug)]
+pub struct GetPointer {
+    id: Id,
+}
+
+impl GetPointer {
+    pub fn pointer(self) -> Pointer {
+        Pointer::new(self.id)
+    }
+}
+
+impl Decode for GetPointer {
+    type Output<'a> = Self;
+
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        Ok(Self {
+            id: reader.read()?,
+        })
+    }
+}
+
+
+// ===== GetKeyboard =====
+
+#[derive(Debug)]
+pub struct GetKeyboard {
+    id: Id,
+}
+
+impl GetKeyboard {
+    pub fn keyboard(self) -> Keyboard {
+        Keyboard::new(self.id)
+    }
+}
+
+impl Decode for GetKeyboard {
+    type Output<'a> = Self;
+
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        Ok(Self {
+            id: reader.read()?,
+        })
+    }
+}
+

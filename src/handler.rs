@@ -6,6 +6,7 @@ use crate::{Message, State, log};
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
 use crate::wayland::wl_shm as WlShm;
+use crate::wayland::wl_seat as WlSeat;
 use crate::wayland::wl_data_device_manager as WlDataDeviceManager;
 
 struct Fallback {
@@ -63,12 +64,16 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
         WlRegistry { Bind }
         WlShm {
             CreatePool,
-            Release
+            Release,
+        }
+        WlSeat {
+            GetPointer,
+            GetKeyboard,
         }
         WlDataDeviceManager {
             CreateDataSource,
             GetDataDevice,
-            Release
+            Release,
         }
     }
 }
@@ -134,6 +139,20 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl RequestHandler<WlSeat::GetPointer> for State<'_> {
+    fn handle(self, req: WlSeat::GetPointer) -> Result<(), WlError> {
+        let _pointer = req.pointer();
+        WlError::todo()
+    }
+}
+
+impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
+    fn handle(self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
+        let keyboard = req.keyboard();
+        self.client.objects_mut().insert_object(&keyboard)
     }
 }
 
