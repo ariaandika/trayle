@@ -1,16 +1,16 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{Id, Interface, WlError, WlObject};
+use crate::wayland::{Id, InterfaceId, Object as WlObject, WlError};
 
 // ===== Object =====
 
 pub struct Object {
-    interface: Interface,
+    interface: InterfaceId,
 }
 
 impl Object {
-    pub fn interface(&self) -> Interface {
+    pub fn interface(&self) -> InterfaceId {
         self.interface
     }
 }
@@ -46,12 +46,12 @@ impl Objects {
         self.insert_inner(
             object.id(),
             Some(Object {
-                interface: O::INTERFACE,
+                interface: O::INTERFACE_ID,
             }),
         )
     }
 
-    pub fn insert(&mut self, id: Id, interface: Interface) -> Result<(), WlError> {
+    pub fn insert(&mut self, id: Id, interface: InterfaceId) -> Result<(), WlError> {
         self.insert_inner(id, Some(Object { interface }))
     }
 

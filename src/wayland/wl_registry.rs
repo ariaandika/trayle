@@ -3,19 +3,19 @@ use crate::wayland::prelude::*;
 const GLOBAL_OP: u16 = 0;
 
 #[derive(Debug)]
-pub struct WlRegistry {
+pub struct Registry {
     id: Id,
 }
 
-impl WlObject for WlRegistry {
-    const INTERFACE: Interface = Interface::WlRegistry;
+impl Object for Registry {
+    const INTERFACE_ID: InterfaceId = InterfaceId::WlRegistry;
 
     fn id(&self) -> Id {
         self.id
     }
 }
 
-impl WlRegistry {
+impl Registry {
     /// Can only be created by `GetRegistry`.
     pub(super) fn new(id: Id) -> Self {
         Self { id }
@@ -37,22 +37,18 @@ impl WlRegistry {
 
 // ===== Op =====
 
-pub struct Op;
-
-impl FromOpCode for Op {
-    type RequestOp = RequestOp;
-
-    fn from_request_op(op: u16) -> Result<Self::RequestOp, WlError> {
-        use RequestOp as Op;
-        match op {
-            0 => Ok(Op::Bind(Decoder::new())),
-            _ => Err(WlError::UnknownOp),
-        }
-    }
+pub enum RequestOp {
+    Bind,
 }
 
-pub enum RequestOp {
-    Bind(Decoder<Bind<'static>>),
+impl FromOp for RequestOp {
+    fn from_op(op: u16) -> Result<Self, WlError> {
+        if op == 0 {
+            Ok(Self::Bind)
+        } else {
+            Err(WlError::UnknownOp)
+        }
+    }
 }
 
 // ===== Bind =====

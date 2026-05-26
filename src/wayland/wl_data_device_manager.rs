@@ -1,27 +1,36 @@
 use crate::wayland::prelude::*;
 
+// ===== Op =====
 
-// ===== DataDeviceManager =====
+pub enum RequestOp {
+    CreateDataSource,
+    GetDataDevice,
+    Release,
+}
 
-pub struct Op;
-
-impl FromOpCode for Op {
-    type RequestOp = RequestOp;
-
-    fn from_request_op(op: u16) -> Result<Self::RequestOp, WlError> {
+impl FromOp for RequestOp {
+    fn from_op(op: u16) -> Result<Self, WlError> {
         match op {
-            0 => Ok(RequestOp::CreateDataSource),
-            1 => Ok(RequestOp::GetDataDevice(Decoder::new())),
-            2 => Ok(RequestOp::Release),
+            0 => Ok(Self::CreateDataSource),
+            1 => Ok(Self::GetDataDevice),
+            2 => Ok(Self::Release),
             _ => Err(WlError::UnknownOp),
         }
     }
 }
 
-pub enum RequestOp {
-    CreateDataSource,
-    GetDataDevice(Decoder<GetDataDevice>),
-    Release,
+// ===== CreateDataSource =====
+
+pub struct CreateDataSource {
+
+}
+
+impl Decode for CreateDataSource {
+    type Output<'a> = Self;
+
+    fn decode<'a>(_: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+        todo!()
+    }
 }
 
 // ===== GetDataDevice =====
@@ -43,3 +52,16 @@ impl Decode for GetDataDevice {
         })
     }
 }
+
+// ===== Release =====
+
+pub struct Release;
+
+impl Decode for Release {
+    type Output<'a> = Self;
+
+    fn decode<'a>(_: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self)
+    }
+}
+

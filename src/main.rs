@@ -31,7 +31,6 @@ use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
-use wayland::wl_seat::Capability;
 
 // ===== os ========
 mod errno;
@@ -48,6 +47,7 @@ mod small_buf;
 mod objects;
 mod wayland;
 mod clients;
+mod handler;
 // ===== util ====
 mod log;
 
@@ -58,8 +58,6 @@ const LISTENER_ID: u64 = STATIC_ID_MASK | 1;
 const SIGFD_ID: u64 = STATIC_ID_MASK | 2;
 
 const MAX_EPOLL_EVENT: usize = 128;
-
-const CAPABILITIES: Capability = Capability::new().add_pointer().add_keyboard();
 
 pub struct FatalError;
 
@@ -158,16 +156,16 @@ fn event_loop() -> Result<(), FatalError> {
         if interest.is_read() {
             let result = loop {
                 use wayland::wl_display::encode_error;
-                match Header::from_bytes(&read_buffer) {
+                match Message::from_bytes(&mut read_buffer) {
                     Ready(Ok(header)) => {
                         let id = header.id;
-                        let total_len = header.body.len() + 8;
-                        match header.handle(&mut read_fd, State {
+                        let state = State {
                             client,
                             write_buffer: &mut write_buffer,
                             write_fd: &mut write_fd,
-                        }) {
-                            Ok(()) => read_buffer.advance(total_len as u32),
+                        };
+                        match handler::router(header, state, &mut read_fd) {
+                            Ok(()) => {}
                             Err(err) => {
                                 encode_error(id, err, &mut write_buffer);
                                 log::error!(client, "{err}");
@@ -254,174 +252,34 @@ fn event_loop() -> Result<(), FatalError> {
 
 // ===== wayland =====
 
-struct Header<'a> {
+pub struct State<'a> {
+    client: &'a mut Client,
+    write_buffer: &'a mut Buffer,
+    #[allow(dead_code)]
+    write_fd: &'a mut FdBuffer,
+}
+
+struct Message<'a> {
     id: Id,
     op: u16,
     body: &'a [u8],
 }
 
-impl<'a> Header<'a> {
-    fn from_bytes(bytes: &'a [u8]) -> Poll<Result<Self, WlError>> {
-        let Some((header, rest)) = bytes.split_first_chunk::<8>() else {
+impl<'a> Message<'a> {
+    fn from_bytes(bytes: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
+        let Some(header) = bytes.first_chunk::<8>() else {
             return Pending;
         };
+        // the compiler will remove all the unwraps
         let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
         let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
         let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
-        let Some(body_len) = len.checked_sub(8) else {
-            return Ready(Err(WlError::InvalidSize));
-        };
-        let Some(body) = rest.get(..body_len as usize) else {
+        let Some(msg) = bytes.try_split_to(len as u32) else {
             return Pending;
         };
+        let Some(body) = msg.get(8..) else {
+            return Ready(Err(WlError::InvalidSize));
+        };
         Ready(Ok(Self { id, op, body }))
-    }
-
-    fn handle(self, read_fd: &mut FdBuffer, state: State) -> Result<(), WlError> {
-        use wayland::InterfaceOp as Op;
-        use wayland::wl_registry::RequestOp as RegOp;
-        use wayland::wl_shm::RequestOp as ShmOp;
-        use wayland::wl_data_device_manager::RequestOp as DdmOp;
-
-        if self.id.is_display() {
-            return self.handle_wl_display(read_fd, state);
-        }
-
-        let Header { id, op, body } = self;
-
-        let Some(object) = state.client.objects_mut().get_mut(id) else {
-            return Err(WlError::UnknownObject);
-        };
-
-        let iface = object.interface();
-
-        // this match act as a router
-        match iface.op() {
-            Op::WlRegistry(reg) => match reg.request(op)? {
-                RegOp::Bind(d) => state.handle(d.decode(body, read_fd)?),
-            }
-            Op::WlShm(reg) => match reg.request(op)? {
-                ShmOp::CreatePool(d) => state.handle(d.decode(body, read_fd)?),
-                ShmOp::Release(_) => WlError::todo(),
-            }
-            Op::WlDataDeviceManager(reg) => match reg.request(op)? {
-                DdmOp::CreateDataSource => WlError::todo(),
-                DdmOp::GetDataDevice(d) => state.handle(d.decode(body, read_fd)?),
-                DdmOp::Release => WlError::todo(),
-            }
-            _ => {
-                log::error!(client, "`{iface:?}::{op}` is not yet implemented");
-                WlError::todo()
-            }
-        }
-    }
-
-    fn handle_wl_display(self, read_fd: &mut FdBuffer, state: State) -> Result<(), WlError> {
-        use wayland::WlObject;
-        use wayland::wl_display::Op;
-
-        let Header { op, body, .. } = self;
-
-        match Op::from_request(op)? {
-            Op::Sync(decoder) => {
-                let sync = decoder.decode(body, read_fd)?;
-                state.client.objects_mut().use_one(sync.wl_callback_id())?;
-                sync.reply(0, state.write_buffer);
-                log::trace!(client, "<- wl_display::sync");
-            }
-            Op::GetRegistry(decoder) => {
-                let get_registry = decoder.decode(body, read_fd)?;
-                let wl_registry = get_registry.wl_registry();
-                state.client.objects_mut().insert_object(&wl_registry)?;
-
-                // FEAT: encode globals at startup
-                for ((iface, version, _), i) in wayland::GLOBALS.into_iter().zip(0..) {
-                    wl_registry.global(i, iface, version as u32, state.write_buffer);
-                }
-
-                log::trace!(
-                    client,
-                    "<- wl_display::get_registry id={}",
-                    wl_registry.id()
-                );
-            }
-        }
-        Ok(())
-    }
-}
-
-// ===== EventHandler =====
-
-use wayland::wl_registry::Bind;
-
-use crate::wayland::{wl_data_device_manager, wl_shm};
-
-#[allow(dead_code)]
-struct State<'a> {
-    client: &'a mut Client,
-    write_buffer: &'a mut Buffer,
-    write_fd: &'a mut FdBuffer,
-}
-
-trait EventHandler<Event> {
-    fn handle(self, event: Event) -> Result<(), WlError>;
-}
-
-impl<'a> EventHandler<Bind<'a>> for State<'a> {
-    fn handle(self, bind: Bind<'a>) -> Result<(), WlError> {
-        log::trace!(
-            client,
-            "<- wl_registry::bind {{ name:{}, id:{}, global: ({}, v{}) }}",
-            bind.name,
-            bind.id,
-            bind.id_name,
-            bind.id_version,
-        );
-        let Some((bind_name, version, iface)) = wayland::GLOBALS.get(bind.name as usize) else {
-            return Err(WlError::UnknownBind);
-        };
-        if bind.id_name != *bind_name {
-            return Err(WlError::UnknownBind);
-        }
-        if bind.id_version > *version as u32 {
-            return Err(WlError::UnknownBind);
-        }
-        self.client.objects_mut().insert(bind.id, *iface)?;
-
-        // some interface has side-effect after binding
-        if let wayland::Interface::WlSeat = iface {
-            CAPABILITIES.encode(bind.id, self.write_buffer);
-        }
-
-        Ok(())
-    }
-}
-
-impl EventHandler<wl_shm::CreatePool> for State<'_> {
-    fn handle(self, bind: wl_shm::CreatePool) -> Result<(), WlError> {
-        log::trace!(
-            client,
-            "<- wl_shm::create_pool {{ id:{}, fd:{}, size:{} }}",
-            bind.id,
-            bind.fd,
-            bind.size,
-        );
-        WlError::todo()
-    }
-}
-
-impl EventHandler<wl_data_device_manager::GetDataDevice> for State<'_> {
-    fn handle(self, event: wl_data_device_manager::GetDataDevice) -> Result<(), WlError> {
-        let _ = event.seat;
-        log::trace!(
-            client,
-            "<- wl_data_device_manager::get_data_device {{ id:{}, seat:{} }}",
-            event.id,
-            event.seat
-        );
-        self.client
-            .objects_mut()
-            .insert(event.id, wayland::Interface::WlDataDevice)?;
-        Ok(())
     }
 }

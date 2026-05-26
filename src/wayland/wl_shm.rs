@@ -2,24 +2,19 @@ use crate::wayland::prelude::*;
 
 // ===== Op =====
 
-pub struct Op;
+pub enum RequestOp {
+    CreatePool,
+    Release,
+}
 
-impl FromOpCode for Op {
-    type RequestOp = RequestOp;
-
-    fn from_request_op(op: u16) -> Result<Self::RequestOp, WlError> {
-        use RequestOp as Op;
+impl FromOp for RequestOp {
+    fn from_op(op: u16) -> Result<Self, WlError> {
         match op {
-            0 => Ok(Op::CreatePool(Decoder::new())),
-            1 => Ok(Op::Release(Decoder::new())),
+            0 => Ok(Self::CreatePool),
+            1 => Ok(Self::Release),
             _ => Err(WlError::UnknownOp),
         }
     }
-}
-
-pub enum RequestOp {
-    CreatePool(Decoder<CreatePool>),
-    Release(Decoder<Release>),
 }
 
 // ===== CreatePool =====

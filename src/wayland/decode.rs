@@ -10,28 +10,13 @@ pub trait Decode: Sized {
     ///
     /// `body` is message payload without the header.
     fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError>;
-}
 
-// ===== Decoder =====
-
-pub struct Decoder<D> {
-    _p: std::marker::PhantomData<D>,
-}
-
-impl<D> Decoder<D> {
-    pub fn new() -> Decoder<D> {
-        Self { _p: std::marker::PhantomData }
-    }
-}
-
-impl<D: Decode> Decoder<D> {
-    pub fn decode<'a>(
-        self,
-        bytes: &'a [u8],
+    fn decode_with<'a>(
+        body: &'a [u8],
         read_fd: &'a mut FdBuffer,
-    ) -> Result<D::Output<'a>, WlError> {
-        let mut reader = Reader::new(bytes, read_fd);
-        let ok = D::decode(&mut reader)?;
+    ) -> Result<Self::Output<'a>, WlError> {
+        let mut reader = Reader::new(body, read_fd);
+        let ok = Self::decode(&mut reader)?;
         if reader.bytes.is_empty() {
             Ok(ok)
         } else {

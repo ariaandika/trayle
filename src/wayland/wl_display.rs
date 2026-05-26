@@ -1,5 +1,5 @@
 use crate::wayland::prelude::*;
-use crate::wayland::wl_registry::WlRegistry;
+use crate::wayland::wl_registry::Registry;
 
 // ===== Op =====
 
@@ -7,16 +7,16 @@ const ERROR_OP: u16 = 0;
 const DELETE_ID_OP: u16 = 1;
 const DONE_OP: u16 = 0;
 
-pub enum Op {
-    Sync(Decoder<Sync>),
-    GetRegistry(Decoder<GetRegistry>),
+pub enum RequestOp {
+    Sync,
+    GetRegistry,
 }
 
-impl Op {
-    pub fn from_request(op: u16) -> Result<Op, WlError> {
+impl FromOp for RequestOp {
+    fn from_op(op: u16) -> Result<Self, WlError> {
         match op {
-            0 => Ok(Op::Sync(Decoder::new())),
-            1 => Ok(Op::GetRegistry(Decoder::new())),
+            0 => Ok(Self::Sync),
+            1 => Ok(Self::GetRegistry),
             _ => Err(WlError::UnknownOp),
         }
     }
@@ -66,8 +66,8 @@ pub struct GetRegistry {
 }
 
 impl GetRegistry {
-    pub fn wl_registry(&self) -> WlRegistry {
-        WlRegistry::new(self.wl_registry_id)
+    pub fn wl_registry(&self) -> Registry {
+        Registry::new(self.wl_registry_id)
     }
 }
 

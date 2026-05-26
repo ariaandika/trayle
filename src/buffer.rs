@@ -49,6 +49,14 @@ impl Buffer {
         self.len += cnt;
     }
 
+    pub fn try_split_to(&mut self, cnt: u32) -> Option<&[u8]> {
+        if cnt > self.len {
+            return None;
+        }
+        self.advance(cnt);
+        Some(unsafe { slice::from_raw_parts(self.ptr.sub(cnt as usize).as_ptr(), cnt as usize) })
+    }
+
     /// Returns `true` if remaining capacity is sufficient and the data is copied.
     pub fn extend_from_slice(&mut self, slice: &[u8]) {
         self.reserve(slice.len() as u32);
