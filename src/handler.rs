@@ -1,14 +1,13 @@
-use crate::wayland::wl_seat::Capability;
-use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
 use crate::{Message, State, log};
+
+use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
 use crate::wayland::wl_shm as WlShm;
 use crate::wayland::wl_seat as WlSeat;
+use crate::wayland::wl_keyboard as WlKeyboard;
 use crate::wayland::wl_data_device_manager as WlDataDeviceManager;
-
-const CAPABILITIES: Capability = Capability::new().add_pointer().add_keyboard();
 
 static GLOBALS: [(&str, u16, InterfaceId); 9] = [
     ("wl_compositor", 7, InterfaceId::WlCompositor),
@@ -137,7 +136,7 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 
         // some interface has side-effect after binding
         if let InterfaceId::WlSeat = iface {
-            CAPABILITIES.encode(bind.id, self.write_buffer);
+            WlSeat::capabilities(bind.id, self.seat.capability(), self.write_buffer);
         }
 
         Ok(())
@@ -147,7 +146,13 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
     fn handle(self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
         let keyboard = req.keyboard();
-        self.client.objects_mut().insert_object(&keyboard)
+        self.client.objects_mut().insert_object(&keyboard)?;
+        WlKeyboard::keymap_xkb_v1(
+            crate::wayland::Object::id(&keyboard),
+            self.seat,
+            self.write_buffer,
+        );
+        Ok(())
     }
 }
 

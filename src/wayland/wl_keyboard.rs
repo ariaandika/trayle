@@ -1,3 +1,4 @@
+use crate::seat::Seat;
 use crate::wayland::prelude::*;
 
 #[derive(Debug)]
@@ -20,4 +21,18 @@ impl Keyboard {
     }
 }
 
+// ===== Keymap =====
 
+pub fn keymap_xkb_v1(wl_keyboard_id: Id, seat: &Seat, buffer: &mut Buffer) {
+    assert!(buffer.push_fd(seat.keymap_memfd()));
+    unsafe {
+        buffer
+            .message(wl_keyboard_id, 0, 16)
+            .put(KeymapFormat::XkbV1 as u32)
+            .put(seat.keymap_size());
+    }
+}
+
+pub enum KeymapFormat {
+    XkbV1
+}

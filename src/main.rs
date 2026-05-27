@@ -28,6 +28,7 @@ use buffer::Buffer;
 use clients::{Client, ClientId, Clients};
 use epoll::Epoll;
 use listener::{Listener, SocketPath};
+use seat::Seat;
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
 
@@ -37,6 +38,7 @@ mod epoll;
 mod sigfd;
 mod conn;
 mod listener;
+mod seat;
 // ===== alloc =====
 mod alloc;
 mod buffer;
@@ -68,6 +70,12 @@ impl<E: std::fmt::Display> From<E> for FatalError {
     }
 }
 
+pub struct State<'a> {
+    client: &'a mut Client,
+    write_buffer: &'a mut Buffer,
+    seat: &'a Seat,
+}
+
 fn main() -> ExitCode {
     let _guard = log::init();
     <_>::from(event_loop().is_err() as u8)
@@ -75,6 +83,7 @@ fn main() -> ExitCode {
 
 fn event_loop() -> Result<(), FatalError> {
     // ===== os =====
+    let seat = Seat::new()?;
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
@@ -160,6 +169,7 @@ fn event_loop() -> Result<(), FatalError> {
                         let state = State {
                             client,
                             write_buffer: &mut write_buffer,
+                            seat: &seat,
                         };
                         match handler::router(header, state) {
                             Ok(()) => {}
@@ -248,11 +258,6 @@ fn event_loop() -> Result<(), FatalError> {
 }
 
 // ===== wayland =====
-
-pub struct State<'a> {
-    client: &'a mut Client,
-    write_buffer: &'a mut Buffer,
-}
 
 struct Message<'a> {
     id: Id,
