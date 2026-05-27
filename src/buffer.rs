@@ -190,6 +190,10 @@ fn cmsg_len(fd_len: usize) -> usize {
     unsafe { libc::CMSG_LEN((fd_len * FDSIZE) as u32) as usize }
 }
 
+fn cmsg_space(fd_len: usize) -> usize {
+    unsafe { libc::CMSG_SPACE((fd_len * FDSIZE) as u32) as usize }
+}
+
 const CONTROL_MESSAGE: CmsgBuf = unsafe {
     let mut buf = [std::mem::zeroed::<libc::cmsghdr>(); _];
     buf[0].cmsg_level = libc::SOL_SOCKET;
@@ -220,9 +224,16 @@ impl<'a> MsgHdr<'a> {
                 } else {
                     let mut cmsg = CONTROL_MESSAGE;
                     cmsg[0].cmsg_len = cmsg_len(buffer.fd_len);
+                    unsafe {
+                        let dst = libc::CMSG_DATA(&cmsg[0]);
+                        dst.copy_from_nonoverlapping(
+                            buffer.base_ptr().as_ptr().add(buffer.fd_off * FDSIZE),
+                            buffer.fd_len * FDSIZE
+                        );
+                    };
                     &raw mut cmsg as *mut _
                 },
-                msg_controllen: if buffer.fd_len == 0 { 0 } else { CMSG_SPACE },
+                msg_controllen: if buffer.fd_len == 0 { 0 } else { cmsg_space(buffer.fd_len) },
                 msg_flags: 0,
             },
             buffer,
