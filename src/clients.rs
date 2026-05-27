@@ -111,14 +111,21 @@ impl Clients {
     }
 
     /// (idx, id)
-    const fn construct_id(&self) -> u64 {
-        (self.last_delete as u64) << 4 | (self.id as u64)
+    fn construct_id(&self) -> u64 {
+        let mut id = [0u8; 8];
+        id[4..].copy_from_slice(&u32::to_ne_bytes(self.last_delete as u32));
+        id[..4].copy_from_slice(&self.id.to_ne_bytes());
+        u64::from_ne_bytes(id)
     }
 
     /// (idx, id)
-    const fn destruct_id(id: u64) -> (u32, u32) {
+    fn destruct_id(id: u64) -> (u32, u32) {
         debug_assert!(id & i64::MIN as u64 == 0);
-        ((id >> 4) as u32, id as u32)
+        let id = id.to_ne_bytes();
+        (
+            u32::from_ne_bytes(*id[4..].as_array().unwrap()),
+            u32::from_ne_bytes(*id[..4].as_array().unwrap()),
+        )
     }
 
     fn as_mut_slice(&mut self) -> &mut [Entry] {
