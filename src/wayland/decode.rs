@@ -1,6 +1,7 @@
-use crate::{fd_buffer::FdBuffer, wayland::{Id, WlError, roundup4}};
+use crate::buffer::Buffer;
+use crate::wayland::{Id, WlError, roundup4};
 
-// ===== trait =====
+// ===== Decode =====
 
 /// Represent type that can be decoded from bytes.
 pub trait Decode: Sized {
@@ -12,36 +13,28 @@ pub trait Decode: Sized {
     fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError>;
 
     fn decode_with<'a>(
-        body: &'a [u8],
-        read_fd: &'a mut FdBuffer,
+        read_buf: &'a mut Buffer,
     ) -> Result<Self::Output<'a>, WlError> {
-        let mut reader = Reader::new(body, read_fd);
-        let ok = Self::decode(&mut reader)?;
-        if reader.bytes.is_empty() {
-            Ok(ok)
-        } else {
-            Err(WlError::ExcessiveSize)
-        }
+        let mut reader = Reader::new(read_buf);
+        Self::decode(&mut reader)
     }
 }
 
 // ===== Reader =====
 
 pub struct Reader<'a> {
-    bytes: &'a [u8],
-    read_fd: &'a mut FdBuffer,
+    read_buf: &'a mut Buffer,
 }
 
 impl<'a> Reader<'a> {
-    pub fn new(bytes: &'a [u8], read_fd: &'a mut FdBuffer) -> Self {
-        Self { bytes, read_fd }
+    pub fn new(read_buf: &'a mut Buffer) -> Self {
+        Self { read_buf }
     }
 
     fn as_array<const N: usize>(&mut self) -> Result<[u8; N], WlError> {
-        let Some((chunk, rest)) = self.bytes.split_first_chunk() else {
+        let Some(chunk) = self.read_buf.try_split_first_chunk() else {
             return Err(WlError::InvalidSize);
         };
-        self.bytes = rest;
         Ok(*chunk)
     }
 
@@ -50,7 +43,7 @@ impl<'a> Reader<'a> {
     }
 
     pub fn read_fd(&mut self) -> Result<i32, WlError> {
-        match self.read_fd.pop_front() {
+        match self.read_buf.pop_front_fd() {
             Some(ok) => Ok(ok),
             None => Err(WlError::MissingFd),
         }
@@ -62,11 +55,14 @@ impl<'a> Reader<'a> {
     }
 
     fn read_bytes(&mut self, len: usize) -> Result<&'a [u8], WlError> {
-        let Some((bytes, rest)) = self.bytes.split_at_checked(len) else {
+        let Some(bytes) = self.read_buf.try_split_to(len) else {
             return Err(WlError::InvalidSize);
         };
-        self.bytes = rest;
-        Ok(bytes)
+        // SAFETY: SWIGGITY SWOOTY
+        // LIKE WHAT THE FUCK DO YOU MEAN, `read_buf` HAS LIFETIME OF `'a`, BUT THE RETURNED SLICE
+        // IS LIFETIME OF `self` ????
+        Ok(unsafe { std::mem::transmute::<&[u8], &[u8]>(bytes) })
+        // Ok(bytes)
     }
 }
 

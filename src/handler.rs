@@ -1,4 +1,3 @@
-use crate::fd_buffer::FdBuffer;
 use crate::wayland::wl_seat::Capability;
 use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
 use crate::{Message, State, log};
@@ -23,8 +22,8 @@ static GLOBALS: [(&str, u16, InterfaceId); 9] = [
     ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
 ];
 
-pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(), WlError> {
-    let Message { id, op, body } = header;
+pub fn router(header: Message, state: State) -> Result<(), WlError> {
+    let Message { id, op, read_buf: body } = header;
 
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
@@ -46,7 +45,7 @@ pub fn router(header: Message, state: State, read_fd: &mut FdBuffer) -> Result<(
         }};
         (@CALL $iface:ident $req:ident) => {{
             #[cfg(debug_assertions)]
-            { state.handle_trace(interface, $iface::$req::decode_with(body, read_fd)?) }
+            { state.handle_trace(interface, $iface::$req::decode_with(body)?) }
             #[cfg(not(debug_assertions))]
             { state.handle(interface, $iface::$req::decode_with(body, read_fd)?) }
         }};

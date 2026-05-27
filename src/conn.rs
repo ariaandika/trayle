@@ -1,10 +1,8 @@
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::task::Poll;
-use std::ptr;
 
 use crate::buffer::Buffer;
 use crate::errno::{Errno, simple_errno};
-use crate::fd_buffer::FdBuffer;
 
 #[derive(Debug)]
 pub struct Connection(OwnedFd);
@@ -23,119 +21,43 @@ impl AsRawFd for Connection {
 
 impl Connection {
     /// Read data to the read buffer.
-    pub fn poll_read(
-        &self,
-        buffer: &mut Buffer,
-        fds: &mut FdBuffer,
-    ) -> Poll<Result<(), ReadError>> {
-        recvmsg(buffer, fds, self.0.as_raw_fd())
+    pub fn poll_read(&self, buffer: &mut Buffer) -> Poll<Result<(), ReadError>> {
+        recvmsg(buffer, self.0.as_raw_fd())
     }
 
     /// Write all data to the socket.
     ///
     /// If write is pending, add write event to epoll.
-    pub fn poll_write_all(
-        &self,
-        buffer: &mut Buffer,
-        fds: &mut FdBuffer,
-    ) -> Poll<Result<(), WriteError>> {
-        sendmsg(buffer, fds, self.0.as_raw_fd())
+    pub fn poll_write_all(&self, buffer: &mut Buffer) -> Poll<Result<(), WriteError>> {
+        sendmsg(buffer, self.0.as_raw_fd())
     }
 }
 
 // ===== syscall =====
 
-fn sendmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), WriteError>> {
-    use libc::CMSG_FIRSTHDR;
-    use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
-
+fn sendmsg(buffer: &mut Buffer, socket: RawFd) -> Poll<Result<(), WriteError>> {
     debug_assert!(!buffer.is_empty());
-
-    let (msg_control, msg_controllen) = fds.as_control();
-
-    // https://linux.die.net/man/3/cmsg
-
-    let msghdr = msghdr {
-        msg_name: ptr::null_mut(),
-        msg_namelen: 0,
-        msg_iov: &mut iovec {
-            iov_base: buffer.as_ptr() as *mut _,
-            iov_len: buffer.len(),
-        },
-        msg_iovlen: 1,
-        msg_control,
-        msg_controllen,
-        msg_flags: 0,
-    };
-
-    if !fds.is_empty() {
-        let ptr = unsafe { CMSG_FIRSTHDR(&msghdr) };
-        debug_assert!(ptr.is_aligned());
-        let cmsg = unsafe { &mut *ptr };
-        cmsg.cmsg_len = msg_controllen;
-        cmsg.cmsg_level = SOL_SOCKET;
-        cmsg.cmsg_type = SCM_RIGHTS;
-        // payload initialized by FdBuffer
-    }
-
-    let mut msghdr = msghdr;
+    let mut msg = buffer.as_msghdr();
     loop {
-        let Ok(write) = unsafe { libc::sendmsg(socket, &msghdr, 0) }.try_into() else {
+        let Ok(write) = unsafe { libc::sendmsg(socket, msg.as_ptr(), 0) }.try_into() else {
             return match Errno::get() {
                 libc::EWOULDBLOCK => Poll::Pending,
                 _ => Poll::Ready(Err(WriteError)),
             };
         };
-        buffer.advance(write);
-        if buffer.is_empty() {
+        if msg.advance(write) {
             break;
         }
-
-        // rebuilt the message buffer
-        let iov_mut = unsafe { &mut *msghdr.msg_iov };
-        iov_mut.iov_base = buffer.as_ptr() as *mut _;
-        iov_mut.iov_len = buffer.len();
-
-        // Ancillary data is received as if it were queued along with the first normal data octet in
-        // the segment (if any).
-        //
-        // - https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
-        //
-        // unset the ancillary data
-        msghdr.msg_control = ptr::null_mut();
-        msghdr.msg_controllen = 0;
     }
-
-    fds.clear();
-
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
-    use libc::{CMSG_DATA, CMSG_FIRSTHDR, CMSG_LEN, CMSG_NXTHDR};
-    use libc::{SCM_RIGHTS, SOL_SOCKET, iovec, msghdr};
+fn recvmsg(buffer: &mut Buffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
     use ReadError as E;
 
-    // const CMSG_SPACE: u32 = unsafe { libc::CMSG_SPACE(crate::MAX_FD_SIZE) };
+    let mut msghdr = buffer.as_spare_msghdr();
 
-    let spare_buf = buffer.spare_capacity_mut();
-    let (msg_control, msg_controllen) = fds.as_spare_control_mut();
-
-    let mut iov = iovec {
-        iov_base: spare_buf.as_mut_ptr().cast(),
-        iov_len: spare_buf.len(),
-    };
-    let mut msghdr = msghdr {
-        msg_name: ptr::null_mut(),
-        msg_namelen: 0,
-        msg_iov: &mut iov,
-        msg_iovlen: 1,
-        msg_control,
-        msg_controllen,
-        msg_flags: 0,
-    };
-
-    let Ok(read) = unsafe { libc::recvmsg(socket, &mut msghdr, 0) }.try_into() else {
+    let Ok(read) = unsafe { libc::recvmsg(socket, msghdr.as_mut_ptr(), 0) }.try_into() else {
         return match Errno::get() {
             libc::EWOULDBLOCK => Poll::Pending,
             _ => Poll::Ready(Err(E::Errno)),
@@ -144,36 +66,14 @@ fn recvmsg(buffer: &mut Buffer, fds: &mut FdBuffer, socket: RawFd) -> Poll<Resul
     if read == 0 {
         return Poll::Ready(Err(E::ConnectionAborted));
     }
-    if msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC {
+    if msghdr.is_truncated() {
         return Poll::Ready(Err(E::ControlDataTruncated));
     }
-
-    unsafe {
-        let mut cmsg_ptr = CMSG_FIRSTHDR(&msghdr);
-        while !cmsg_ptr.is_null() {
-            let cmsg = cmsg_ptr.read_unaligned();
-
-            let (SOL_SOCKET, SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
-                return Poll::Ready(Err(E::ControlDataType));
-            };
-
-            let data = CMSG_DATA(&cmsg);
-            let data_len = cmsg.cmsg_len - const { CMSG_LEN(0) as usize };
-            let fd_count = data_len / size_of::<RawFd>();
-            debug_assert!(
-                msg_control.addr() == data.sub(size_of::<libc::cmsghdr>()).addr()
-            );
-
-            data.sub(size_of::<libc::cmsghdr>()).copy_from(data, data_len);
-            fds.advance_mut(fd_count);
-
-            cmsg_ptr = CMSG_NXTHDR(&msghdr, cmsg_ptr);
-        }
-
-        buffer.advance_mut(read);
+    if unsafe { msghdr.advance_mut(read) } {
+        Poll::Ready(Ok(()))
+    } else {
+        Poll::Ready(Err(E::ControlDataType))
     }
-
-    Poll::Ready(Ok(()))
 }
 
 // ===== Error =====

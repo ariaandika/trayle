@@ -95,12 +95,13 @@ macro_rules! names {
 }
 
 macro_rules! log {
-    ($l:ident, $s:ident, $($tt:tt)*) => {
+    ($l:ident, $s:ident, $($tt:tt)*) => {{
         crate::log::log_me(
             const { crate::log::build_prefix(crate::log::Level::$l, crate::log::names!($s)) },
             format_args!($($tt)*)
-        )
-    };
+        );
+        crate::log::flush();
+    }};
 }
 
 macro_rules! error { ($($tt:tt)*) => { crate::log::log!(Error, $($tt)*) }; }

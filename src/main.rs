@@ -14,20 +14,19 @@
 //! - [`epoll`] epoll based event loop
 //! - [`sigfd`] handle process signal
 //!
-//! # Application
+//! # Protocol
 //!
 //! - [`wayland`] contains all wayland logic
 //!
-//! # Util
+//! # Application
 //!
-//! - [`error`] error handling
+//! - [`handler`] main logic for handling request
 use std::process::ExitCode;
 use std::task::Poll::{self, *};
 
 use buffer::Buffer;
 use clients::{Client, ClientId, Clients};
 use epoll::Epoll;
-use fd_buffer::FdBuffer;
 use listener::{Listener, SocketPath};
 use sigfd::Sigfd;
 use wayland::{Id, WlError};
@@ -41,7 +40,6 @@ mod listener;
 // ===== alloc =====
 mod alloc;
 mod buffer;
-mod fd_buffer;
 mod small_buf;
 // ===== collections =====
 mod objects;
@@ -87,10 +85,8 @@ fn event_loop() -> Result<(), FatalError> {
     // ===== alloc =====
     let mut events_read = 0;
     let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
-    let mut read_buffer = Buffer::with_capacity(1024);
-    let mut write_buffer = Buffer::with_capacity(1024);
-    let mut read_fd = FdBuffer::new();
-    let mut write_fd = FdBuffer::new();
+    let mut read_buffer = Buffer::new();
+    let mut write_buffer = Buffer::new();
 
     // ===== app =====
     let mut clients = Clients::new();
@@ -164,9 +160,8 @@ fn event_loop() -> Result<(), FatalError> {
                         let state = State {
                             client,
                             write_buffer: &mut write_buffer,
-                            write_fd: &mut write_fd,
                         };
-                        match handler::router(header, state, &mut read_fd) {
+                        match handler::router(header, state) {
                             Ok(()) => {}
                             Err(err) => {
                                 encode_error(id, err, &mut write_buffer);
@@ -181,7 +176,7 @@ fn event_loop() -> Result<(), FatalError> {
                         break Err(());
                     },
                     Pending => {
-                        match client.conn().poll_read(&mut read_buffer, &mut read_fd){
+                        match client.conn().poll_read(&mut read_buffer){
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
                                 log::debug!(client, "{err}");
@@ -199,7 +194,7 @@ fn event_loop() -> Result<(), FatalError> {
                 if !write_buffer.is_empty() {
                     let _ = client
                         .conn()
-                        .poll_write_all(&mut write_buffer, &mut write_fd);
+                        .poll_write_all(&mut write_buffer);
                 }
                 read_buffer.clear();
                 write_buffer.clear();
@@ -212,7 +207,7 @@ fn event_loop() -> Result<(), FatalError> {
         let pending_write = if !write_buffer.is_empty() {
             let result = client
                 .conn()
-                .poll_write_all(&mut write_buffer, &mut write_fd);
+                .poll_write_all(&mut write_buffer);
             match result {
                 Ready(Ok(())) => if interest.is_write() {
                     epoll.modify(false, id.to_u64(), client.conn());
@@ -257,31 +252,30 @@ fn event_loop() -> Result<(), FatalError> {
 pub struct State<'a> {
     client: &'a mut Client,
     write_buffer: &'a mut Buffer,
-    #[allow(dead_code)]
-    write_fd: &'a mut FdBuffer,
 }
 
 struct Message<'a> {
     id: Id,
     op: u16,
-    body: &'a [u8],
+    read_buf: &'a mut Buffer,
 }
 
 impl<'a> Message<'a> {
-    fn from_bytes(bytes: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
-        let Some(header) = bytes.first_chunk::<8>() else {
+    fn from_bytes(read_buf: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
+        let Some(header) = read_buf.first_chunk::<8>() else {
             return Pending;
         };
         // the compiler will remove all the unwraps
         let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
         let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
         let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
-        let Some(msg) = bytes.try_split_to(len as usize) else {
-            return Pending;
-        };
-        let Some(body) = msg.get(8..) else {
+        if len < 8 {
             return Ready(Err(WlError::InvalidSize));
-        };
-        Ready(Ok(Self { id, op, body }))
+        }
+        if read_buf.len() < len as usize {
+            return Pending;
+        }
+        read_buf.advance(8);
+        Ready(Ok(Self { id, op, read_buf }))
     }
 }

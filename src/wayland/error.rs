@@ -10,8 +10,6 @@ pub enum WlError {
     UnknownBind,
     /// Invalid payload size.
     InvalidSize,
-    /// Excessive payload size.
-    ExcessiveSize,
     /// Invalid new object id, e.g: new id that is used by existing object.
     InvalidNewId,
     /// Invalid object id of `0`.
@@ -31,7 +29,6 @@ impl WlError {
             Self::UnknownObject => "unknown object id",
             Self::UnknownBind => "unknown global binding operation",
             Self::InvalidSize => "invalid payload size",
-            Self::ExcessiveSize => "excessive payload size",
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",
             Self::Null => "invalid null value",
