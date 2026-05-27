@@ -231,7 +231,7 @@ impl<'a> MsgHdr<'a> {
                             buffer.fd_len * FDSIZE
                         );
                     };
-                    &raw mut cmsg as *mut _
+                    cmsg.as_mut_ptr().cast()
                 },
                 msg_controllen: if buffer.fd_len == 0 { 0 } else { cmsg_space(buffer.fd_len) },
                 msg_flags: 0,
@@ -253,7 +253,7 @@ impl<'a> MsgHdr<'a> {
                 msg_iovlen: 1,
                 msg_control: {
                     let mut cmsg = CONTROL_MESSAGE;
-                    &raw mut cmsg as *mut _
+                    cmsg.as_mut_ptr().cast()
                 },
                 msg_controllen: CMSG_SPACE,
                 msg_flags: 0,
@@ -324,13 +324,13 @@ impl<'a> MsgHdr<'a> {
         unsafe {
             let mut cmsg_ptr = libc::CMSG_FIRSTHDR(&self.msghdr);
             while !cmsg_ptr.is_null() {
-                let cmsg = cmsg_ptr.read_unaligned();
+                let cmsg = &*cmsg_ptr;
 
                 let (libc::SOL_SOCKET, libc::SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
                     return false;
                 };
 
-                let cmsg_data = libc::CMSG_DATA(&cmsg);
+                let cmsg_data = libc::CMSG_DATA(cmsg);
                 let cmsg_len = cmsg.cmsg_len - const { libc::CMSG_LEN(0) as usize };
                 let fd_count = cmsg_len / FDSIZE;
                 let remaining = MAXFD - self.buffer.fd_len;
