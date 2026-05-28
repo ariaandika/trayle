@@ -31,7 +31,7 @@ impl CreateSurface {
 impl Decode for CreateSurface {
     type Output<'a> = Self;
 
-    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self { id: reader.read()? })
+    fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
+        Ok(Self { id: decoder.read()? })
     }
 }

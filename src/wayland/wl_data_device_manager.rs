@@ -31,8 +31,8 @@ pub struct CreateDataSource {
 impl Decode for CreateDataSource {
     type Output<'a> = Self;
 
-    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self { id: reader.read()? })
+    fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
+        Ok(Self { id: decoder.read()? })
     }
 }
 
@@ -49,7 +49,8 @@ pub struct GetDataDevice {
 impl Decode for GetDataDevice {
     type Output<'a> = Self;
 
-    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+    fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
+        let mut reader = decoder.body()?;
         Ok(Self {
             id: reader.read()?,
             seat: reader.read()?,

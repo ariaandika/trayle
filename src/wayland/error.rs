@@ -16,6 +16,8 @@ pub enum WlError {
     ZeroId,
     /// Invalid null value.
     Null,
+    /// Non-UTF8 string.
+    NonUtf8,
     /// No fd in ancillary data.
     MissingFd,
     /// Not yet implemented.
@@ -32,6 +34,7 @@ impl WlError {
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",
             Self::Null => "invalid null value",
+            Self::NonUtf8 => "non-utf8 string",
             Self::MissingFd => "no fd in ancillary data",
             Self::NotYetImplemented => "not yet implemented",
         }

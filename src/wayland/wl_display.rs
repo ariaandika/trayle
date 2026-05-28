@@ -52,9 +52,9 @@ impl Sync {
 impl Decode for Sync {
     type Output<'a> = Self;
 
-    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+    fn decode(decoder: Decoder) -> Result<Self, WlError> {
         Ok(Self {
-            callback: reader.read()?,
+            callback: decoder.read()?,
         })
     }
 }
@@ -75,9 +75,9 @@ impl GetRegistry {
 impl Decode for GetRegistry {
     type Output<'a> = Self;
 
-    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+    fn decode(decoder: Decoder) -> Result<Self, WlError> {
         Ok(Self {
-            registry: reader.read()?,
+            registry: decoder.read()?,
         })
     }
 }
@@ -108,6 +108,7 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
         E::InvalidNewId => SEMANTIC,
         E::ZeroId => SEMANTIC,
         E::Null => SEMANTIC,
+        E::NonUtf8 => SEMANTIC,
         E::MissingFd => MALFORMED,
         E::NotYetImplemented => (Id::wl_display(), IMPLEMENTATION),
     };

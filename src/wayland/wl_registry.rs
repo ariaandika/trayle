@@ -64,7 +64,8 @@ pub struct Bind<'a> {
 impl Decode for Bind<'static> {
     type Output<'a> = Bind<'a>;
 
-    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+        let mut reader = decoder.body()?;
         Ok(Bind {
             name: reader.read()?,
             id_name: reader.read()?,

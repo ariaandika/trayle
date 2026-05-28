@@ -26,7 +26,7 @@ mod prelude {
     pub use super::id::Id;
     pub use super::op::FromOp;
     pub use super::error::WlError;
-    pub use super::decode::{Reader, Decode};
+    pub use super::decode::{Decode, Decoder};
     pub use super::encode::{PtrWrite, Encoder};
     pub use super::interface::InterfaceId;
     pub use crate::buffer::Buffer;

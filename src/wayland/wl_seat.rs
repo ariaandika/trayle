@@ -35,9 +35,9 @@ impl GetKeyboard {
 impl Decode for GetKeyboard {
     type Output<'a> = Self;
 
-    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+    fn decode(decoder: Decoder) -> Result<Self, WlError> {
         Ok(Self {
-            id: reader.read()?,
+            id: decoder.read()?,
         })
     }
 }

@@ -31,11 +31,13 @@ pub struct CreatePool {
 impl Decode for CreatePool {
     type Output<'a> = Self;
 
-    fn decode<'a>(reader: &mut Reader<'a>) -> Result<Self::Output<'a>, WlError> {
+    fn decode(mut decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
+        let fd = decoder.pop_fd()?;
+        let mut reader = decoder.body()?;
         Ok(Self {
             id: reader.read()?,
-            fd: reader.read_fd()?,
-            size: reader.read_int()?,
+            fd,
+            size: reader.read()?,
         })
     }
 }
