@@ -377,7 +377,7 @@ impl Drop for SmallBuf {
 }
 
 impl SmallBuf {
-    pub fn copy_from(&mut self, read_buf: &mut Buffer, write_buf: &mut Buffer) {
+    pub fn copy_from(&mut self, read_buf: &Buffer, write_buf: &Buffer) {
         debug_assert!(self.ptr.is_none());
         debug_assert!(!(read_buf.is_empty() & write_buf.is_empty()));
 
@@ -404,8 +404,6 @@ impl SmallBuf {
                 .copy_from_nonoverlapping(write_buf.base_ptr(), MAXFD_SIZE + write_buf.len);
         }
 
-        read_buf.clear();
-        write_buf.clear();
         self.ptr = Some(ptr);
     }
     // ```not_rust

@@ -54,6 +54,7 @@ fn sendmsg(buffer: &mut Buffer, socket: RawFd) -> Poll<Result<(), WriteError>> {
 
 fn recvmsg(buffer: &mut Buffer, socket: RawFd) -> Poll<Result<(), ReadError>> {
     use ReadError as E;
+    debug_assert!(!buffer.spare_capacity_mut().is_empty());
 
     let mut msghdr = buffer.as_spare_msghdr();
 
@@ -89,13 +90,19 @@ pub enum ReadError {
     ConnectionAborted,
 }
 
+impl ReadError {
+    pub fn is_connection_aborted(&self) -> bool {
+        matches!(self, Self::ConnectionAborted)
+    }
+}
+
 impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Errno => write!(f, "failed to read socket: {Errno}"),
             Self::ControlDataType => "unexpected ancillary data type".fmt(f),
             Self::ControlDataTruncated => "ancillary data truncated".fmt(f),
-            Self::ConnectionAborted => std::io::ErrorKind::ConnectionAborted.fmt(f),
+            Self::ConnectionAborted => "connection aborted by the peer".fmt(f),
         }
     }
 }

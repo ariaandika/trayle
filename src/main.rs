@@ -143,8 +143,8 @@ fn event_loop() -> Result<(), FatalError> {
 
         if interest.is_close() {
             match clients.remove(id, &epoll) {
-                Some(()) => log::debug!(client, "id={id} disconnected"),
-                None => log::error!(epoll, "unknown dynamic key: {id}"),
+                Some(()) => log::debug!(client, "id={id} disconnected (hup)"),
+                None => log::warn!(epoll, "unknown dynamic key: {id}"),
             }
             continue;
         }
@@ -188,7 +188,9 @@ fn event_loop() -> Result<(), FatalError> {
                         match client.conn().poll_read(&mut read_buffer){
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
-                                log::debug!(client, "{err}");
+                                if !err.is_connection_aborted() {
+                                    log::error!(client, "failed to read: {err}");
+                                }
                                 break Err(());
                             },
                             Pending => {
@@ -208,7 +210,7 @@ fn event_loop() -> Result<(), FatalError> {
                 read_buffer.clear();
                 write_buffer.clear();
                 clients.remove(id, &epoll);
-                log::debug!(client, "disconnected");
+                log::debug!(client, "id={id} disconnected (read)");
                 continue;
             }
         }
@@ -226,7 +228,7 @@ fn event_loop() -> Result<(), FatalError> {
                     write_buffer.clear();
                     clients.remove(id, &epoll);
                     log::error!(client, "{}", err);
-                    log::debug!(client, "disconnecting");
+                    log::debug!(client, "id={id} disconnected (write)");
                     continue;
                 }
                 Pending => if !interest.is_write() {
@@ -249,8 +251,11 @@ fn event_loop() -> Result<(), FatalError> {
             }
             client
                 .buffer_mut()
-                .copy_from(&mut read_buffer, &mut write_buffer);
+                .copy_from(&read_buffer, &write_buffer);
         }
+
+        read_buffer.clear();
+        write_buffer.clear();
     }
 
     Ok(())
