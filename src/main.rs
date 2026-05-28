@@ -42,7 +42,6 @@ mod seat;
 // ===== alloc =====
 mod alloc;
 mod buffer;
-mod small_buf;
 // ===== collections =====
 mod objects;
 mod clients;
@@ -158,7 +157,7 @@ fn event_loop() -> Result<(), FatalError> {
         debug_assert!(read_buffer.is_empty());
         debug_assert!(write_buffer.is_empty());
 
-        client.buffer_mut().copy_to(&mut read_buffer, &mut write_buffer);
+        client.buffer_mut().restore(&mut read_buffer, &mut write_buffer);
 
         if interest.is_read() {
             let result = loop {

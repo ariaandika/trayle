@@ -2,7 +2,7 @@ use std::ptr::NonNull;
 use std::{mem, slice};
 
 use crate::alloc;
-use crate::small_buf::SmallBuf;
+use crate::buffer::SmallBuf;
 use crate::conn::Connection;
 use crate::epoll::Epoll;
 use crate::objects::Objects;
@@ -143,7 +143,7 @@ impl Clients {
         let new_entry = Entry::Some(Client {
             conn,
             objects: Objects::new(),
-            buffer: SmallBuf::new(),
+            buffer: SmallBuf::default(),
         });
         let entry = unsafe { self.ptr.add(self.last_delete).as_mut() };
         let Entry::None(next_delete) = mem::replace(entry, new_entry) else {

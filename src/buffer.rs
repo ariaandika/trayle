@@ -94,16 +94,16 @@ impl Buffer {
         Some(unsafe { slice::from_raw_parts(self.ptr.sub(cnt).as_ptr(), cnt) })
     }
 
-    /// Returns `true` if remaining capacity is sufficient and the data is copied.
-    pub fn extend_from_slice(&mut self, slice: &[u8]) {
-        self.reserve(slice.len());
-        unsafe {
-            self.spare_capacity_mut()
-                .as_mut_ptr()
-                .copy_from_nonoverlapping(slice.as_ptr().cast(), slice.len());
-            self.advance_mut(slice.len());
-        }
-    }
+    // /// Returns `true` if remaining capacity is sufficient and the data is copied.
+    // pub fn extend_from_slice(&mut self, slice: &[u8]) {
+    //     self.reserve(slice.len());
+    //     unsafe {
+    //         self.spare_capacity_mut()
+    //             .as_mut_ptr()
+    //             .copy_from_nonoverlapping(slice.as_ptr().cast(), slice.len());
+    //         self.advance_mut(slice.len());
+    //     }
+    // }
 
     pub fn reserve(&mut self, additional: usize) {
         if self.cap - self.len < additional {
@@ -125,6 +125,8 @@ impl Buffer {
         self.cap += self.off;
         self.len = 0;
         self.off = 0;
+        self.fd_len = 0;
+        self.fd_off = 0;
     }
 
     pub fn push_fd(&mut self, fd: i32) -> bool {
@@ -181,6 +183,8 @@ const CMSG_SPACE: usize = unsafe { libc::CMSG_SPACE(MAXFD_SIZE as u32) as usize 
 const CMSG_ALIGN: usize = align_of::<libc::cmsghdr>();
 
 // this prove all statements above
+//
+// perhaps this is not true for different architecture, but thats a todo
 const _: () = assert!(matches!(
     (size_of::<CmsgBuf>(), align_of::<CmsgBuf>()),
     (CMSG_SPACE, CMSG_ALIGN)
@@ -291,8 +295,6 @@ impl<'a> MsgHdr<'a> {
         if self.is_empty() {
             // reset the indexes
             self.buffer.clear();
-            self.buffer.fd_len = 0;
-            self.buffer.fd_off = 0;
             return true;
         }
 
@@ -333,7 +335,7 @@ impl<'a> MsgHdr<'a> {
                 let cmsg_data = libc::CMSG_DATA(cmsg);
                 let cmsg_len = cmsg.cmsg_len - const { libc::CMSG_LEN(0) as usize };
                 let fd_count = cmsg_len / FDSIZE;
-                let remaining = MAXFD - self.buffer.fd_len;
+                let remaining = MAXFD - self.buffer.fd_off - self.buffer.fd_len;
 
                 if fd_count > remaining {
                     return false;
@@ -356,5 +358,99 @@ impl<'a> MsgHdr<'a> {
         }
 
         true
+    }
+}
+
+// ===== SmallBuf =====
+
+#[derive(Default)]
+pub struct SmallBuf {
+    ptr: Option<NonNull<u8>>,
+}
+
+impl Drop for SmallBuf {
+    fn drop(&mut self) {
+        if let Some(ptr) = self.ptr {
+            alloc::deallocate(ptr);
+        }
+    }
+}
+
+impl SmallBuf {
+    pub fn copy_from(&mut self, read_buf: &mut Buffer, write_buf: &mut Buffer) {
+        debug_assert!(self.ptr.is_none());
+        debug_assert!(!(read_buf.is_empty() & write_buf.is_empty()));
+
+        const USIZE: usize = size_of::<usize>();
+        const HEADER: usize = size_of::<usize>() * 4;
+        const FDSPACE: usize = MAXFD_SIZE * 2;
+
+        let read_len = read_buf.len();
+        let write_len = write_buf.len();
+        let cap = HEADER + FDSPACE + read_len + write_len;
+        let ptr = alloc::allocate::<u8>(cap);
+
+        unsafe {
+            ptr.cast::<usize>().write_unaligned(read_buf.fd_len);
+            ptr.cast::<usize>().add(1).write_unaligned(read_buf.len);
+            ptr.add(USIZE * 2)
+                .copy_from_nonoverlapping(read_buf.base_ptr(), MAXFD_SIZE + read_buf.len);
+
+            let ptr = ptr.add(USIZE * 2 + MAXFD_SIZE + read_buf.len);
+
+            ptr.cast::<usize>().write_unaligned(write_buf.fd_len);
+            ptr.cast::<usize>().add(1).write_unaligned(write_buf.len);
+            ptr.add(USIZE * 2)
+                .copy_from_nonoverlapping(write_buf.base_ptr(), MAXFD_SIZE + write_buf.len);
+        }
+
+        read_buf.clear();
+        write_buf.clear();
+        self.ptr = Some(ptr);
+    }
+    // ```not_rust
+    // [
+    //     read_fd_len @ usize,
+    //     read_len @ usize,
+    //     read_buf @ [u8; MAXFD_SIZE + read_len],
+    //     write_fd_len @ usize,
+    //     write_fd @ [u8; MAXFD_SIZE],
+    //     write_buf @ [u8; MAXFD_SIZE + write_len],
+    // ]
+    // ```
+    pub fn restore(&mut self, read_buf: &mut Buffer, write_buf: &mut Buffer) {
+        debug_assert!(read_buf.is_empty() & write_buf.is_empty());
+        debug_assert_eq!(
+            read_buf.fd_len | read_buf.fd_off | write_buf.fd_len | write_buf.fd_off,
+            0
+        );
+
+        const USIZE: usize = size_of::<usize>();
+
+        let Some(ptr) = self.ptr else {
+            return;
+        };
+
+        unsafe {
+            let read_fd_len = ptr.cast().read_unaligned();
+            let read_len = ptr.cast().add(1).read_unaligned();
+            read_buf
+                .base_ptr()
+                .copy_from_nonoverlapping(ptr.add(USIZE * 2), MAXFD_SIZE + read_len);
+            read_buf.fd_len = read_fd_len;
+            read_buf.advance_mut(read_len);
+
+            let ptr = ptr.add(USIZE * 2 + MAXFD_SIZE + read_buf.len);
+
+            let write_fd_len = ptr.cast().read_unaligned();
+            let write_len = ptr.cast().add(1).read_unaligned();
+            write_buf
+                .base_ptr()
+                .copy_from_nonoverlapping(ptr.add(USIZE * 2), MAXFD_SIZE + write_len);
+            write_buf.fd_len = write_fd_len;
+            write_buf.advance_mut(write_len);
+        }
+
+        self.ptr = None;
     }
 }
