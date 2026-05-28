@@ -4,6 +4,7 @@ use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
+use crate::wayland::wl_compositor as WlCompositor;
 use crate::wayland::wl_shm as WlShm;
 use crate::wayland::wl_seat as WlSeat;
 use crate::wayland::wl_keyboard as WlKeyboard;
@@ -61,6 +62,9 @@ pub fn router(header: Message, state: State) -> Result<(), WlError> {
     handle_me! {
         WlDisplay { Sync, GetRegistry }
         WlRegistry { Bind }
+        WlCompositor {
+            CreateSurface
+        }
         WlShm {
             CreatePool todo,
             Release todo,
@@ -140,6 +144,13 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
         }
 
         Ok(())
+    }
+}
+
+impl RequestHandler<WlCompositor::CreateSurface> for State<'_> {
+    fn handle(self, req: WlCompositor::CreateSurface) -> Result<(), WlError> {
+        let surface = req.surface();
+        self.client.objects_mut().insert_object(&surface)
     }
 }
 
