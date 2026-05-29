@@ -5,6 +5,12 @@ pub struct WlSurface {
     id: Id,
 }
 
+impl FromId for WlSurface {
+    fn from_id(id: Id) -> Self {
+        Self { id }
+    }
+}
+
 impl Object for WlSurface {
     const INTERFACE_ID: InterfaceId = InterfaceId::WlSurface;
 
@@ -12,10 +18,3 @@ impl Object for WlSurface {
         self.id
     }
 }
-
-impl WlSurface {
-    pub fn new(id: Id) -> Self {
-        Self { id }
-    }
-}
-

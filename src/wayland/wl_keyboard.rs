@@ -6,6 +6,12 @@ pub struct Keyboard {
     id: Id,
 }
 
+impl FromId for Keyboard {
+    fn from_id(id: Id) -> Self {
+        Self { id }
+    }
+}
+
 impl Object for Keyboard {
     const INTERFACE_ID: InterfaceId = InterfaceId::WlKeyboard;
 
@@ -16,11 +22,6 @@ impl Object for Keyboard {
 }
 
 impl Keyboard {
-    #[inline]
-    pub fn new(id: Id) -> Self {
-        Self { id }
-    }
-
     pub fn keymap_xkb_v1(&self, seat: &Seat) -> Message<Keymap> {
         Message::new(
             self,

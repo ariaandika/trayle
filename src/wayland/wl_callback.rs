@@ -4,14 +4,10 @@ pub struct WlCallback {
     id: Id,
 }
 
-impl WlCallback {
+impl FromId for WlCallback {
     #[inline]
-    pub fn new(id: Id) -> Self {
+    fn from_id(id: Id) -> Self {
         Self { id }
-    }
-
-    pub fn done(&self, callback_data: u32) -> Message<Done> {
-        Message::new(self, Done { callback_data })
     }
 }
 
@@ -20,6 +16,12 @@ impl Object for WlCallback {
 
     fn id(&self) -> Id {
         self.id
+    }
+}
+
+impl WlCallback {
+    pub fn done(&self, callback_data: u32) -> Message<Done> {
+        Message::new(self, Done { callback_data })
     }
 }
 

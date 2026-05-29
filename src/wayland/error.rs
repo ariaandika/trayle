@@ -1,5 +1,3 @@
-use crate::wayland::id::ZeroId;
-
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
     /// Unknown op code.
@@ -50,11 +48,5 @@ impl std::error::Error for WlError { }
 impl std::fmt::Display for WlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message())
-    }
-}
-
-impl From<ZeroId> for WlError {
-    fn from(_: ZeroId) -> Self {
-        Self::ZeroId
     }
 }

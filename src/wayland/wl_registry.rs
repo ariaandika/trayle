@@ -5,6 +5,13 @@ pub struct Registry {
     id: Id,
 }
 
+impl FromId for Registry {
+    #[inline]
+    fn from_id(id: Id) -> Self {
+        Self { id }
+    }
+}
+
 impl Object for Registry {
     const INTERFACE_ID: InterfaceId = InterfaceId::WlRegistry;
 
@@ -14,11 +21,6 @@ impl Object for Registry {
 }
 
 impl Registry {
-    /// Can only be created by `GetRegistry`.
-    pub(super) fn new(id: Id) -> Self {
-        Self { id }
-    }
-
     /// Send `wl_registry::global` event.
     pub fn global<'a>(&self, name: u32, interface: &'a str, version: u32) -> Message<Global<'a>> {
         Message::new(self, Global { name, interface, version })
@@ -45,7 +47,6 @@ impl FromOp for RequestOp {
 #[derive(Debug, Clone, Copy)]
 pub enum EventOp {
     Global,
-    GlobalRemove,
 }
 
 impl ToOp for EventOp {
@@ -81,9 +82,9 @@ impl Decode for Bind<'static> {
 // ===== Global =====
 
 pub struct Global<'a> {
-    name: u32,
-    interface: &'a str,
-    version: u32,
+    pub name: u32,
+    pub interface: &'a str,
+    pub version: u32,
 }
 
 impl Encode for Message<Global<'_>> {

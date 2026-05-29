@@ -1,5 +1,11 @@
 use std::num::NonZeroU32;
 
+pub trait FromId {
+    fn from_id(id: Id) -> Self;
+}
+
+// ===== Id =====
+
 /// Object ID.
 ///
 /// The IDs are allocated by the entity creating the object (either client or server). IDs allocated
@@ -17,19 +23,19 @@ use std::num::NonZeroU32;
 pub struct Id(NonZeroU32);
 
 impl Id {
-    pub const fn new(id: u32) -> Result<Self, ZeroId> {
+    pub const fn new(id: u32) -> Option<Self> {
         match NonZeroU32::new(id) {
-            Some(x) => Ok(Self(x)),
-            None => Err(ZeroId),
+            Some(x) => Some(Self(x)),
+            None => None
         }
     }
 
-    pub const fn from_ne_bytes(ne: [u8; 4]) -> Result<Self, ZeroId> {
+    pub const fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
         Self::new(u32::from_ne_bytes(ne))
     }
 
     pub const fn wl_display() -> Self {
-        unsafe { Self(NonZeroU32::new_unchecked(1)) }
+        const { Self(NonZeroU32::new(1).unwrap()) }
     }
 
     /// Returns `true` if id is special id for `wl_display`.
@@ -60,16 +66,31 @@ impl std::fmt::Display for Id {
     }
 }
 
-// ===== Error =====
+// ===== NewId =====
 
-#[derive(Debug, Clone, Copy)]
-pub struct ZeroId;
+pub struct NewId<T> {
+    id: Id,
+    _p: std::marker::PhantomData<T>,
+}
 
-impl std::error::Error for ZeroId { }
+impl<T> NewId<T> {
+    pub fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
+        Some(Self {
+            id: Id::from_ne_bytes(ne)?,
+            _p: std::marker::PhantomData,
+        })
+    }
 
-impl std::fmt::Display for ZeroId {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "invalid object id of `0`")
+    pub fn get(self) -> T
+    where
+        T: FromId,
+    {
+        T::from_id(self.id)
     }
 }
 
+impl<T> std::fmt::Debug for NewId<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("NewId").field("id", &self.id).finish()
+    }
+}

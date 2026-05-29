@@ -104,7 +104,7 @@ impl State<'_> {
 
 impl RequestHandler<WlDisplay::Sync> for State<'_> {
     fn handle(mut self, sync: WlDisplay::Sync) -> Result<(), WlError> {
-        let callback = sync.callback();
+        let callback = sync.callback.get();
         self.client.objects_mut().use_one(&callback)?;
         self.send(callback.done(69));
         self.send(WlDisplay::delete_id(&callback));
@@ -113,13 +113,13 @@ impl RequestHandler<WlDisplay::Sync> for State<'_> {
 }
 
 impl RequestHandler<WlDisplay::GetRegistry> for State<'_> {
-    fn handle(mut self, get_registry: WlDisplay::GetRegistry) -> Result<(), WlError> {
-        let wl_registry = get_registry.wl_registry();
-        self.client.objects_mut().insert_object(&wl_registry)?;
+    fn handle(mut self, request: WlDisplay::GetRegistry) -> Result<(), WlError> {
+        let registry = request.registry.get();
+        self.client.objects_mut().insert_object(&registry)?;
 
         // FEAT: encode globals at startup
         for ((iface, version, _), i) in GLOBALS.into_iter().zip(0..) {
-            self.send(wl_registry.global(i, iface, version as u32));
+            self.send(registry.global(i, iface, version as u32));
         }
 
         Ok(())
@@ -150,14 +150,14 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 
 impl RequestHandler<WlCompositor::CreateSurface> for State<'_> {
     fn handle(self, req: WlCompositor::CreateSurface) -> Result<(), WlError> {
-        let surface = req.surface();
+        let surface = req.surface.get();
         self.client.objects_mut().insert_object(&surface)
     }
 }
 
 impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
     fn handle(mut self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
-        let keyboard = req.keyboard();
+        let keyboard = req.keyboard.get();
         self.client.objects_mut().insert_object(&keyboard)?;
         self.send(keyboard.keymap_xkb_v1(self.seat));
         Ok(())

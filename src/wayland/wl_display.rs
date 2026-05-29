@@ -36,13 +36,7 @@ impl ToOp for EventOp {
 
 #[derive(Debug)]
 pub struct Sync {
-    callback: Id,
-}
-
-impl Sync {
-    pub fn callback(self) -> WlCallback {
-        WlCallback::new(self.callback)
-    }
+    pub callback: NewId<WlCallback>,
 }
 
 impl Decode for Sync {
@@ -59,13 +53,7 @@ impl Decode for Sync {
 
 #[derive(Debug)]
 pub struct GetRegistry {
-    registry: Id,
-}
-
-impl GetRegistry {
-    pub fn wl_registry(&self) -> Registry {
-        Registry::new(self.registry)
-    }
+    pub registry: NewId<Registry>,
 }
 
 impl Decode for GetRegistry {

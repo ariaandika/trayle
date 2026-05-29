@@ -32,22 +32,22 @@ impl FromOp for RequestOp {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
 pub enum EventOp {
     Capabities,
-    Name,
+}
+
+impl ToOp for EventOp {
+    fn to_op(&self) -> u16 {
+        *self as u16
+    }
 }
 
 // ===== GetKeyboard =====
 
 #[derive(Debug)]
 pub struct GetKeyboard {
-    id: Id,
-}
-
-impl GetKeyboard {
-    pub fn keyboard(self) -> Keyboard {
-        Keyboard::new(self.id)
-    }
+    pub keyboard: NewId<Keyboard>,
 }
 
 impl Decode for GetKeyboard {
@@ -55,7 +55,7 @@ impl Decode for GetKeyboard {
 
     fn decode(decoder: Decoder) -> Result<Self, WlError> {
         Ok(Self {
-            id: decoder.read()?,
+            keyboard: decoder.read()?,
         })
     }
 }
