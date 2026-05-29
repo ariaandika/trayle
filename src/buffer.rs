@@ -64,6 +64,15 @@ impl Buffer {
 
     pub fn advance(&mut self, cnt: usize) {
         assert!(cnt <= self.len);
+        // SAFETY: asserted above
+        unsafe { self.advance_unchecked(cnt) };
+    }
+
+    /// # Safety
+    ///
+    /// `cnt <= self.len()`
+    pub unsafe fn advance_unchecked(&mut self, cnt: usize) {
+        debug_assert!(cnt <= self.len);
         self.ptr = unsafe { self.ptr.add(cnt) };
         self.off += cnt;
         self.len -= cnt;
@@ -82,16 +91,40 @@ impl Buffer {
         if N > self.len {
             return None;
         }
-        self.advance(N);
-        Some(unsafe { self.ptr.sub(N).cast().as_ref() })
+        // SAFETY: checked above
+        unsafe { Some(self.split_first_chunk_unchecked()) }
+    }
+
+    /// # Safety
+    ///
+    /// `N <= self.len()`
+    pub unsafe fn split_first_chunk_unchecked<const N: usize>(&mut self) -> &[u8; N] {
+        debug_assert!(N <= self.len);
+        // SAFETY: precondition
+        unsafe {
+            self.advance_unchecked(N);
+            self.ptr.sub(N).cast().as_ref()
+        }
     }
 
     pub fn try_split_to(&mut self, cnt: usize) -> Option<&[u8]> {
         if cnt > self.len {
             return None;
         }
-        self.advance(cnt);
-        Some(unsafe { slice::from_raw_parts(self.ptr.sub(cnt).as_ptr(), cnt) })
+        // SAFETY: checked above
+        unsafe { Some(self.split_to_unchecked(cnt)) }
+    }
+
+    /// # Safety
+    ///
+    /// `cnt <= self.len()`
+    pub unsafe fn split_to_unchecked(&mut self, cnt: usize) -> &[u8] {
+        debug_assert!(cnt <= self.len);
+        // SAFETY: precondition
+        unsafe {
+            self.advance_unchecked(cnt);
+            slice::from_raw_parts(self.ptr.sub(cnt).as_ptr(), cnt)
+        }
     }
 
     // /// Returns `true` if remaining capacity is sufficient and the data is copied.
