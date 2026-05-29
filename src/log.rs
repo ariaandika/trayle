@@ -57,9 +57,25 @@ pub fn log_me(prefix: [u8; HEADER_LEN], args: std::fmt::Arguments) {
     use std::io::Write;
     let b = buffer();
     b.reserve(prefix.len());
-    let _ = b.write_all(&prefix);
+    b.extend_from_slice(&prefix);
     let _ = b.write_fmt(args);
-    let _ = b.write(b"\n");
+    b.push(b'\n');
+}
+
+#[allow(unused, reason = "debugging")]
+pub fn lossy(bytes: &[u8]) {
+    let buf = buffer();
+    buf.reserve(7 + bytes.len());
+    buf.extend_from_slice(b"DEBUG ");
+    for b in bytes {
+        if b.is_ascii_alphabetic() || *b == b'_' {
+            buf.push(*b)
+        } else {
+            use std::io::Write;
+            let _ = write!(buf, "\\x{b:0>2X}");
+        }
+    }
+    buf.push(b'\n');
 }
 
 pub fn flush() {
