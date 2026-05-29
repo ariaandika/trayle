@@ -38,7 +38,7 @@ impl<'a> Decoder<'a> {
     }
 
     pub fn read<T: PrimitiveDecode<'a>>(self) -> Result<T, WlError> {
-        T::decode(&mut Reader { read_buf: self.read_buf.as_slice() })
+        T::decode(&mut self.body()?)
     }
 
     pub fn body(self) -> Result<Reader<'a>, WlError> {

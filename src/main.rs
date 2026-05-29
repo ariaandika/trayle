@@ -284,7 +284,6 @@ impl<'a> Message<'a> {
         if read_buf.len() < len as usize {
             return Pending;
         }
-        read_buf.advance(8);
         Ready(Ok(Self { id, op, read_buf }))
     }
 }
