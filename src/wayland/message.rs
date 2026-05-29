@@ -11,6 +11,32 @@ pub trait Object {
     fn id(&self) -> Id;
 }
 
+macro_rules! simple_object {
+    (pub struct $mod_name:ident::$struct_name:ident;) => {
+        #[derive(Debug)]
+        pub struct $struct_name {
+            id: Id,
+        }
+
+        impl FromId for $struct_name {
+            #[inline]
+            fn from_id(id: Id) -> Self {
+                Self { id }
+            }
+        }
+
+        impl Object for $struct_name {
+            const INTERFACE_ID: InterfaceId = InterfaceId::$mod_name;
+
+            fn id(&self) -> Id {
+                self.id
+            }
+        }
+    };
+}
+
+pub(super) use simple_object;
+
 // ===== Message =====
 
 pub struct Message<T> {

@@ -2,23 +2,8 @@ use crate::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::Keyboard;
 
-pub struct Seat {
-    id: Id,
-}
-
-impl FromId for Seat {
-    fn from_id(id: Id) -> Self {
-        Self { id }
-    }
-}
-
-impl Object for Seat {
-    const INTERFACE_ID: InterfaceId = InterfaceId::WlSeat;
-
-    #[inline]
-    fn id(&self) -> Id {
-        self.id
-    }
+simple_object! {
+    pub struct WlSeat::Seat;
 }
 
 impl Seat {

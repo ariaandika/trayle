@@ -1,23 +1,8 @@
 use crate::wayland::prelude::*;
-use crate::wayland::wl_surface::WlSurface;
+use crate::wayland::wl_surface::Surface;
 
-pub struct Compositor {
-    id: Id,
-}
-
-impl FromId for Compositor {
-    fn from_id(id: Id) -> Self {
-        Self { id }
-    }
-}
-
-impl Object for Compositor {
-    const INTERFACE_ID: InterfaceId = InterfaceId::WlCompositor;
-
-    #[inline]
-    fn id(&self) -> Id {
-        self.id
-    }
+simple_object! {
+    pub struct WlCompositor::Compositor;
 }
 
 // ===== Op =====
@@ -32,7 +17,7 @@ opcode! {
 
 #[derive(Debug)]
 pub struct CreateSurface {
-    pub surface: NewId<WlSurface>,
+    pub surface: NewId<Surface>,
 }
 
 impl Decode for CreateSurface {

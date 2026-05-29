@@ -34,8 +34,9 @@ mod prelude {
     pub use super::encode::{Encode, Encoder};
     pub use super::interface::InterfaceId;
 
-    pub(super) use super::op::opcode;
     pub(super) use super::roundup4;
+    pub(super) use super::op::opcode;
+    pub(super) use super::message::simple_object;
 }
 
 macro_rules! roundup4 {
