@@ -65,6 +65,15 @@ pub struct Bind<'a> {
     pub id: Id,
 }
 
+impl<'a> Bind<'a> {
+    /// Create object from current bind id.
+    ///
+    /// Note that this does not check for interface correction.
+    pub fn get<O: FromId>(self) -> O {
+        O::from_id(self.id)
+    }
+}
+
 impl Decode for Bind<'static> {
     type Output<'a> = Bind<'a>;
 

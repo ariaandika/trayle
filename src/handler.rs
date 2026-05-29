@@ -141,7 +141,8 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 
         // some interface has side-effect after binding
         if let InterfaceId::WlSeat = iface {
-            self.send(WlSeat::capabilities(bind.id, self.seat.capability()));
+            let seat = bind.get::<WlSeat::Seat>();
+            self.send(seat.capabilities(self.seat.capability()));
         }
 
         Ok(())

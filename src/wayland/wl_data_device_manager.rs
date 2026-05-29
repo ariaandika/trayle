@@ -1,5 +1,24 @@
 use crate::wayland::prelude::*;
 
+pub struct DataDeviceManager {
+    id: Id,
+}
+
+impl FromId for DataDeviceManager {
+    fn from_id(id: Id) -> Self {
+        Self { id }
+    }
+}
+
+impl Object for DataDeviceManager {
+    const INTERFACE_ID: InterfaceId = InterfaceId::WlDataDeviceManager;
+
+    #[inline]
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
 // ===== Op =====
 
 pub enum RequestOp {

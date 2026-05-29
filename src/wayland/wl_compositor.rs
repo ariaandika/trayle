@@ -1,6 +1,25 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_surface::WlSurface;
 
+pub struct Compositor {
+    id: Id,
+}
+
+impl FromId for Compositor {
+    fn from_id(id: Id) -> Self {
+        Self { id }
+    }
+}
+
+impl Object for Compositor {
+    const INTERFACE_ID: InterfaceId = InterfaceId::WlCompositor;
+
+    #[inline]
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
 // ===== Op =====
 
 pub enum RequestOp {
@@ -20,7 +39,6 @@ impl FromOp for RequestOp {
 
 #[derive(Debug)]
 pub struct CreateSurface {
-    /// `<wl_surface>`
     pub surface: NewId<WlSurface>,
 }
 
