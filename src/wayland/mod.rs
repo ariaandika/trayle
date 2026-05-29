@@ -1,5 +1,5 @@
 pub use id::{Id, NewId};
-pub use op::{FromOp, ToOp};
+pub use op::OpCode;
 pub use message::{Frame, Object};
 pub use error::WlError;
 pub use decode::Decode;
@@ -27,13 +27,14 @@ pub mod wl_keyboard;
 
 mod prelude {
     pub use super::id::{FromId, Id, NewId};
-    pub use super::op::{FromOp, ToOp};
+    pub use super::op::OpCode;
     pub use super::message::{Message, Object};
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};
     pub use super::encode::{Encode, Encoder};
     pub use super::interface::InterfaceId;
 
+    pub(super) use super::op::opcode;
     pub(super) use super::roundup4;
 }
 

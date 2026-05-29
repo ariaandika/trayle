@@ -29,29 +29,15 @@ impl Registry {
 
 // ===== Op =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum RequestOp {
-    Bind,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op: u16) -> Result<Self, WlError> {
-        if op == 0 {
-            Ok(Self::Bind)
-        } else {
-            Err(WlError::UnknownOp)
-        }
+opcode! {
+    pub enum RequestOp {
+        Bind,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EventOp {
-    Global,
-}
-
-impl ToOp for EventOp {
-    fn to_op(&self) -> u16 {
-        *self as u16
+opcode! {
+    pub enum EventOp {
+        Global,
     }
 }
 

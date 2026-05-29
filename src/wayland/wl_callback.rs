@@ -27,14 +27,9 @@ impl WlCallback {
 
 // ===== Op =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum EventOp {
-    Done,
-}
-
-impl ToOp for EventOp {
-    fn to_op(&self) -> u16 {
-        *self as u16
+opcode! {
+    pub enum EventOp {
+        Done,
     }
 }
 

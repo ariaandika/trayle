@@ -1,5 +1,5 @@
 use crate::buffer::Buffer;
-use crate::wayland::{Id, ToOp, roundup4};
+use crate::wayland::{Id, OpCode, roundup4};
 
 /// Encodable wayland message.
 pub trait Encode: Sized {
@@ -30,11 +30,11 @@ impl<'a> Encoder<'a> {
     /// `len` must be the exact length of the required size.
     ///
     /// Caller must ensure `len` bytes are initialized.
-    pub unsafe fn encode<Op: ToOp>(self, id: Id, op: Op, len: u16) -> Writer<'a> {
+    pub unsafe fn encode<Op: OpCode>(self, id: Id, op: Op, len: u16) -> Writer<'a> {
         self.encode_inner(id, op.to_op(), len)
     }
 
-    pub fn encode_one<Op: ToOp, E: PrimitiveEncode>(self, id: Id, op: Op, value: E) {
+    pub fn encode_one<Op: OpCode, E: PrimitiveEncode>(self, id: Id, op: Op, value: E) {
         let size = 8 + value.size();
         value.encode(&mut self.encode_inner(id, op.to_op(), size));
     }

@@ -36,14 +36,9 @@ impl Keyboard {
 
 // ===== Op =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum EventOp {
-    Keymap,
-}
-
-impl ToOp for EventOp {
-    fn to_op(&self) -> u16 {
-        *self as u16
+opcode! {
+    pub enum EventOp {
+        Keymap,
     }
 }
 

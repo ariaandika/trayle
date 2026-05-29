@@ -20,18 +20,10 @@ impl Object for Shm {
 
 // ===== Op =====
 
-pub enum RequestOp {
-    CreatePool,
-    Release,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op: u16) -> Result<Self, WlError> {
-        match op {
-            0 => Ok(Self::CreatePool),
-            1 => Ok(Self::Release),
-            _ => Err(WlError::UnknownOp),
-        }
+opcode! {
+    pub enum RequestOp {
+        CreatePool,
+        Release,
     }
 }
 

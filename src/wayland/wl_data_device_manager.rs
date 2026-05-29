@@ -21,20 +21,11 @@ impl Object for DataDeviceManager {
 
 // ===== Op =====
 
-pub enum RequestOp {
-    CreateDataSource,
-    GetDataDevice,
-    Release,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op: u16) -> Result<Self, WlError> {
-        match op {
-            0 => Ok(Self::CreateDataSource),
-            1 => Ok(Self::GetDataDevice),
-            2 => Ok(Self::Release),
-            _ => Err(WlError::UnknownOp),
-        }
+opcode! {
+    pub enum RequestOp {
+        CreateDataSource,
+        GetDataDevice,
+        Release,
     }
 }
 

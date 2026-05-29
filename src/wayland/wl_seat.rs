@@ -29,29 +29,16 @@ impl Seat {
 
 // ===== op =====
 
-pub enum RequestOp {
-    GetPointer,
-    GetKeyboard,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op:u16) -> Result<Self,WlError>{
-        match op {
-            0 => Ok(Self::GetPointer),
-            1 => Ok(Self::GetKeyboard),
-            _ => Err(WlError::UnknownOp),
-        }
+opcode! {
+    pub enum RequestOp {
+        GetPointer,
+        GetKeyboard,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EventOp {
-    Capabities,
-}
-
-impl ToOp for EventOp {
-    fn to_op(&self) -> u16 {
-        *self as u16
+opcode! {
+    pub enum EventOp {
+        Capabilities,
     }
 }
 
@@ -80,6 +67,6 @@ pub struct Capabilities {
 
 impl Encode for Message<Capabilities> {
     fn encode(self, encoder: Encoder) {
-        encoder.encode_one(self.id(), EventOp::Capabities as u16, self.capabilities.to_u32());
+        encoder.encode_one(self.id(), EventOp::Capabilities, self.capabilities.to_u32());
     }
 }

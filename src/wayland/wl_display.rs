@@ -4,31 +4,17 @@ use crate::wayland::wl_registry::Registry;
 
 // ===== Op =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum RequestOp {
-    Sync,
-    GetRegistry,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op: u16) -> Result<Self, WlError> {
-        match op {
-            0 => Ok(Self::Sync),
-            1 => Ok(Self::GetRegistry),
-            _ => Err(WlError::UnknownOp),
-        }
+opcode! {
+    pub enum RequestOp {
+        Sync,
+        GetRegistry,
     }
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum EventOp {
-    Error,
-    DeleteId,
-}
-
-impl ToOp for EventOp {
-    fn to_op(&self) -> u16 {
-        *self as u16
+opcode! {
+    pub enum EventOp {
+        Error,
+        DeleteId,
     }
 }
 

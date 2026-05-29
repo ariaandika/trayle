@@ -1,6 +1,6 @@
 use crate::{State, log};
 
-use crate::wayland::{Decode, Encode, Frame, FromOp, InterfaceId, WlError};
+use crate::wayland::{Decode, Encode, Frame, OpCode, InterfaceId, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;

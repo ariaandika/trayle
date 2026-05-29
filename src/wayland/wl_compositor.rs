@@ -22,16 +22,9 @@ impl Object for Compositor {
 
 // ===== Op =====
 
-pub enum RequestOp {
-    CreateSurface,
-}
-
-impl FromOp for RequestOp {
-    fn from_op(op: u16) -> Result<Self, WlError> {
-        match op {
-            0 => Ok(Self::CreateSurface),
-            _ => Err(WlError::UnknownOp),
-        }
+opcode! {
+    pub enum RequestOp {
+        CreateSurface,
     }
 }
 
