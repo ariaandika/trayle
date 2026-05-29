@@ -35,7 +35,7 @@ impl<'a> Encoder<'a> {
     }
 
     pub fn encode_one<Op: ToOp, E: PrimitiveEncode>(self, id: Id, op: Op, value: E) {
-        let size = value.size();
+        let size = 8 + value.size();
         value.encode(&mut self.encode_inner(id, op.to_op(), size));
     }
 
