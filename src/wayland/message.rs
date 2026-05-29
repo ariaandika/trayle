@@ -19,24 +19,14 @@ pub struct Message<T> {
 }
 
 impl<T> Message<T> {
-    pub fn new<O: Object>(interface: &O, payload: T) -> Self {
+    pub fn new<O: Object>(object: &O, payload: T) -> Self {
         Self {
-            id: interface.id(),
+            id: object.id(),
             payload,
         }
     }
 
-    #[inline]
-    pub fn into_parts(self) -> (Id, T) {
-        (self.id, self.payload)
-    }
-}
-
-impl<T: Object> Object for Message<T> {
-    const INTERFACE_ID: InterfaceId = T::INTERFACE_ID;
-
-    #[inline]
-    fn id(&self) -> Id {
+    pub fn id(&self) -> Id {
         self.id
     }
 }

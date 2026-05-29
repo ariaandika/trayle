@@ -1,8 +1,9 @@
 pub use id::Id;
-pub use op::FromOp;
-pub use message::{Frame, Message, Object};
+pub use op::{FromOp, ToOp};
+pub use message::{Frame, Object};
 pub use error::WlError;
 pub use decode::Decode;
+pub use encode::Encode;
 pub use interface::InterfaceId;
 
 mod id;
@@ -12,8 +13,11 @@ mod error;
 mod decode;
 mod encode;
 
+mod interface;
+
 pub mod wl_display;
 pub mod wl_registry;
+pub mod wl_callback;
 pub mod wl_compositor;
 pub mod wl_shm;
 pub mod wl_data_device_manager;
@@ -21,17 +25,14 @@ pub mod wl_surface;
 pub mod wl_seat;
 pub mod wl_keyboard;
 
-mod interface;
-
 mod prelude {
-    pub use super::Object;
     pub use super::id::Id;
-    pub use super::op::FromOp;
+    pub use super::op::{FromOp, ToOp};
+    pub use super::message::{Message, Object};
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};
-    pub use super::encode::{PtrWrite, Encoder};
+    pub use super::encode::{Encode, Encoder};
     pub use super::interface::InterfaceId;
-    pub use crate::buffer::Buffer;
 
     pub(super) use super::roundup4;
 }

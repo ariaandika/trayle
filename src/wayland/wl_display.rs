@@ -1,12 +1,10 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_callback::WlCallback;
 use crate::wayland::wl_registry::Registry;
 
 // ===== Op =====
 
-const ERROR_OP: u16 = 0;
-const DELETE_ID_OP: u16 = 1;
-const DONE_OP: u16 = 0;
-
+#[derive(Debug, Clone, Copy)]
 pub enum RequestOp {
     Sync,
     GetRegistry,
@@ -22,6 +20,18 @@ impl FromOp for RequestOp {
     }
 }
 
+#[derive(Debug, Clone, Copy)]
+pub enum EventOp {
+    Error,
+    DeleteId,
+}
+
+impl ToOp for EventOp {
+    fn to_op(&self) -> u16 {
+        *self as u16
+    }
+}
+
 // ===== Sync =====
 
 #[derive(Debug)]
@@ -30,22 +40,8 @@ pub struct Sync {
 }
 
 impl Sync {
-    pub fn wl_callback_id(&self) -> Id {
-        self.callback
-    }
-
-    /// Write `wl_callback::done` and `wl_display::delete_id`  event.
-    pub fn reply(self, callback_data: u32, buffer: &mut Buffer) {
-        unsafe {
-            // wl_callback::done(callback_data: uint)
-            buffer
-                .message(self.callback, DONE_OP, 12)
-                .put(callback_data);
-            // wl_display::delete_id(id: uint)
-            buffer
-                .message(Id::wl_display(), DELETE_ID_OP, 12)
-                .put(self.callback);
-        };
+    pub fn callback(self) -> WlCallback {
+        WlCallback::new(self.callback)
     }
 }
 
@@ -82,25 +78,27 @@ impl Decode for GetRegistry {
     }
 }
 
-// ===== Encode =====
+// ===== Error =====
 
-/// server couldn't find object
-const INVALID_OBJECT: u32 = 0;
-/// method doesn't exist on the specified interface or malformed request
-const INVALID_METHOD: u32 = 1;
-// /// server is out of memory
-// const NO_MEMORY: u32 = 2;
-/// implementation error in compositor
-const IMPLEMENTATION: u32 = 3;
+pub enum DisplayError {
+    /// server couldn't find object
+    InvalidObject,
+    /// method doesn't exist on the specified interface or malformed request
+    InvalidMethod,
+    /// server is out of memory
+    #[allow(unused)]
+    NoMemory,
+    /// implementation error in compositor
+    Implementation,
+}
 
-/// Send `wl_display::error` event from `WlError`.
-pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
+pub fn error_from(id: Id, error: WlError) -> Error<'static> {
     use WlError as E;
 
-    const MALFORMED: (Id, u32) = (Id::wl_display(), INVALID_METHOD);
-    const SEMANTIC: (Id, u32) = (Id::wl_display(), INVALID_OBJECT);
+    const MALFORMED: (Id, DisplayError) = (Id::wl_display(), DisplayError::InvalidMethod);
+    const SEMANTIC: (Id, DisplayError) = (Id::wl_display(), DisplayError::InvalidObject);
 
-    let (id, code) = match error {
+    let (object_id, code) = match error {
         E::UnknownOp => MALFORMED,
         E::UnknownObject => SEMANTIC,
         E::UnknownBind => SEMANTIC,
@@ -110,18 +108,48 @@ pub fn encode_error(_: Id, error: WlError, buffer: &mut Buffer) {
         E::Null => SEMANTIC,
         E::NonUtf8 => SEMANTIC,
         E::MissingFd => MALFORMED,
-        E::NotYetImplemented => (Id::wl_display(), IMPLEMENTATION),
+        E::NotYetImplemented => (Id::wl_display(), DisplayError::Implementation),
     };
+    let _ = id;
+    Error {
+        object_id,
+        code: code as u32,
+        message: error.message(),
+    }
+}
 
-    let message = error.message();
-    let msg_len = message.len() as u16;
-    let len = const { 8 + 4 + 4 + 4 } + roundup4!(msg_len + 1);
+pub struct Error<'a> {
+    object_id: Id,
+    code: u32,
+    message: &'a str,
+}
 
-    unsafe {
-        buffer
-            .message(Id::wl_display(), ERROR_OP, len)
-            .put(id)
-            .put(code)
-            .put(message)
-    };
+impl Encode for Error<'_> {
+    fn encode(self, encoder: Encoder) {
+        let msg_len = self.message.len() as u16;
+        let len = const { 8 + 4 + 4 + 4 } + roundup4!(msg_len + 1);
+        unsafe {
+            encoder
+                .encode(Id::wl_display(), EventOp::Error, len)
+                .write(self.object_id)
+                .write(self.code)
+                .write(self.message)
+        };
+    }
+}
+
+// ===== DeleteId =====
+
+pub fn delete_id<O: Object>(object: &O) -> DeleteId {
+    DeleteId { id: object.id() }
+}
+
+pub struct DeleteId {
+    id: Id,
+}
+
+impl Encode for DeleteId {
+    fn encode(self, encoder: Encoder) {
+        encoder.encode_one(Id::wl_display(), EventOp::DeleteId, self.id);
+    }
 }

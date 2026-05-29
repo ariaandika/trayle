@@ -1,13 +1,12 @@
 use crate::{State, log};
 
-use crate::wayland::{Decode, FromOp, Id, InterfaceId, Frame, WlError};
+use crate::wayland::{Decode, Encode, Frame, FromOp, Id, InterfaceId, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
 use crate::wayland::wl_compositor as WlCompositor;
 use crate::wayland::wl_shm as WlShm;
 use crate::wayland::wl_seat as WlSeat;
-use crate::wayland::wl_keyboard as WlKeyboard;
 use crate::wayland::wl_data_device_manager as WlDataDeviceManager;
 
 static GLOBALS: [(&str, u16, InterfaceId); 9] = [
@@ -92,6 +91,10 @@ trait RequestHandler<Request>: Sized {
 }
 
 impl State<'_> {
+    fn send<E: Encode>(&mut self, message: E) {
+        message.encode_to(self.write_buffer);
+    }
+
     fn todo(self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
         log::error!(client, "<- `{interface:?}::{op}` is not yet implemented");
         WlError::todo()
@@ -99,21 +102,23 @@ impl State<'_> {
 }
 
 impl RequestHandler<WlDisplay::Sync> for State<'_> {
-    fn handle(self, sync: WlDisplay::Sync) -> Result<(), WlError> {
-        self.client.objects_mut().use_one(sync.wl_callback_id())?;
-        sync.reply(0, self.write_buffer);
+    fn handle(mut self, sync: WlDisplay::Sync) -> Result<(), WlError> {
+        let callback = sync.callback();
+        self.client.objects_mut().use_one(&callback)?;
+        self.send(callback.done(69));
+        self.send(WlDisplay::delete_id(&callback));
         Ok(())
     }
 }
 
 impl RequestHandler<WlDisplay::GetRegistry> for State<'_> {
-    fn handle(self, get_registry: WlDisplay::GetRegistry) -> Result<(), WlError> {
+    fn handle(mut self, get_registry: WlDisplay::GetRegistry) -> Result<(), WlError> {
         let wl_registry = get_registry.wl_registry();
         self.client.objects_mut().insert_object(&wl_registry)?;
 
         // FEAT: encode globals at startup
         for ((iface, version, _), i) in GLOBALS.into_iter().zip(0..) {
-            wl_registry.global(i, iface, version as u32, self.write_buffer);
+            self.send(wl_registry.global(i, iface, version as u32));
         }
 
         Ok(())
@@ -121,7 +126,7 @@ impl RequestHandler<WlDisplay::GetRegistry> for State<'_> {
 }
 
 impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
-    fn handle(self, bind: WlRegistry::Bind<'a>) -> Result<(), WlError> {
+    fn handle(mut self, bind: WlRegistry::Bind<'a>) -> Result<(), WlError> {
         let Some((bind_name, version, iface)) = GLOBALS.get(bind.name as usize) else {
             return Err(WlError::UnknownBind);
         };
@@ -135,7 +140,7 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 
         // some interface has side-effect after binding
         if let InterfaceId::WlSeat = iface {
-            WlSeat::capabilities(bind.id, self.seat.capability(), self.write_buffer);
+            self.send(WlSeat::capabilities(bind.id, self.seat.capability()));
         }
 
         Ok(())
@@ -150,14 +155,10 @@ impl RequestHandler<WlCompositor::CreateSurface> for State<'_> {
 }
 
 impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
-    fn handle(self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
+    fn handle(mut self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
         let keyboard = req.keyboard();
         self.client.objects_mut().insert_object(&keyboard)?;
-        WlKeyboard::keymap_xkb_v1(
-            crate::wayland::Object::id(&keyboard),
-            self.seat,
-            self.write_buffer,
-        );
+        self.send(keyboard.keymap_xkb_v1(self.seat));
         Ok(())
     }
 }

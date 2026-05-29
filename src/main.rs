@@ -30,7 +30,7 @@ use epoll::Epoll;
 use listener::{Listener, SocketPath};
 use seat::Seat;
 use sigfd::Sigfd;
-use wayland::{Frame, Id};
+use wayland::Frame;
 
 // ===== os ========
 mod errno;
@@ -161,7 +161,6 @@ fn event_loop() -> Result<(), FatalError> {
 
         if interest.is_read() {
             let result = loop {
-                use wayland::wl_display::encode_error;
                 match Frame::from_bytes(&mut read_buffer) {
                     Ready(Ok((id, op, header))) => {
                         let state = State {
@@ -172,14 +171,14 @@ fn event_loop() -> Result<(), FatalError> {
                         match handler::router(id, op, header, state) {
                             Ok(()) => {}
                             Err(err) => {
-                                encode_error(id, err, &mut write_buffer);
+                                client.send_global_error(err, &mut write_buffer);
                                 log::error!(client, "{err}");
                                 break Err(());
                             },
                         }
                     },
                     Ready(Err(err)) => {
-                        encode_error(Id::wl_display(), err, &mut write_buffer);
+                        client.send_global_error(err, &mut write_buffer);
                         log::error!(client, "{err}");
                         break Err(());
                     },

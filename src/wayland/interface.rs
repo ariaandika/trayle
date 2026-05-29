@@ -1,11 +1,10 @@
-// commented entry are exists but never constructed
 #[derive(Debug, Clone, Copy)]
 #[repr(u16)]
 #[allow(dead_code)]
 pub enum InterfaceId {
     WlDisplay,
     WlRegistry,
-    // WlCallback,
+    WlCallback,
     WlCompositor,
     WlShmPool,
     WlShm,

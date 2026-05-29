@@ -2,10 +2,12 @@ use std::ptr::NonNull;
 use std::{mem, slice};
 
 use crate::alloc;
-use crate::buffer::SmallBuf;
+use crate::buffer::{Buffer, SmallBuf};
 use crate::conn::Connection;
 use crate::epoll::Epoll;
 use crate::objects::Objects;
+use crate::wayland::wl_display;
+use crate::wayland::{Encode, Id, WlError};
 
 // ===== ClientId =====
 
@@ -52,6 +54,10 @@ impl Client {
 
     pub fn buffer_mut(&mut self) -> &mut SmallBuf {
         &mut self.buffer
+    }
+
+    pub fn send_global_error(&mut self, error: WlError, write_buf: &mut Buffer) {
+        wl_display::error_from(Id::wl_display(), error).encode_to(write_buf);
     }
 }
 

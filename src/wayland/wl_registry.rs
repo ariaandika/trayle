@@ -1,7 +1,5 @@
 use crate::wayland::prelude::*;
 
-const GLOBAL_OP: u16 = 0;
-
 #[derive(Debug)]
 pub struct Registry {
     id: Id,
@@ -22,21 +20,14 @@ impl Registry {
     }
 
     /// Send `wl_registry::global` event.
-    pub fn global(&self, name: u32, interface: &str, version: u32, buffer: &mut Buffer) {
-        let iface_len = interface.len() as u16;
-        let len = const { 8 + 4 + 4 + 4 } + roundup4!(iface_len + 1);
-        unsafe {
-            buffer
-                .message(self.id, GLOBAL_OP, len)
-                .put(name)
-                .put(interface)
-                .put(version)
-        };
+    pub fn global<'a>(&self, name: u32, interface: &'a str, version: u32) -> Message<Global<'a>> {
+        Message::new(self, Global { name, interface, version })
     }
 }
 
 // ===== Op =====
 
+#[derive(Debug, Clone, Copy)]
 pub enum RequestOp {
     Bind,
 }
@@ -48,6 +39,18 @@ impl FromOp for RequestOp {
         } else {
             Err(WlError::UnknownOp)
         }
+    }
+}
+
+#[derive(Debug, Clone, Copy)]
+pub enum EventOp {
+    Global,
+    GlobalRemove,
+}
+
+impl ToOp for EventOp {
+    fn to_op(&self) -> u16 {
+        *self as u16
     }
 }
 
@@ -74,3 +77,25 @@ impl Decode for Bind<'static> {
         })
     }
 }
+
+// ===== Global =====
+
+pub struct Global<'a> {
+    name: u32,
+    interface: &'a str,
+    version: u32,
+}
+
+impl Encode for Message<Global<'_>> {
+    fn encode(self, encoder: Encoder) {
+        let iface_len = self.interface.len() as u16;
+        let len = const { 8 + 4 + 4 + 4 } + roundup4!(iface_len + 1);
+        unsafe {
+            encoder.encode(self.id(), EventOp::Global, len)
+                .write(self.name)
+                .write(self.interface)
+                .write(self.version)
+        };
+    }
+}
+

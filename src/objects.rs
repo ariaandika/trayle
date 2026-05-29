@@ -73,8 +73,8 @@ impl Objects {
     }
 
     /// This has the same effect of inserting the id and immediately remove it.
-    pub fn use_one(&mut self, id: Id) -> Result<(), WlError> {
-        self.insert_inner(id, None)
+    pub fn use_one<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
+        self.insert_inner(object.id(), None)
     }
 
     fn insert_inner(&mut self, id: Id, object: Option<Object>) -> Result<(), WlError> {

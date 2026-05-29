@@ -2,6 +2,19 @@ use crate::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::Keyboard;
 
+pub struct WlSeat {
+    id: Id,
+}
+
+impl Object for WlSeat {
+    const INTERFACE_ID: InterfaceId = InterfaceId::WlSeat;
+
+    #[inline]
+    fn id(&self) -> Id {
+        self.id
+    }
+}
+
 // ===== op =====
 
 pub enum RequestOp {
@@ -17,6 +30,11 @@ impl FromOp for RequestOp {
             _ => Err(WlError::UnknownOp),
         }
     }
+}
+
+pub enum EventOp {
+    Capabities,
+    Name,
 }
 
 // ===== GetKeyboard =====
@@ -44,8 +62,16 @@ impl Decode for GetKeyboard {
 
 // ===== Capabilities =====
 
-const EVENT_CAPABILITIES: u16 = 0;
+pub fn capabilities(wl_seat: Id, capabilities: Capability) -> Message<Capabilities> {
+    Message::new(&WlSeat { id: wl_seat }, Capabilities { capabilities })
+}
 
-pub fn capabilities(wl_seat: Id, capability: Capability, write: &mut Buffer) {
-    unsafe { write.message(wl_seat, EVENT_CAPABILITIES, 12).put(capability.to_u32()) };
+pub struct Capabilities {
+    capabilities: Capability,
+}
+
+impl Encode for Message<Capabilities> {
+    fn encode(self, encoder: Encoder) {
+        encoder.encode_one(self.id(), EventOp::Capabities as u16, self.capabilities.to_u32());
+    }
 }

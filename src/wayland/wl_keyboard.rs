@@ -9,30 +9,60 @@ pub struct Keyboard {
 impl Object for Keyboard {
     const INTERFACE_ID: InterfaceId = InterfaceId::WlKeyboard;
 
+    #[inline]
     fn id(&self) -> Id {
         self.id
     }
 }
 
 impl Keyboard {
-    /// Can only be created by `wl_seat::get_keyboard`.
-    pub(super) fn new(id: Id) -> Self {
+    #[inline]
+    pub fn new(id: Id) -> Self {
         Self { id }
+    }
+
+    pub fn keymap_xkb_v1(&self, seat: &Seat) -> Message<Keymap> {
+        Message::new(
+            self,
+            Keymap {
+                format: KeymapFormat::XkbV1,
+                fd: seat.keymap_memfd(),
+                size: seat.keymap_size(),
+            },
+        )
+    }
+}
+
+// ===== Op =====
+
+#[derive(Debug, Clone, Copy)]
+pub enum EventOp {
+    Keymap,
+}
+
+impl ToOp for EventOp {
+    fn to_op(&self) -> u16 {
+        *self as u16
     }
 }
 
 // ===== Keymap =====
 
-pub fn keymap_xkb_v1(wl_keyboard_id: Id, seat: &Seat, buffer: &mut Buffer) {
-    assert!(buffer.push_fd(seat.keymap_memfd()));
-    unsafe {
-        buffer
-            .message(wl_keyboard_id, 0, 16)
-            .put(KeymapFormat::XkbV1 as u32)
-            .put(seat.keymap_size());
-    }
-}
-
+#[derive(Debug, Clone, Copy)]
 pub enum KeymapFormat {
     XkbV1
+}
+
+pub struct Keymap {
+    format: KeymapFormat,
+    fd: i32,
+    size: u32,
+}
+
+impl Encode for Message<Keymap> {
+    fn encode(self, mut encoder: Encoder) {
+        encoder.push_fd(self.fd);
+        let mut writer = unsafe { encoder.encode(self.id(), EventOp::Keymap, 16) };
+        writer.write(self.format as u32).write(self.size);
+    }
 }
