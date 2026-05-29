@@ -33,7 +33,7 @@ impl Decode for CreatePool {
 
     fn decode(mut decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
         let fd = decoder.pop_fd()?;
-        let mut reader = decoder.body()?;
+        let mut reader = decoder.body();
         Ok(Self {
             id: reader.read()?,
             fd,

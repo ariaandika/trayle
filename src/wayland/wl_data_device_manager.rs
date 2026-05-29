@@ -50,7 +50,7 @@ impl Decode for GetDataDevice {
     type Output<'a> = Self;
 
     fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
-        let mut reader = decoder.body()?;
+        let mut reader = decoder.body();
         Ok(Self {
             id: reader.read()?,
             seat: reader.read()?,

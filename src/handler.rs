@@ -1,6 +1,6 @@
-use crate::{Message, State, log};
+use crate::{State, log};
 
-use crate::wayland::{Decode, FromOp, InterfaceId, WlError};
+use crate::wayland::{Decode, FromOp, Id, InterfaceId, Frame, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
@@ -22,9 +22,7 @@ static GLOBALS: [(&str, u16, InterfaceId); 9] = [
     ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
 ];
 
-pub fn router(header: Message, state: State) -> Result<(), WlError> {
-    let Message { id, op, read_buf: body } = header;
-
+pub fn router(id: Id, op: u16, message: Frame, state: State) -> Result<(), WlError> {
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
     } else {
@@ -43,12 +41,9 @@ pub fn router(header: Message, state: State) -> Result<(), WlError> {
         (@CALL $iface:ident $req:ident todo) => {{
             state.todo(interface, op)
         }};
-        (@CALL $iface:ident $req:ident) => {{
-            #[cfg(debug_assertions)]
-            { state.handle_trace(interface, $iface::$req::decode_with(body)?) }
-            #[cfg(not(debug_assertions))]
-            { state.handle(interface, $iface::$req::decode_with(body, read_fd)?) }
-        }};
+        (@CALL $iface:ident $req:ident) => {
+            state.handle_trace(interface, $iface::$req::decode_with(message)?)
+        };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
                 $(
@@ -86,12 +81,12 @@ pub fn router(header: Message, state: State) -> Result<(), WlError> {
 trait RequestHandler<Request>: Sized {
     fn handle(self, request: Request) -> Result<(), WlError>;
 
-    #[cfg(debug_assertions)]
-    fn handle_trace(self, interface: InterfaceId, request: Request) -> Result<(), WlError>
+    fn handle_trace(self, _interface: InterfaceId, request: Request) -> Result<(), WlError>
     where
         Request: std::fmt::Debug,
     {
-        log::trace!(client, "<- {interface:?}::{request:?}");
+        #[cfg(debug_assertions)]
+        log::trace!(client, "<- {_interface:?}::{request:?}");
         self.handle(request)
     }
 }

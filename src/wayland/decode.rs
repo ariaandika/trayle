@@ -1,5 +1,4 @@
-use crate::buffer::Buffer;
-use crate::wayland::{Id, WlError, roundup4};
+use crate::wayland::{Frame, Id, WlError, roundup4};
 
 /// Decodable wayland message.
 pub trait Decode {
@@ -7,45 +6,35 @@ pub trait Decode {
 
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError>;
 
-    fn decode_with<'a>(read_buf: &'a mut Buffer) -> Result<Self::Output<'a>, WlError> {
-        Decoder::new(read_buf).and_then(Self::decode)
+    fn decode_with<'a>(message: Frame<'a>) -> Result<Self::Output<'a>, WlError> {
+        Self::decode(Decoder::new(message))
     }
 }
 
 // ===== Decoder =====
 
 pub struct Decoder<'a> {
-    len: u16,
-    read_buf: &'a mut Buffer,
+    message: Frame<'a>,
 }
 
 impl<'a> Decoder<'a> {
-    fn new(read_buf: &'a mut Buffer) -> Result<Self, WlError> {
-        let Some(header) = read_buf.try_split_first_chunk::<8>() else {
-            return Err(WlError::InvalidSize);
-        };
-        let Some(len) = u16::from_ne_bytes(*header.last_chunk().unwrap()).checked_sub(8) else {
-            return Err(WlError::InvalidSize);
-        };
-        Ok(Self { len, read_buf })
+    fn new(message: Frame<'a>) -> Self {
+        Self { message }
     }
 
     pub fn pop_fd(&mut self) -> Result<i32, WlError> {
-        match self.read_buf.pop_front_fd() {
+        match self.message.pop_fd() {
             Some(ok) => Ok(ok),
             None => Err(WlError::MissingFd),
         }
     }
 
     pub fn read<T: PrimitiveDecode<'a>>(self) -> Result<T, WlError> {
-        T::decode(&mut self.body()?)
+        T::decode(&mut self.body())
     }
 
-    pub fn body(self) -> Result<Reader<'a>, WlError> {
-        match self.read_buf.try_split_to(self.len as usize) {
-            Some(read_buf) => Ok(Reader { read_buf }),
-            None => Err(WlError::InvalidSize),
-        }
+    pub fn body(self) -> Reader<'a> {
+        Reader { read_buf: self.message.body() }
     }
 }
 

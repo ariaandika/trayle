@@ -1,11 +1,13 @@
 pub use id::Id;
 pub use op::FromOp;
+pub use message::{Frame, Message, Object};
 pub use error::WlError;
 pub use decode::Decode;
 pub use interface::InterfaceId;
 
 mod id;
 mod op;
+mod message;
 mod error;
 mod decode;
 mod encode;
@@ -32,12 +34,6 @@ mod prelude {
     pub use crate::buffer::Buffer;
 
     pub(super) use super::roundup4;
-}
-
-pub trait Object {
-    const INTERFACE_ID: InterfaceId;
-
-    fn id(&self) -> Id;
 }
 
 macro_rules! roundup4 {

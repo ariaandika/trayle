@@ -22,7 +22,7 @@
 //!
 //! - [`handler`] main logic for handling request
 use std::process::ExitCode;
-use std::task::Poll::{self, *};
+use std::task::Poll::*;
 
 use buffer::Buffer;
 use clients::{Client, ClientId, Clients};
@@ -30,7 +30,7 @@ use epoll::Epoll;
 use listener::{Listener, SocketPath};
 use seat::Seat;
 use sigfd::Sigfd;
-use wayland::{Id, WlError};
+use wayland::{Frame, Id};
 
 // ===== os ========
 mod errno;
@@ -162,15 +162,14 @@ fn event_loop() -> Result<(), FatalError> {
         if interest.is_read() {
             let result = loop {
                 use wayland::wl_display::encode_error;
-                match Message::from_bytes(&mut read_buffer) {
-                    Ready(Ok(header)) => {
-                        let id = header.id;
+                match Frame::from_bytes(&mut read_buffer) {
+                    Ready(Ok((id, op, header))) => {
                         let state = State {
                             client,
                             write_buffer: &mut write_buffer,
                             seat: &seat,
                         };
-                        match handler::router(header, state) {
+                        match handler::router(id, op, header, state) {
                             Ok(()) => {}
                             Err(err) => {
                                 encode_error(id, err, &mut write_buffer);
@@ -259,31 +258,4 @@ fn event_loop() -> Result<(), FatalError> {
     }
 
     Ok(())
-}
-
-// ===== wayland =====
-
-struct Message<'a> {
-    id: Id,
-    op: u16,
-    read_buf: &'a mut Buffer,
-}
-
-impl<'a> Message<'a> {
-    fn from_bytes(read_buf: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
-        let Some(header) = read_buf.first_chunk::<8>() else {
-            return Pending;
-        };
-        // the compiler will remove all the unwraps
-        let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
-        let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
-        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
-        if len < 8 {
-            return Ready(Err(WlError::InvalidSize));
-        }
-        if read_buf.len() < len as usize {
-            return Pending;
-        }
-        Ready(Ok(Self { id, op, read_buf }))
-    }
 }
