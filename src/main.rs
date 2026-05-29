@@ -162,13 +162,13 @@ fn event_loop() -> Result<(), FatalError> {
         if interest.is_read() {
             let result = loop {
                 match Frame::from_bytes(&mut read_buffer) {
-                    Ready(Ok((id, op, header))) => {
+                    Ready(Ok(header)) => {
                         let state = State {
                             client,
                             write_buffer: &mut write_buffer,
                             seat: &seat,
                         };
-                        match handler::router(id, op, header, state) {
+                        match handler::router(header, state) {
                             Ok(()) => {}
                             Err(err) => {
                                 client.send_global_error(err, &mut write_buffer);

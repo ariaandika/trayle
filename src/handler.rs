@@ -1,6 +1,6 @@
 use crate::{State, log};
 
-use crate::wayland::{Decode, Encode, Frame, FromOp, Id, InterfaceId, WlError};
+use crate::wayland::{Decode, Encode, Frame, FromOp, InterfaceId, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
@@ -21,7 +21,8 @@ static GLOBALS: [(&str, u16, InterfaceId); 9] = [
     ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
 ];
 
-pub fn router(id: Id, op: u16, message: Frame, state: State) -> Result<(), WlError> {
+pub fn router(frame: Frame, state: State) -> Result<(), WlError> {
+    let (id, op) = frame.parts();
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
     } else {
@@ -41,7 +42,7 @@ pub fn router(id: Id, op: u16, message: Frame, state: State) -> Result<(), WlErr
             state.todo(interface, op)
         }};
         (@CALL $iface:ident $req:ident) => {
-            state.handle_trace(interface, $iface::$req::decode_with(message)?)
+            state.handle_trace(interface, $iface::$req::decode_with(frame)?)
         };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {

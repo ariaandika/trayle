@@ -49,18 +49,19 @@ impl<T> std::ops::DerefMut for Message<T> {
 
 /// Encoded message.
 pub struct Frame<'a> {
-    /// guarantee that have at least 8 + message body length
+    /// - guarantee to contains one valid length message
+    /// - guarantee that Id is non-zero
     read_buf: &'a mut Buffer,
 }
 
 impl<'a> Frame<'a> {
-    pub fn from_bytes(read_buf: &'a mut Buffer) -> Poll<Result<(Id, u16, Self), WlError>> {
+    pub fn from_bytes(read_buf: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Pending;
         };
-        // the compiler will remove all the unwraps
-        let id = Id::from_ne_bytes(*header[..4].as_array().unwrap())?;
-        let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
+        if header.starts_with(b"\0\0\0\0") {
+            return Ready(Err(WlError::ZeroId));
+        }
         let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
         if len < 8 {
             return Ready(Err(WlError::InvalidSize));
@@ -68,7 +69,17 @@ impl<'a> Frame<'a> {
         if read_buf.len() < len as usize {
             return Pending;
         }
-        Ready(Ok((id, op, Self { read_buf })))
+        Ready(Ok(Self { read_buf }))
+    }
+
+    pub fn parts(&self) -> (Id, u16) {
+        // SAFETY: invariant
+        unsafe {
+            (
+                self.read_buf.as_ptr().cast::<Id>().read_unaligned(),
+                self.read_buf.as_ptr().add(4).cast::<u16>().read_unaligned(),
+            )
+        }
     }
 
     #[inline]
