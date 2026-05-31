@@ -1,8 +1,5 @@
-use std::ptr::NonNull;
-use std::{mem, slice};
-
-use crate::alloc;
 use crate::sys::conn::Connection;
+use crate::collections::slab::Slab;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
 use crate::wayland::wl_display;
@@ -64,160 +61,32 @@ impl Client {
 
 const INITIAL_CAP: usize = 8;
 
-enum Entry {
-    Some(Client),
-    None(usize)
-}
-
-/// A list of clients.
-///
-/// This is a slab, where insertion will returns an id that is required for other operation.
-///
-/// The id is unique and unchanged for each client. Even after deletion, the slot is reused but the
-/// id will have a new unique value. When the integer overflows, it will start reusing old id.
-///
-/// This also integrates with epoll, where insertion or deletion will trigger corresponding
-/// operation to the epoll.
+/// Collections of clients.
 pub struct Clients {
-    ptr: NonNull<Entry>,
-    id: u32,
-    len: usize,
-    cap: usize,
-    /// represent a linked list of deleted entry that ends in one after the last entry
-    ///
-    /// `ptr.add(last_delete)` is always initialized
-    last_delete: usize,
-}
-
-impl Drop for Clients {
-    fn drop(&mut self) {
-        for entry in self.as_mut_slice() {
-            drop(std::mem::replace(entry, Entry::None(0)));
-        }
-        alloc::deallocate(self.ptr);
-    }
+    buf: Slab<Client>
 }
 
 impl Clients {
     pub fn new() -> Self {
-        let ptr = alloc::allocate(INITIAL_CAP);
-        // initialize `ptr.add(last_delete)`
-        unsafe { ptr.write(Entry::None(0)); }
         Self {
-            ptr,
-            id: 0,
-            len: 0,
-            cap: INITIAL_CAP,
-            last_delete: 0,
+            buf: Slab::with_capacity(INITIAL_CAP),
         }
     }
 
-    #[cold]
-    #[inline(never)]
-    fn grow(&mut self) {
-        let new_cap = alloc::calc_exp(self.cap);
-        self.ptr = alloc::reallocate(self.ptr, new_cap);
-        self.cap = new_cap;
-    }
-
-    /// (idx, id)
-    fn construct_id(&self) -> u64 {
-        let mut id = [0u8; 8];
-        id[4..].copy_from_slice(&u32::to_ne_bytes(self.last_delete as u32));
-        id[..4].copy_from_slice(&self.id.to_ne_bytes());
-        u64::from_ne_bytes(id)
-    }
-
-    /// (idx, id)
-    fn destruct_id(id: u64) -> (u32, u32) {
-        debug_assert!(id & i64::MIN as u64 == 0);
-        let id = id.to_ne_bytes();
-        (
-            u32::from_ne_bytes(*id[4..].as_array().unwrap()),
-            u32::from_ne_bytes(*id[..4].as_array().unwrap()),
-        )
-    }
-
-    fn as_mut_slice(&mut self) -> &mut [Entry] {
-        unsafe { slice::from_raw_parts_mut(self.ptr.as_ptr(), self.len) }
-    }
-}
-
-impl Clients {
     pub fn insert(&mut self, conn: Connection) -> (ClientId, &mut Client) {
-        if self.len == self.cap {
-            self.grow();
-        }
-
-        let id = self.construct_id();
-        let new_entry = Entry::Some(Client {
+        let (key, client) = self.buf.insert(Client {
             conn,
             objects: Objects::new(),
             buffer: SmallBuf::default(),
         });
-
-        // SAFETY: `last_delete <= len`, thus `last_delete <= cap`
-        let mut entry_ptr = unsafe { self.ptr.add(self.last_delete) };
-        // SAFETY: `ptr.add(last_delete)` is always initialized
-        let old_entry = unsafe { entry_ptr.replace(new_entry) };
-        let Entry::None(next_delete) = old_entry else {
-            unreachable!("corrupted clients list");
-        };
-
-        if self.last_delete == self.len {
-            self.len += 1;
-            self.last_delete += 1;
-            // appending, initialize `ptr.add(last_delete)`
-            unsafe { self.ptr.add(self.last_delete).write(Entry::None(0)); }
-        } else {
-            self.last_delete = next_delete;
-        }
-        self.id = self.id.wrapping_add(1);
-
-        // SAFETY: `entry_ptr` has been initialized to `Entry::Some` above
-        let client_mut = unsafe {
-            match entry_ptr.as_mut() {
-                Entry::Some(client) => client,
-                Entry::None(_) => std::hint::unreachable_unchecked(),
-            }
-        };
-        (ClientId(id), client_mut)
+        (ClientId(key as u64), client)
     }
-}
 
-impl Clients {
     pub fn get_mut(&mut self, id: ClientId) -> Option<&mut Client> {
-        let (idx, _) = Self::destruct_id(id.0);
-        if (idx as usize) < self.len {
-            match unsafe { self.ptr.add(idx as usize).as_mut() } {
-                Entry::Some(state) => Some(state),
-                Entry::None(_) => None,
-            }
-        } else {
-            None
-        }
+        self.buf.get_mut(id.0 as usize)
     }
 
     pub fn remove(&mut self, id: ClientId) -> Option<Client> {
-        if self.len == 0 {
-            return None;
-        }
-        let idx = Self::destruct_id(id.0).0 as usize;
-        if idx >= self.len {
-            return None;
-        }
-        // let Entry::Some(client) = self.ptr.add(idx).as_ref() else {
-        //     unreachable!("invalid id, referencing None entry")
-        // };
-        // if client.id() != id {
-        //     dbg!((client.id(), id));
-        //     return None;
-        // }
-        let entry = unsafe { self.ptr.add(idx).as_mut() };
-        let Entry::Some(client) = mem::replace(entry, Entry::None(self.last_delete)) else {
-            unsafe { std::hint::unreachable_unchecked() };
-        };
-        self.last_delete = idx;
-        Some(client)
+        self.buf.remove(id.0 as usize)
     }
 }
