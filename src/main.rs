@@ -28,7 +28,7 @@ use sys::listener::{Listener, SocketPath};
 use sys::sigfd::Sigfd;
 use collections::buffer::Buffer;
 use wayland::Frame;
-use compositor::clients::{Client, ClientId, Clients};
+use compositor::clients::{ClientId, ClientMut, Clients};
 use compositor::seat::Seat;
 use rt::event::EventSources;
 
@@ -57,8 +57,7 @@ impl<E: std::fmt::Display> From<E> for FatalError {
 }
 
 pub struct State<'a> {
-    client: &'a mut Client,
-    write_buffer: &'a mut Buffer,
+    client: ClientMut<'a>,
     seat: &'a Seat,
 }
 
@@ -129,13 +128,13 @@ fn event_loop() -> Result<(), FatalError> {
             continue;
         }
 
+        debug_assert!(read_buffer.is_empty());
+        debug_assert!(write_buffer.is_empty());
+
         let Some(client) = clients.get_mut(id) else {
             log::warn!(epoll, "unknown dynamic key: {id}");
             continue;
         };
-
-        debug_assert!(read_buffer.is_empty());
-        debug_assert!(write_buffer.is_empty());
 
         client.buffer_mut().restore(&mut read_buffer, &mut write_buffer);
 
@@ -144,9 +143,8 @@ fn event_loop() -> Result<(), FatalError> {
                 match Frame::from_bytes(&mut read_buffer) {
                     Ready(Ok(header)) => {
                         let state = State {
-                            client,
-                            write_buffer: &mut write_buffer,
-                            seat: &seat,
+                            client: ClientMut::new(client, &mut write_buffer),
+                            seat: &seat
                         };
                         match handler::router(header, state) {
                             Ok(()) => {}

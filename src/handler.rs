@@ -21,7 +21,7 @@ static GLOBALS: [(&str, u16, InterfaceId); 9] = [
     ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
 ];
 
-pub fn router(frame: Frame, state: State) -> Result<(), WlError> {
+pub fn router(frame: Frame, mut state: State) -> Result<(), WlError> {
     let (id, op) = frame.parts();
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
@@ -93,7 +93,7 @@ trait RequestHandler<Request>: Sized {
 
 impl State<'_> {
     fn send<E: Encode>(&mut self, message: E) {
-        message.encode_to(self.write_buffer);
+        self.client.send(message);
     }
 
     fn todo(self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
@@ -150,7 +150,7 @@ impl<'a> RequestHandler<WlRegistry::Bind<'a>> for State<'a> {
 }
 
 impl RequestHandler<WlCompositor::CreateSurface> for State<'_> {
-    fn handle(self, req: WlCompositor::CreateSurface) -> Result<(), WlError> {
+    fn handle(mut self, req: WlCompositor::CreateSurface) -> Result<(), WlError> {
         let surface = req.surface.get();
         self.client.objects_mut().insert_object(&surface)
     }
@@ -166,7 +166,7 @@ impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
 }
 
 impl RequestHandler<WlDataDeviceManager::GetDataDevice> for State<'_> {
-    fn handle(self, req: WlDataDeviceManager::GetDataDevice) -> Result<(), WlError> {
+    fn handle(mut self, req: WlDataDeviceManager::GetDataDevice) -> Result<(), WlError> {
         let _ = req.seat;
         self.client
             .objects_mut()

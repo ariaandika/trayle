@@ -3,7 +3,7 @@ use crate::collections::slab::Slab;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
 use crate::wayland::wl_display;
-use crate::wayland::{Encode, Id, WlError};
+use crate::wayland::{Encode, Id, Object, WlError};
 
 // ===== ClientId =====
 
@@ -33,6 +33,7 @@ impl std::fmt::Display for ClientId {
 
 // ===== Client =====
 
+// Client state.
 pub struct Client {
     conn: Connection,
     objects: Objects,
@@ -40,20 +41,68 @@ pub struct Client {
 }
 
 impl Client {
+    #[inline]
     pub fn conn(&self) -> &Connection {
         &self.conn
     }
 
+    #[inline]
     pub fn objects_mut(&mut self) -> &mut Objects {
         &mut self.objects
     }
 
+    #[inline]
     pub fn buffer_mut(&mut self) -> &mut SmallBuf {
         &mut self.buffer
     }
 
+    #[inline]
     pub fn send_global_error(&mut self, error: WlError, write_buf: &mut Buffer) {
         wl_display::error_from(Id::wl_display(), error).encode_to(write_buf);
+    }
+}
+
+// ===== ClientMut =====
+
+pub struct ClientMut<'a> {
+    state: &'a mut Client,
+    write_buf: &'a mut Buffer,
+}
+
+impl<'a> ClientMut<'a> {
+    #[inline]
+    pub fn new(state: &'a mut Client, write_buf: &'a mut Buffer) -> Self {
+        Self { state, write_buf }
+    }
+
+    #[inline]
+    pub fn conn(&self) -> &Connection {
+        &self.state.conn
+    }
+
+    #[inline]
+    pub fn buffer_mut(&mut self) -> &mut SmallBuf {
+        &mut self.state.buffer
+    }
+
+    #[inline]
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.state.objects
+    }
+
+    #[inline]
+    pub fn insert_object<O: Object>(&mut self, object: &O) -> Result<(), WlError> {
+        self.state.objects.insert_object(object)
+    }
+
+    #[inline]
+    pub fn send<E: Encode>(&mut self, message: E) {
+        message.encode_to(self.write_buf);
+    }
+
+    #[inline]
+    pub fn send_global_error(&mut self, error: WlError) {
+        wl_display::error_from(Id::wl_display(), error).encode_to(self.write_buf);
     }
 }
 
