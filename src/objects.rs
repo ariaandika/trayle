@@ -1,6 +1,6 @@
 use std::ptr::NonNull;
 
-use crate::alloc;
+use crate::collections::alloc;
 use crate::wayland::{Id, InterfaceId, Object as WlObject, WlError};
 
 // ===== Object =====

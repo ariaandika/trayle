@@ -1,4 +1,4 @@
-use crate::buffer::Buffer;
+use crate::collections::buffer::Buffer;
 use crate::wayland::{Id, OpCode, roundup4};
 
 /// Encodable wayland message.

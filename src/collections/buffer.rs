@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::ptr::{self, NonNull};
 use std::slice;
 
-use crate::alloc;
+use crate::collections::alloc;
 
 const TOTAL_INITIAL_SIZE: usize = 512;
 const MAXFD: usize = 16;

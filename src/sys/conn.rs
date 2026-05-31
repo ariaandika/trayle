@@ -1,7 +1,7 @@
 use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::task::Poll;
 
-use crate::buffer::Buffer;
+use crate::collections::buffer::Buffer;
 use crate::sys::errno::{Errno, simple_errno};
 
 #[derive(Debug)]

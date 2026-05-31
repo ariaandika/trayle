@@ -24,20 +24,19 @@
 use std::process::ExitCode;
 use std::task::Poll::*;
 
-use buffer::Buffer;
 use clients::{Client, ClientId, Clients};
+use collections::buffer::Buffer;
 use seat::Seat;
-use sys::sigfd::Sigfd;
 use sys::epoll::Epoll;
 use sys::listener::{Listener, SocketPath};
+use sys::sigfd::Sigfd;
 use wayland::Frame;
 
 mod sys;
 // ===== os ========
 mod seat;
 // ===== alloc =====
-mod alloc;
-mod buffer;
+mod collections;
 // ===== collections =====
 mod objects;
 mod clients;

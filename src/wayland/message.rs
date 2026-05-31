@@ -1,6 +1,6 @@
 use std::task::Poll::{self, *};
 
-use crate::buffer::Buffer;
+use crate::collections::buffer::Buffer;
 use crate::wayland::{Id, InterfaceId, WlError};
 
 // ===== Object =====

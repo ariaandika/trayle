@@ -1,8 +1,8 @@
 use std::ptr::NonNull;
 use std::{mem, slice};
 
-use crate::alloc;
-use crate::buffer::{Buffer, SmallBuf};
+use crate::collections::alloc;
+use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::objects::Objects;
 use crate::sys::conn::Connection;
 use crate::sys::epoll::Epoll;
