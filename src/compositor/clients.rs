@@ -3,7 +3,7 @@ use std::{mem, slice};
 
 use crate::collections::alloc;
 use crate::collections::buffer::{Buffer, SmallBuf};
-use crate::objects::Objects;
+use crate::compositor::objects::Objects;
 use crate::sys::conn::Connection;
 use crate::sys::epoll::Epoll;
 use crate::wayland::wl_display;

@@ -1,4 +1,4 @@
-use crate::seat::Capability;
+use crate::compositor::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::Keyboard;
 

@@ -32,7 +32,7 @@ impl Capability {
 
 // ===== Seat =====
 
-static STATIC_XKB: &str = include_str!("./static-xkb");
+static STATIC_XKB: &str = include_str!("../static-xkb");
 const SIZE: u32 = STATIC_XKB.len() as u32;
 
 pub struct Seat {

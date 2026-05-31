@@ -24,27 +24,19 @@
 use std::process::ExitCode;
 use std::task::Poll::*;
 
-use clients::{Client, ClientId, Clients};
 use collections::buffer::Buffer;
-use seat::Seat;
+use compositor::clients::{Client, ClientId, Clients};
+use compositor::seat::Seat;
 use sys::epoll::Epoll;
 use sys::listener::{Listener, SocketPath};
 use sys::sigfd::Sigfd;
 use wayland::Frame;
 
 mod sys;
-// ===== os ========
-mod seat;
-// ===== alloc =====
 mod collections;
-// ===== collections =====
-mod objects;
-mod clients;
-// ===== protocol =======
 mod wayland;
-// ===== app =====
+mod compositor;
 mod handler;
-// ===== util ====
 mod log;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
