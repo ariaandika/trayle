@@ -1,11 +1,10 @@
 use std::ptr::NonNull;
 use std::{mem, slice};
 
+use crate::sys::conn::Connection;
 use crate::collections::alloc;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
-use crate::sys::conn::Connection;
-use crate::sys::epoll::Epoll;
 use crate::wayland::wl_display;
 use crate::wayland::{Encode, Id, WlError};
 
@@ -85,6 +84,8 @@ pub struct Clients {
     len: usize,
     cap: usize,
     /// represent a linked list of deleted entry that ends in one after the last entry
+    ///
+    /// `ptr.add(last_delete)` is always initialized
     last_delete: usize,
 }
 
@@ -99,8 +100,11 @@ impl Drop for Clients {
 
 impl Clients {
     pub fn new() -> Self {
+        let ptr = alloc::allocate(INITIAL_CAP);
+        // initialize `ptr.add(last_delete)`
+        unsafe { ptr.write(Entry::None(0)); }
         Self {
-            ptr: alloc::allocate(INITIAL_CAP),
+            ptr,
             id: 0,
             len: 0,
             cap: INITIAL_CAP,
@@ -140,29 +144,44 @@ impl Clients {
 }
 
 impl Clients {
-    pub fn insert(&mut self, conn: Connection, epoll: &Epoll) -> ClientId {
-        let id = self.construct_id();
-        epoll.add(id, &conn);
+    pub fn insert(&mut self, conn: Connection) -> (ClientId, &mut Client) {
         if self.len == self.cap {
             self.grow();
         }
+
+        let id = self.construct_id();
         let new_entry = Entry::Some(Client {
             conn,
             objects: Objects::new(),
             buffer: SmallBuf::default(),
         });
-        let entry = unsafe { self.ptr.add(self.last_delete).as_mut() };
-        let Entry::None(next_delete) = mem::replace(entry, new_entry) else {
+
+        // SAFETY: `last_delete <= len`, thus `last_delete <= cap`
+        let mut entry_ptr = unsafe { self.ptr.add(self.last_delete) };
+        // SAFETY: `ptr.add(last_delete)` is always initialized
+        let old_entry = unsafe { entry_ptr.replace(new_entry) };
+        let Entry::None(next_delete) = old_entry else {
             unreachable!("corrupted clients list");
         };
+
         if self.last_delete == self.len {
             self.len += 1;
             self.last_delete += 1;
+            // appending, initialize `ptr.add(last_delete)`
+            unsafe { self.ptr.add(self.last_delete).write(Entry::None(0)); }
         } else {
             self.last_delete = next_delete;
         }
         self.id = self.id.wrapping_add(1);
-        ClientId(id)
+
+        // SAFETY: `entry_ptr` has been initialized to `Entry::Some` above
+        let client_mut = unsafe {
+            match entry_ptr.as_mut() {
+                Entry::Some(client) => client,
+                Entry::None(_) => std::hint::unreachable_unchecked(),
+            }
+        };
+        (ClientId(id), client_mut)
     }
 }
 
@@ -179,7 +198,7 @@ impl Clients {
         }
     }
 
-    pub fn remove(&mut self, id: ClientId, epoll: &Epoll) -> Option<()> {
+    pub fn remove(&mut self, id: ClientId) -> Option<Client> {
         if self.len == 0 {
             return None;
         }
@@ -199,7 +218,6 @@ impl Clients {
             unsafe { std::hint::unreachable_unchecked() };
         };
         self.last_delete = idx;
-        epoll.delete(&client.conn);
-        Some(())
+        Some(client)
     }
 }

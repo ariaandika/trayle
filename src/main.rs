@@ -24,18 +24,19 @@
 use std::process::ExitCode;
 use std::task::Poll::*;
 
-use collections::buffer::Buffer;
-use compositor::clients::{Client, ClientId, Clients};
-use compositor::seat::Seat;
-use sys::epoll::Epoll;
 use sys::listener::{Listener, SocketPath};
 use sys::sigfd::Sigfd;
+use collections::buffer::Buffer;
 use wayland::Frame;
+use compositor::clients::{Client, ClientId, Clients};
+use compositor::seat::Seat;
+use rt::event::EventSources;
 
 mod sys;
 mod collections;
 mod wayland;
 mod compositor;
+mod rt;
 mod handler;
 mod log;
 
@@ -44,8 +45,6 @@ const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const STATIC_ID_MASK: u64 = i64::MIN as u64;
 const LISTENER_ID: u64 = STATIC_ID_MASK | 1;
 const SIGFD_ID: u64 = STATIC_ID_MASK | 2;
-
-const MAX_EPOLL_EVENT: usize = 128;
 
 pub struct FatalError;
 
@@ -72,35 +71,25 @@ fn event_loop() -> Result<(), FatalError> {
     let seat = Seat::new()?;
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
-    let epoll = Epoll::new()?;
 
-    epoll.add(LISTENER_ID, &listener);
-    epoll.add(SIGFD_ID, &sigfd);
-
-    // ===== alloc =====
-    let mut events_read = 0;
-    let mut events = Vec::with_capacity(MAX_EPOLL_EVENT);
     let mut read_buffer = Buffer::new();
     let mut write_buffer = Buffer::new();
 
-    // ===== app =====
     let mut clients = Clients::new();
+    let mut event_sources = EventSources::new()?;
+
+    event_sources.add(LISTENER_ID, &listener);
+    event_sources.add(SIGFD_ID, &sigfd);
 
     // ===== event loop =====
 
     loop {
-        let Some(event) = events.get(events_read) else {
+        let Some((key, interest)) = event_sources.next_event() else {
             log::trace!(epoll, "blocking");
             log::flush();
-            events_read = 0;
-            events.clear();
-            let n = epoll.wait(events.spare_capacity_mut(), None);
-            // SAFETY: the kernel guarantee that `n` events has been written
-            unsafe { events.set_len(n) };
+            event_sources.wait(None);
             continue;
         };
-        events_read += 1;
-        let (key, interest) = event.to_parts();
 
         if key & STATIC_ID_MASK == STATIC_ID_MASK {
             match key {
@@ -113,7 +102,8 @@ fn event_loop() -> Result<(), FatalError> {
                         }
                         Pending => break,
                     };
-                    let id = clients.insert(conn, &epoll);
+                    let (id, client) = clients.insert(conn);
+                    event_sources.add(id.to_u64(), client.conn());
                     log::debug!(client, "id={id} connected");
                 },
                 SIGFD_ID => {
@@ -129,10 +119,12 @@ fn event_loop() -> Result<(), FatalError> {
         let id = ClientId::from_u64(key);
 
         if interest.is_close() {
-            match clients.remove(id, &epoll) {
-                Some(()) => log::debug!(client, "id={id} disconnected (hup)"),
-                None => log::warn!(epoll, "unknown dynamic key: {id}"),
-            }
+            let Some(client) = clients.remove(id) else {
+                log::warn!(epoll, "unknown dynamic key: {id}");
+                continue;
+            };
+            event_sources.delete(client.conn());
+            log::debug!(client, "id={id} disconnected (hup)");
             continue;
         }
 
@@ -194,7 +186,11 @@ fn event_loop() -> Result<(), FatalError> {
                 }
                 read_buffer.clear();
                 write_buffer.clear();
-                clients.remove(id, &epoll);
+                let Some(client) = clients.remove(id) else {
+                    log::warn!(epoll, "unknown dynamic key: {id}");
+                    continue;
+                };
+                event_sources.delete(client.conn());
                 log::debug!(client, "id={id} disconnected (read)");
                 continue;
             }
@@ -206,19 +202,23 @@ fn event_loop() -> Result<(), FatalError> {
                 .poll_write_all(&mut write_buffer);
             match result {
                 Ready(Ok(())) => if interest.is_write() {
-                    epoll.modify(false, id.to_u64(), client.conn());
+                    event_sources.modify(id.to_u64(), false, client.conn());
                 }
                 Ready(Err(err)) => {
                     read_buffer.clear();
                     write_buffer.clear();
-                    clients.remove(id, &epoll);
+                    let Some(client) = clients.remove(id) else {
+                        log::warn!(epoll, "unknown dynamic key: {id}");
+                        continue;
+                    };
+                    event_sources.delete(client.conn());
                     log::error!(client, "{}", err);
                     log::debug!(client, "id={id} disconnected (write)");
                     continue;
                 }
                 Pending => if !interest.is_write() {
                     log::warn!(client, "pending message write {}", write_buffer.len());
-                    epoll.modify(true, id.to_u64(), client.conn());
+                    event_sources.modify(id.to_u64(), true, client.conn());
                 }
             }
             result.is_pending()
