@@ -56,9 +56,8 @@ impl<E: std::fmt::Display> From<E> for FatalError {
     }
 }
 
-pub struct State<'a> {
-    client: ClientMut<'a>,
-    seat: &'a Seat,
+pub struct Compositor {
+    seat: Seat,
 }
 
 fn main() -> ExitCode {
@@ -67,27 +66,28 @@ fn main() -> ExitCode {
 }
 
 fn event_loop() -> Result<(), FatalError> {
-    // ===== os =====
     let seat = Seat::new()?;
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
 
-    let mut read_buffer = Buffer::new();
-    let mut write_buffer = Buffer::new();
+    let mut read_buf = Buffer::new();
+    let mut write_buf = Buffer::new();
 
     let mut clients = Clients::new();
-    let mut event_sources = EventSources::new()?;
+    let mut compositor = Compositor { seat };
 
-    event_sources.add(LISTENER_ID, &listener);
-    event_sources.add(SIGFD_ID, &sigfd);
+    let mut events = EventSources::new()?;
+
+    events.add(LISTENER_ID, &listener);
+    events.add(SIGFD_ID, &sigfd);
 
     // ===== event loop =====
 
     loop {
-        let Some((key, interest)) = event_sources.next_event() else {
+        let Some((key, interest)) = events.next_event() else {
             log::trace!(epoll, "blocking");
             log::flush();
-            event_sources.wait(None);
+            events.wait(None);
             continue;
         };
 
@@ -103,7 +103,7 @@ fn event_loop() -> Result<(), FatalError> {
                         Pending => break,
                     };
                     let (id, client) = clients.insert(conn);
-                    event_sources.add(id.to_u64(), client.conn());
+                    events.add(id.to_u64(), client.conn());
                     log::debug!(client, "id={id} connected");
                 },
                 SIGFD_ID => {
@@ -123,123 +123,92 @@ fn event_loop() -> Result<(), FatalError> {
                 log::warn!(epoll, "unknown dynamic key: {id}");
                 continue;
             };
-            event_sources.delete(client.conn());
+            events.delete(client.conn());
             log::debug!(client, "id={id} disconnected (hup)");
             continue;
         }
 
-        debug_assert!(read_buffer.is_empty());
-        debug_assert!(write_buffer.is_empty());
+        debug_assert!(read_buf.is_empty());
+        debug_assert!(write_buf.is_empty());
 
         let Some(client) = clients.get_mut(id) else {
             log::warn!(epoll, "unknown dynamic key: {id}");
             continue;
         };
 
-        client.buffer_mut().restore(&mut read_buffer, &mut write_buffer);
+        client.buffer_mut().restore(&mut read_buf, &mut write_buf);
 
-        if interest.is_read() {
-            let result = loop {
-                match Frame::from_bytes(&mut read_buffer) {
-                    Ready(Ok(header)) => {
-                        let state = State {
-                            client: ClientMut::new(client, &mut write_buffer),
-                            seat: &seat
-                        };
-                        match handler::router(header, state) {
-                            Ok(()) => {}
-                            Err(err) => {
-                                client.send_global_error(err, &mut write_buffer);
-                                log::error!(client, "{err}");
-                                break Err(());
-                            },
+        // cope and seeth: https://github.com/rust-lang/rust/issues/31436
+        let result = (|| {
+            if interest.is_read() {
+                let mut client = ClientMut::new(client, &mut write_buf);
+                loop {
+                    match Frame::from_bytes(&mut read_buf) {
+                        Ready(Ok(header)) => handler::router(header, &mut client, &mut compositor)
+                            .map_err(|_| FatalError)?,
+                        Ready(Err(err)) => {
+                            client.send_global_error(err);
+                            log::error!(client, "{err}");
+                            return Err(FatalError);
                         }
-                    },
-                    Ready(Err(err)) => {
-                        client.send_global_error(err, &mut write_buffer);
-                        log::error!(client, "{err}");
-                        break Err(());
-                    },
-                    Pending => {
-                        match client.conn().poll_read(&mut read_buffer){
+                        Pending => match client.conn().poll_read(&mut read_buf) {
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
                                 if !err.is_connection_aborted() {
                                     log::error!(client, "failed to read: {err}");
                                 }
-                                break Err(());
-                            },
-                            Pending => {
-                                break Ok(());
-                            },
-                        };
+                                return Err(FatalError);
+                            }
+                            Pending => break,
+                        },
                     }
                 }
-            };
+            }
 
-            if result.is_err() {
-                if !write_buffer.is_empty() {
+            if !write_buf.is_empty() {
+                let is_pending = client.conn().poll_write_all(&mut write_buf)?.is_pending();
+                match (is_pending, interest.is_write()) {
+                    (true, false) => {
+                        // first time write pending, add write interest
+                        events.modify(id.to_u64(), true, client.conn());
+                    }
+                    (false, true) => {
+                        // previous write pending complete, remove write interest
+                        events.modify(id.to_u64(), false, client.conn());
+                    }
+                    _ => {}
+                }
+            }
+
+            Ok::<_, FatalError>(())
+        })();
+
+        match result {
+            Ok(()) => {
+                if !read_buf.is_empty() || !write_buf.is_empty() {
+                    log::warn!(client, "partial message read: {}, write: {}", read_buf.len(), write_buf.len());
+
+                    // the sad pending bytes cannot stay in shared buffer because it will be used for other
+                    // socket, it will be stored in on demand allocation
+                    client
+                        .buffer_mut()
+                        .copy_from(&read_buf, &write_buf);
+                }
+            },
+            Err(_) => {
+                if !write_buf.is_empty() {
                     let _ = client
                         .conn()
-                        .poll_write_all(&mut write_buffer);
+                        .poll_write_all(&mut write_buf);
                 }
-                read_buffer.clear();
-                write_buffer.clear();
-                let Some(client) = clients.remove(id) else {
-                    log::warn!(epoll, "unknown dynamic key: {id}");
-                    continue;
-                };
-                event_sources.delete(client.conn());
+                events.delete(client.conn());
+                clients.remove(id);
                 log::debug!(client, "id={id} disconnected (read)");
-                continue;
-            }
+            },
         }
 
-        let pending_write = if !write_buffer.is_empty() {
-            let result = client
-                .conn()
-                .poll_write_all(&mut write_buffer);
-            match result {
-                Ready(Ok(())) => if interest.is_write() {
-                    event_sources.modify(id.to_u64(), false, client.conn());
-                }
-                Ready(Err(err)) => {
-                    read_buffer.clear();
-                    write_buffer.clear();
-                    let Some(client) = clients.remove(id) else {
-                        log::warn!(epoll, "unknown dynamic key: {id}");
-                        continue;
-                    };
-                    event_sources.delete(client.conn());
-                    log::error!(client, "{}", err);
-                    log::debug!(client, "id={id} disconnected (write)");
-                    continue;
-                }
-                Pending => if !interest.is_write() {
-                    log::warn!(client, "pending message write {}", write_buffer.len());
-                    event_sources.modify(id.to_u64(), true, client.conn());
-                }
-            }
-            result.is_pending()
-        } else {
-            false
-        };
-
-        let pending_read = !read_buffer.is_empty();
-
-        // the sad pending bytes cannot stay in shared buffer because it will be used for other
-        // socket, it will be stored in on demand allocation
-        if pending_read | pending_write {
-            if pending_read {
-                log::warn!(client, "partial message read {}", read_buffer.len());
-            }
-            client
-                .buffer_mut()
-                .copy_from(&read_buffer, &write_buffer);
-        }
-
-        read_buffer.clear();
-        write_buffer.clear();
+        read_buf.clear();
+        write_buf.clear();
     }
 
     Ok(())

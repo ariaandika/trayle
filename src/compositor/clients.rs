@@ -1,4 +1,6 @@
-use crate::sys::conn::Connection;
+use std::task::Poll;
+
+use crate::sys::conn::{self, Connection};
 use crate::collections::slab::Slab;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
@@ -47,18 +49,8 @@ impl Client {
     }
 
     #[inline]
-    pub fn objects_mut(&mut self) -> &mut Objects {
-        &mut self.objects
-    }
-
-    #[inline]
     pub fn buffer_mut(&mut self) -> &mut SmallBuf {
         &mut self.buffer
-    }
-
-    #[inline]
-    pub fn send_global_error(&mut self, error: WlError, write_buf: &mut Buffer) {
-        wl_display::error_from(Id::wl_display(), error).encode_to(write_buf);
     }
 }
 
@@ -81,13 +73,13 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn buffer_mut(&mut self) -> &mut SmallBuf {
-        &mut self.state.buffer
+    pub fn objects_mut(&mut self) -> &mut Objects {
+        &mut self.state.objects
     }
 
     #[inline]
-    pub fn objects_mut(&mut self) -> &mut Objects {
-        &mut self.state.objects
+    pub fn get_object(&mut self, id: Id) -> Option<&mut super::objects::Object> {
+        self.state.objects.get_mut(id)
     }
 
     #[inline]

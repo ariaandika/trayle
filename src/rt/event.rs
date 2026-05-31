@@ -4,7 +4,9 @@ use std::ptr::NonNull;
 use std::slice;
 
 use crate::alloc;
-use crate::sys::epoll::{CreateError, Epoll, EpollEvent, Interest};
+use crate::sys::epoll::{CreateError, Epoll, EpollEvent};
+
+pub use crate::sys::epoll::Interest;
 
 const MAX_EVENT: usize = 128;
 
