@@ -1,7 +1,10 @@
 use std::mem::MaybeUninit;
+use std::os::fd::AsRawFd;
 use std::ptr::{self, NonNull};
 use std::slice;
+use std::task::Poll::{self, *};
 
+use crate::sys::errno::{Errno, simple_errno};
 use crate::alloc;
 
 const TOTAL_INITIAL_SIZE: usize = 512;
@@ -14,7 +17,7 @@ const INITIAL_CAP: usize = TOTAL_INITIAL_SIZE - MAXFD_SIZE;
 
 // ===== Buffer =====
 
-pub struct Buffer {
+pub struct MessageBuf {
     ptr: NonNull<u8>,
     off: usize,
     len: usize,
@@ -23,13 +26,14 @@ pub struct Buffer {
     fd_off: usize,
 }
 
-impl Drop for Buffer {
+impl Drop for MessageBuf {
     fn drop(&mut self) {
         alloc::deallocate(self.base_ptr());
     }
 }
 
-impl Buffer {
+impl MessageBuf {
+    #[inline]
     pub fn new() -> Self {
         let base_ptr = alloc::allocate(TOTAL_INITIAL_SIZE);
         Self {
@@ -58,10 +62,12 @@ impl Buffer {
         self.cap = new_base_cap - offset;
     }
 
+    #[inline]
     pub fn as_slice(&self) -> &[u8] {
         unsafe { slice::from_raw_parts(self.ptr.as_ptr(), self.len) }
     }
 
+    #[inline]
     pub fn advance(&mut self, cnt: usize) {
         assert!(cnt <= self.len);
         // SAFETY: asserted above
@@ -71,6 +77,7 @@ impl Buffer {
     /// # Safety
     ///
     /// `cnt <= self.len()`
+    #[inline]
     pub unsafe fn advance_unchecked(&mut self, cnt: usize) {
         debug_assert!(cnt <= self.len);
         self.ptr = unsafe { self.ptr.add(cnt) };
@@ -82,68 +89,20 @@ impl Buffer {
     /// # Safety
     ///
     /// `cnt` element after the last element must be initialized.
+    #[inline]
     pub unsafe fn advance_mut(&mut self, cnt: usize) {
         debug_assert!(self.cap - self.len >= cnt);
         self.len += cnt;
     }
 
-    pub fn try_split_first_chunk<const N: usize>(&mut self) -> Option<&[u8; N]> {
-        if N > self.len {
-            return None;
-        }
-        // SAFETY: checked above
-        unsafe { Some(self.split_first_chunk_unchecked()) }
-    }
-
-    /// # Safety
-    ///
-    /// `N <= self.len()`
-    pub unsafe fn split_first_chunk_unchecked<const N: usize>(&mut self) -> &[u8; N] {
-        debug_assert!(N <= self.len);
-        // SAFETY: precondition
-        unsafe {
-            self.advance_unchecked(N);
-            self.ptr.sub(N).cast().as_ref()
-        }
-    }
-
-    pub fn try_split_to(&mut self, cnt: usize) -> Option<&[u8]> {
-        if cnt > self.len {
-            return None;
-        }
-        // SAFETY: checked above
-        unsafe { Some(self.split_to_unchecked(cnt)) }
-    }
-
-    /// # Safety
-    ///
-    /// `cnt <= self.len()`
-    pub unsafe fn split_to_unchecked(&mut self, cnt: usize) -> &[u8] {
-        debug_assert!(cnt <= self.len);
-        // SAFETY: precondition
-        unsafe {
-            self.advance_unchecked(cnt);
-            slice::from_raw_parts(self.ptr.sub(cnt).as_ptr(), cnt)
-        }
-    }
-
-    // /// Returns `true` if remaining capacity is sufficient and the data is copied.
-    // pub fn extend_from_slice(&mut self, slice: &[u8]) {
-    //     self.reserve(slice.len());
-    //     unsafe {
-    //         self.spare_capacity_mut()
-    //             .as_mut_ptr()
-    //             .copy_from_nonoverlapping(slice.as_ptr().cast(), slice.len());
-    //         self.advance_mut(slice.len());
-    //     }
-    // }
-
+    #[inline]
     pub fn reserve(&mut self, additional: usize) {
         if self.cap - self.len < additional {
             self.grow(additional);
         }
     }
 
+    #[inline]
     pub fn spare_capacity_mut(&mut self) -> &mut [MaybeUninit<u8>] {
         unsafe {
             slice::from_raw_parts_mut(
@@ -153,6 +112,7 @@ impl Buffer {
         }
     }
 
+    #[inline]
     pub fn clear(&mut self) {
         self.ptr = unsafe { self.ptr.sub(self.off) };
         self.cap += self.off;
@@ -195,7 +155,19 @@ impl Buffer {
     }
 }
 
-impl std::ops::Deref for Buffer {
+impl MessageBuf {
+    #[inline]
+    pub fn sendmsg<Fd: AsRawFd>(&mut self, socket: &Fd) -> Poll<Result<(), WriteError>> {
+        sendmsg(self, socket.as_raw_fd())
+    }
+
+    #[inline]
+    pub fn recvmsg<Fd: AsRawFd>(&mut self, socket: &Fd) -> Poll<Result<(), ReadError>> {
+        recvmsg(self, socket.as_raw_fd())
+    }
+}
+
+impl std::ops::Deref for MessageBuf {
     type Target = [u8];
 
     fn deref(&self) -> &Self::Target {
@@ -238,15 +210,89 @@ const CONTROL_MESSAGE: CmsgBuf = unsafe {
     buf
 };
 
+// ===== syscall =====
+
+fn sendmsg(buffer: &mut MessageBuf, socket: i32) -> Poll<Result<(), WriteError>> {
+    debug_assert!(!buffer.is_empty());
+    let mut msg = buffer.as_msghdr();
+    loop {
+        let Ok(write) = unsafe { libc::sendmsg(socket, msg.as_ptr(), 0) }.try_into() else {
+            return match Errno::get() {
+                libc::EWOULDBLOCK => Poll::Pending,
+                _ => Poll::Ready(Err(WriteError)),
+            };
+        };
+        if msg.advance(write) {
+            break;
+        }
+    }
+    Poll::Ready(Ok(()))
+}
+
+fn recvmsg(buffer: &mut MessageBuf, socket: i32) -> Poll<Result<(), ReadError>> {
+    use ReadError as E;
+    debug_assert!(!buffer.spare_capacity_mut().is_empty());
+
+    let mut msghdr = buffer.as_spare_msghdr();
+
+    let Ok(read) = unsafe { libc::recvmsg(socket, msghdr.as_mut_ptr(), 0) }.try_into() else {
+        return match Errno::get() {
+            libc::EWOULDBLOCK => Poll::Pending,
+            _ => Poll::Ready(Err(E::Errno)),
+        };
+    };
+    if read == 0 {
+        return Poll::Ready(Err(E::ConnectionAborted));
+    }
+    if msghdr.is_truncated() {
+        return Poll::Ready(Err(E::ControlDataTruncated));
+    }
+    if unsafe { msghdr.advance_mut(read) } {
+        Ready(Ok(()))
+    } else {
+        Ready(Err(E::ControlDataType))
+    }
+}
+
+// ===== Error =====
+
+simple_errno! {
+    pub WriteError, "failed to write to socket: {}";
+}
+
+pub enum ReadError {
+    Errno,
+    ControlDataType,
+    ControlDataTruncated,
+    ConnectionAborted,
+}
+
+impl ReadError {
+    pub fn is_connection_aborted(&self) -> bool {
+        matches!(self, Self::ConnectionAborted)
+    }
+}
+
+impl std::fmt::Display for ReadError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Errno => write!(f, "failed to read socket: {Errno}"),
+            Self::ControlDataType => "unexpected ancillary data type".fmt(f),
+            Self::ControlDataTruncated => "ancillary data truncated".fmt(f),
+            Self::ConnectionAborted => "connection aborted by the peer".fmt(f),
+        }
+    }
+}
+
 // ===== MsgHdr =====
 
 pub struct MsgHdr<'a> {
     msghdr: libc::msghdr,
-    buffer: &'a mut Buffer,
+    buffer: &'a mut MessageBuf,
 }
 
 impl<'a> MsgHdr<'a> {
-    fn new(buffer: &'a mut Buffer) -> Self {
+    fn new(buffer: &'a mut MessageBuf) -> Self {
         Self {
             msghdr: libc::msghdr {
                 msg_name: ptr::null_mut(),
@@ -277,7 +323,7 @@ impl<'a> MsgHdr<'a> {
         }
     }
 
-    fn spare(buffer: &'a mut Buffer) -> Self {
+    fn spare(buffer: &'a mut MessageBuf) -> Self {
         let spare = buffer.spare_capacity_mut();
         Self {
             msghdr: libc::msghdr {
@@ -410,7 +456,7 @@ impl Drop for SmallBuf {
 }
 
 impl SmallBuf {
-    pub fn copy_from(&mut self, read_buf: &Buffer, write_buf: &Buffer) {
+    pub fn copy_from(&mut self, read_buf: &MessageBuf, write_buf: &MessageBuf) {
         debug_assert!(self.ptr.is_none());
         debug_assert!(!(read_buf.is_empty() & write_buf.is_empty()));
 
@@ -449,7 +495,7 @@ impl SmallBuf {
     //     write_buf @ [u8; MAXFD_SIZE + write_len],
     // ]
     // ```
-    pub fn restore(&mut self, read_buf: &mut Buffer, write_buf: &mut Buffer) {
+    pub fn restore(&mut self, read_buf: &mut MessageBuf, write_buf: &mut MessageBuf) {
         debug_assert!(read_buf.is_empty() & write_buf.is_empty());
         debug_assert_eq!(
             read_buf.fd_len | read_buf.fd_off | write_buf.fd_len | write_buf.fd_off,

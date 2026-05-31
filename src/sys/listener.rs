@@ -2,7 +2,6 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::task::Poll;
 use std::{mem, ptr};
 
-use crate::sys::conn::Connection;
 use crate::sys::errno::{Errno, simple_errno};
 
 // ===== SocketPath =====
@@ -95,7 +94,7 @@ impl Listener {
         Some(Self { fd, path })
     }
 
-    pub fn poll_accept(&self) -> Poll<Result<Connection, AcceptError>> {
+    pub fn poll_accept(&self) -> Poll<Result<OwnedFd, AcceptError>> {
         unsafe {
             let result = libc::accept(self.fd.as_raw_fd(), ptr::null_mut(), ptr::null_mut());
             let Some(fd) = e(result) else {

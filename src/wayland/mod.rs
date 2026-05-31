@@ -1,6 +1,7 @@
 pub use id::{Id, NewId};
 pub use op::OpCode;
 pub use message::{Frame, Message, WaylandObject};
+pub use buffer::{MessageBuf, SmallBuf};
 pub use error::WlError;
 pub use decode::Decode;
 pub use encode::Encode;
@@ -9,6 +10,7 @@ pub use interface::InterfaceId;
 mod id;
 mod op;
 mod message;
+mod buffer;
 mod error;
 mod decode;
 mod encode;

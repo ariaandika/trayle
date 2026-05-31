@@ -1,7 +1,6 @@
 use std::task::Poll::{self, *};
 
-use crate::collections::buffer::Buffer;
-use crate::wayland::{Id, InterfaceId, WlError};
+use crate::wayland::{MessageBuf, Id, InterfaceId, WlError};
 
 // ===== WaylandObject =====
 
@@ -77,11 +76,11 @@ impl<T> std::ops::DerefMut for Message<T> {
 pub struct Frame<'a> {
     /// - guarantee to contains one valid length message
     /// - guarantee that Id is non-zero
-    read_buf: &'a mut Buffer,
+    read_buf: &'a mut MessageBuf,
 }
 
 impl<'a> Frame<'a> {
-    pub fn from_bytes(read_buf: &'a mut Buffer) -> Poll<Result<Self, WlError>> {
+    pub fn from_bytes(read_buf: &'a mut MessageBuf) -> Poll<Result<Self, WlError>> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Pending;
         };

@@ -1,9 +1,9 @@
-use crate::sys::conn::Connection;
+use std::os::fd::{AsRawFd, OwnedFd};
+
 use crate::collections::slab::Slab;
-use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
 use crate::wayland::wl_display;
-use crate::wayland::{Encode, Id, WaylandObject, WlError};
+use crate::wayland::{MessageBuf, Encode, Id, SmallBuf, WaylandObject, WlError};
 
 // ===== ClientId =====
 
@@ -33,22 +33,23 @@ impl std::fmt::Display for ClientId {
 
 // ===== Client =====
 
-// Client state.
+/// Client state.
 pub struct Client {
-    conn: Connection,
+    socket: OwnedFd,
     objects: Objects,
     buffer: SmallBuf,
 }
 
 impl Client {
     #[inline]
-    pub fn conn(&self) -> &Connection {
-        &self.conn
-    }
-
-    #[inline]
     pub fn buffer_mut(&mut self) -> &mut SmallBuf {
         &mut self.buffer
+    }
+}
+
+impl AsRawFd for Client {
+    fn as_raw_fd(&self) -> i32 {
+        self.socket.as_raw_fd()
     }
 }
 
@@ -56,18 +57,13 @@ impl Client {
 
 pub struct ClientMut<'a> {
     state: &'a mut Client,
-    write_buf: &'a mut Buffer,
+    write_buf: &'a mut MessageBuf,
 }
 
 impl<'a> ClientMut<'a> {
     #[inline]
-    pub fn new(state: &'a mut Client, write_buf: &'a mut Buffer) -> Self {
+    pub fn new(state: &'a mut Client, write_buf: &'a mut MessageBuf) -> Self {
         Self { state, write_buf }
-    }
-
-    #[inline]
-    pub fn conn(&self) -> &Connection {
-        &self.state.conn
     }
 
     #[inline]
@@ -96,6 +92,12 @@ impl<'a> ClientMut<'a> {
     }
 }
 
+impl AsRawFd for ClientMut<'_> {
+    fn as_raw_fd(&self) -> i32 {
+        self.state.as_raw_fd()
+    }
+}
+
 // ===== Clients =====
 
 const INITIAL_CAP: usize = 8;
@@ -106,25 +108,29 @@ pub struct Clients {
 }
 
 impl Clients {
+    #[inline]
     pub fn new() -> Self {
         Self {
             buf: Slab::with_capacity(INITIAL_CAP),
         }
     }
 
-    pub fn insert(&mut self, conn: Connection) -> (ClientId, &mut Client) {
+    #[inline]
+    pub fn insert(&mut self, socket: OwnedFd) -> (ClientId, &mut Client) {
         let (key, client) = self.buf.insert(Client {
-            conn,
+            socket,
             objects: Objects::new(),
             buffer: SmallBuf::default(),
         });
         (ClientId(key as u64), client)
     }
 
+    #[inline]
     pub fn get_mut(&mut self, id: ClientId) -> Option<&mut Client> {
         self.buf.get_mut(id.0 as usize)
     }
 
+    #[inline]
     pub fn remove(&mut self, id: ClientId) -> Option<Client> {
         self.buf.remove(id.0 as usize)
     }

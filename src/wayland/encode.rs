@@ -1,5 +1,4 @@
-use crate::collections::buffer::Buffer;
-use crate::wayland::{Id, roundup4};
+use crate::wayland::{Id, MessageBuf, roundup4};
 
 /// Encodable wayland message.
 pub trait Encode: Sized {
@@ -10,7 +9,7 @@ pub trait Encode: Sized {
     fn encode(self, encoder: Encoder);
 
     #[inline]
-    fn encode_to(self, write_buf: &mut Buffer) {
+    fn encode_to(self, write_buf: &mut MessageBuf) {
         let id = self.object_id().to_u32();
         let op = Self::OPCODE;
         self.encode(Encoder { id, op, write_buf });
@@ -33,7 +32,7 @@ pub(super) use encode_me;
 pub struct Encoder<'a> {
     id: u32,
     op: u16,
-    write_buf: &'a mut Buffer,
+    write_buf: &'a mut MessageBuf,
 }
 
 impl<'a> Encoder<'a> {
@@ -76,7 +75,7 @@ impl<'a> Encoder<'a> {
 
 pub struct Writer<'a> {
     ptr: *mut u8,
-    _p: std::marker::PhantomData<&'a mut Buffer>,
+    _p: std::marker::PhantomData<&'a mut MessageBuf>,
 }
 
 impl<'a> Writer<'a> {

@@ -26,8 +26,7 @@ use std::task::Poll::*;
 
 use sys::listener::{Listener, SocketPath};
 use sys::sigfd::Sigfd;
-use collections::buffer::Buffer;
-use wayland::Frame;
+use wayland::{MessageBuf, Frame};
 use compositor::clients::{ClientId, ClientMut, Clients};
 use compositor::seat::Seat;
 use rt::event::EventSources;
@@ -70,8 +69,8 @@ fn event_loop() -> Result<(), FatalError> {
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
 
-    let mut read_buf = Buffer::new();
-    let mut write_buf = Buffer::new();
+    let mut read_buf = MessageBuf::new();
+    let mut write_buf = MessageBuf::new();
 
     let mut clients = Clients::new();
     let mut compositor = Compositor { seat };
@@ -103,7 +102,7 @@ fn event_loop() -> Result<(), FatalError> {
                         Pending => break,
                     };
                     let (id, client) = clients.insert(conn);
-                    events.add(id.to_u64(), client.conn());
+                    events.add(id.to_u64(), client);
                     log::debug!(client, "id={id} connected");
                 },
                 SIGFD_ID => {
@@ -123,7 +122,7 @@ fn event_loop() -> Result<(), FatalError> {
                 log::warn!(epoll, "unknown dynamic key: {id}");
                 continue;
             };
-            events.delete(client.conn());
+            events.delete(&client);
             log::debug!(client, "id={id} disconnected (hup)");
             continue;
         }
@@ -151,7 +150,7 @@ fn event_loop() -> Result<(), FatalError> {
                             log::error!(client, "{err}");
                             return Err(FatalError);
                         }
-                        Pending => match client.conn().poll_read(&mut read_buf) {
+                        Pending => match read_buf.recvmsg(&client) {
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
                                 if !err.is_connection_aborted() {
@@ -166,15 +165,15 @@ fn event_loop() -> Result<(), FatalError> {
             }
 
             if !write_buf.is_empty() {
-                let is_pending = client.conn().poll_write_all(&mut write_buf)?.is_pending();
+                let is_pending = write_buf.sendmsg(client)?.is_pending();
                 match (is_pending, interest.is_write()) {
                     (true, false) => {
                         // first time write pending, add write interest
-                        events.modify(id.to_u64(), true, client.conn());
+                        events.modify(id.to_u64(), true, client);
                     }
                     (false, true) => {
                         // previous write pending complete, remove write interest
-                        events.modify(id.to_u64(), false, client.conn());
+                        events.modify(id.to_u64(), false, client);
                     }
                     _ => {}
                 }
@@ -197,11 +196,9 @@ fn event_loop() -> Result<(), FatalError> {
             },
             Err(_) => {
                 if !write_buf.is_empty() {
-                    let _ = client
-                        .conn()
-                        .poll_write_all(&mut write_buf);
+                    let _ = write_buf.sendmsg(client);
                 }
-                events.delete(client.conn());
+                events.delete(client);
                 clients.remove(id);
                 log::debug!(client, "id={id} disconnected (read)");
             },
