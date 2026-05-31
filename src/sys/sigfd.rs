@@ -1,9 +1,7 @@
 use std::mem::MaybeUninit;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 
-use crate::errno::simple_errno;
-
-// https://man7.org/linux/man-pages/man2/signalfd.2.html
+use crate::sys::errno::simple_errno;
 
 // ===== Sig =====
 

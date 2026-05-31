@@ -3,9 +3,9 @@ use std::{mem, slice};
 
 use crate::alloc;
 use crate::buffer::{Buffer, SmallBuf};
-use crate::conn::Connection;
-use crate::epoll::Epoll;
 use crate::objects::Objects;
+use crate::sys::conn::Connection;
+use crate::sys::epoll::Epoll;
 use crate::wayland::wl_display;
 use crate::wayland::{Encode, Id, WlError};
 

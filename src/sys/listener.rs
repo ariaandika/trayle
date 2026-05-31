@@ -2,8 +2,8 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::task::Poll;
 use std::{mem, ptr};
 
-use crate::conn::Connection;
-use crate::errno::{Errno, simple_errno};
+use crate::sys::conn::Connection;
+use crate::sys::errno::{Errno, simple_errno};
 
 // ===== SocketPath =====
 

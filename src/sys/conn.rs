@@ -2,7 +2,7 @@ use std::os::fd::{AsRawFd, OwnedFd, RawFd};
 use std::task::Poll;
 
 use crate::buffer::Buffer;
-use crate::errno::{Errno, simple_errno};
+use crate::sys::errno::{Errno, simple_errno};
 
 #[derive(Debug)]
 pub struct Connection(OwnedFd);

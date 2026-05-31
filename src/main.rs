@@ -26,18 +26,14 @@ use std::task::Poll::*;
 
 use buffer::Buffer;
 use clients::{Client, ClientId, Clients};
-use epoll::Epoll;
-use listener::{Listener, SocketPath};
 use seat::Seat;
-use sigfd::Sigfd;
+use sys::sigfd::Sigfd;
+use sys::epoll::Epoll;
+use sys::listener::{Listener, SocketPath};
 use wayland::Frame;
 
+mod sys;
 // ===== os ========
-mod errno;
-mod epoll;
-mod sigfd;
-mod conn;
-mod listener;
 mod seat;
 // ===== alloc =====
 mod alloc;

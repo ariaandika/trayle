@@ -36,15 +36,15 @@ macro_rules! simple_errno {
 
         impl std::error::Error for $name {}
 
-        impl From<crate::errno::Errno> for $name {
-            fn from(_: crate::errno::Errno) -> Self {
+        impl From<crate::sys::errno::Errno> for $name {
+            fn from(_: crate::sys::errno::Errno) -> Self {
                 Self
             }
         }
 
         impl std::fmt::Display for $name {
             fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-                write!(f, $m, crate::errno::Errno)
+                write!(f, $m, crate::sys::errno::Errno)
             }
         }
 
@@ -55,7 +55,7 @@ macro_rules! simple_errno {
         }
     };
     ($($v:vis $name:ident, $m:literal;)*) => {
-        $(crate::errno::simple_errno!($v $name, $m);)*
+        $(crate::sys::errno::simple_errno!($v $name, $m);)*
     };
     () => {}
 }

@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::ptr;
 
-use crate::errno::simple_errno;
+use crate::sys::errno::{Errno, simple_errno};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Interest(i32);
@@ -143,14 +143,14 @@ fn epoll_ctl_panic() -> ! {
     //
     // looking further, all epoll_ctl failure is a server fault, except ENOMEM and ENOSPC, in which
     // no recovery seems possible, thus the panic
-    panic!("`epoll_ctl` fail: {}", crate::errno::Errno);
+    panic!("`epoll_ctl` fail: {Errno}");
 }
 
 #[cold]
 #[inline(never)]
 fn epoll_wait_panic() -> ! {
     // all epoll_wait errors, except EINTR, are server error
-    panic!("`epoll_wait` fail: {}", crate::errno::Errno);
+    panic!("`epoll_wait` fail: {Errno}");
 }
 
 simple_errno! {

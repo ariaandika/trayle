@@ -88,6 +88,6 @@ impl std::fmt::Display for SeatError {
             Self::MemfdCreate => write!(f, "failed to create memfd: ")?,
             Self::MemfdWrite => write!(f, "failed to write to memfd: ")?,
         }
-        crate::errno::Errno.fmt(f)
+        crate::sys::errno::Errno.fmt(f)
     }
 }
