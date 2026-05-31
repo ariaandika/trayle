@@ -12,7 +12,7 @@ pub trait Object {
 }
 
 macro_rules! simple_object {
-    (pub struct $mod_name:ident::$struct_name:ident;) => {
+    (pub struct $struct_name:ident;) => {
         #[derive(Debug)]
         pub struct $struct_name {
             id: Id,
@@ -26,7 +26,7 @@ macro_rules! simple_object {
         }
 
         impl Object for $struct_name {
-            const INTERFACE_ID: InterfaceId = InterfaceId::$mod_name;
+            const INTERFACE_ID: InterfaceId = InterfaceId::$struct_name;
 
             fn id(&self) -> Id {
                 self.id

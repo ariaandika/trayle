@@ -1,8 +1,8 @@
 use crate::wayland::prelude::*;
-use crate::wayland::wl_surface::Surface;
+use crate::wayland::wl_surface::WlSurface;
 
 simple_object! {
-    pub struct WlCompositor::Compositor;
+    pub struct WlCompositor;
 }
 
 // ===== Op =====
@@ -17,7 +17,7 @@ opcode! {
 
 #[derive(Debug)]
 pub struct CreateSurface {
-    pub surface: NewId<Surface>,
+    pub surface: NewId<WlSurface>,
 }
 
 impl Decode for CreateSurface {

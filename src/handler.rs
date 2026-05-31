@@ -118,7 +118,7 @@ trait RequestHandler<Request>: Sized {
 
 mod wl_display {
     use super::*;
-    use WlDisplay::{GetRegistry, Sync};
+    use crate::wayland::wl_display::{GetRegistry, Sync};
 
     impl RequestHandler<Sync> for Compositor {
         fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
@@ -147,7 +147,8 @@ mod wl_display {
 
 mod wl_registry {
     use super::*;
-    use WlRegistry::Bind;
+    use crate::wayland::wl_registry::Bind;
+    use crate::wayland::wl_seat::WlSeat;
 
     impl RequestHandler<Bind<'_>> for Compositor {
         fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -164,7 +165,7 @@ mod wl_registry {
 
             // some interface has side-effect after binding
             if let InterfaceId::WlSeat = iface {
-                let seat = bind.get::<WlSeat::Seat>();
+                let seat = bind.get::<WlSeat>();
                 client.send(seat.capabilities(self.seat.capability()));
             }
 
@@ -175,7 +176,7 @@ mod wl_registry {
 
 mod wl_compositor {
     use super::*;
-    use WlCompositor::CreateSurface;
+    use crate::wayland::wl_compositor::CreateSurface;
 
     impl RequestHandler<CreateSurface> for Compositor {
         fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
@@ -187,7 +188,7 @@ mod wl_compositor {
 
 mod wl_seat {
     use super::*;
-    use WlSeat::GetKeyboard;
+    use crate::wayland::wl_seat::GetKeyboard;
 
     impl RequestHandler<GetKeyboard> for Compositor {
         fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
@@ -200,9 +201,9 @@ mod wl_seat {
 }
 
 mod wl_data_device_manager {
-    use crate::wayland::InterfaceId;
     use super::*;
-    use WlDataDeviceManager::GetDataDevice;
+    use crate::wayland::InterfaceId;
+    use crate::wayland::wl_data_device_manager::GetDataDevice;
 
     impl RequestHandler<GetDataDevice> for Compositor {
         fn handle(&mut self, req: GetDataDevice, client: &mut ClientMut) -> Result<(), WlError> {

@@ -1,10 +1,10 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
-    pub struct WlRegistry::Registry;
+    pub struct WlRegistry;
 }
 
-impl Registry {
+impl WlRegistry {
     /// Send `wl_registry::global` event.
     pub fn global<'a>(&self, name: u32, interface: &'a str, version: u32) -> Message<Global<'a>> {
         Message::new(self, Global { name, interface, version })

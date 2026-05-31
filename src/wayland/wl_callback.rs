@@ -1,10 +1,10 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
-    pub struct WlCallback::Callback;
+    pub struct WlCallback;
 }
 
-impl Callback {
+impl WlCallback {
     pub fn done(&self, callback_data: u32) -> Message<Done> {
         Message::new(self, Done { callback_data })
     }

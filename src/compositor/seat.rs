@@ -63,7 +63,7 @@ impl Seat {
 
     pub fn to_keymap_event(
         &self,
-        wl_keyboard: &wl_keyboard::Keyboard,
+        wl_keyboard: &wl_keyboard::WlKeyboard,
     ) -> Message<wl_keyboard::Keymap> {
         wl_keyboard.keymap(
             wl_keyboard::KeymapFormat::XkbV1,

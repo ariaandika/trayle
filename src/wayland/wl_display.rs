@@ -1,6 +1,6 @@
 use crate::wayland::prelude::*;
-use crate::wayland::wl_callback::Callback;
-use crate::wayland::wl_registry::Registry;
+use crate::wayland::wl_callback::WlCallback;
+use crate::wayland::wl_registry::WlRegistry;
 
 // ===== Op =====
 
@@ -22,7 +22,7 @@ opcode! {
 
 #[derive(Debug)]
 pub struct Sync {
-    pub callback: NewId<Callback>,
+    pub callback: NewId<WlCallback>,
 }
 
 impl Decode for Sync {
@@ -39,7 +39,7 @@ impl Decode for Sync {
 
 #[derive(Debug)]
 pub struct GetRegistry {
-    pub registry: NewId<Registry>,
+    pub registry: NewId<WlRegistry>,
 }
 
 impl Decode for GetRegistry {

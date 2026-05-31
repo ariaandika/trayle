@@ -1,12 +1,12 @@
 use crate::compositor::seat::Capability;
 use crate::wayland::prelude::*;
-use crate::wayland::wl_keyboard::Keyboard;
+use crate::wayland::wl_keyboard::WlKeyboard;
 
 simple_object! {
-    pub struct WlSeat::Seat;
+    pub struct WlSeat;
 }
 
-impl Seat {
+impl WlSeat {
     pub fn capabilities(&self, capabilities: Capability) -> Message<Capabilities> {
         Message::new(self, Capabilities { capabilities })
     }
@@ -31,7 +31,7 @@ opcode! {
 
 #[derive(Debug)]
 pub struct GetKeyboard {
-    pub keyboard: NewId<Keyboard>,
+    pub keyboard: NewId<WlKeyboard>,
 }
 
 impl Decode for GetKeyboard {

@@ -1,10 +1,10 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
-    pub struct WlKeyboard::Keyboard;
+    pub struct WlKeyboard;
 }
 
-impl Keyboard {
+impl WlKeyboard {
     /// Send `wl_keyboard::keymap` event.
     pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
         Message::new(self, Keymap { format, fd, size })

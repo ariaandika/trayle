@@ -1,7 +1,7 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
-    pub struct WlDataDeviceManager::DataDeviceManager;
+    pub struct WlDataDeviceManager;
 }
 
 // ===== Op =====

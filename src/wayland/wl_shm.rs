@@ -1,7 +1,7 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
-    pub struct WlShm::Shm;
+    pub struct WlShm;
 }
 
 // ===== Op =====
