@@ -114,7 +114,7 @@ impl Encode for Error<'_> {
 
 // ===== DeleteId =====
 
-pub fn delete_id<O: Object>(object: &O) -> DeleteId {
+pub fn delete_id<O: WaylandObject>(object: &O) -> DeleteId {
     DeleteId { id: object.id() }
 }
 

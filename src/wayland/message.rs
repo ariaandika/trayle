@@ -3,9 +3,9 @@ use std::task::Poll::{self, *};
 use crate::collections::buffer::Buffer;
 use crate::wayland::{Id, InterfaceId, WlError};
 
-// ===== Object =====
+// ===== WaylandObject =====
 
-pub trait Object {
+pub trait WaylandObject {
     const INTERFACE_ID: InterfaceId;
 
     fn id(&self) -> Id;
@@ -25,7 +25,7 @@ macro_rules! simple_object {
             }
         }
 
-        impl Object for $struct_name {
+        impl WaylandObject for $struct_name {
             const INTERFACE_ID: InterfaceId = InterfaceId::$struct_name;
 
             fn id(&self) -> Id {
@@ -45,7 +45,7 @@ pub struct Message<T> {
 }
 
 impl<T> Message<T> {
-    pub fn new<O: Object>(object: &O, payload: T) -> Self {
+    pub fn new<O: WaylandObject>(object: &O, payload: T) -> Self {
         Self {
             id: object.id(),
             payload,

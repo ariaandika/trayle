@@ -1,11 +1,9 @@
-use std::task::Poll;
-
-use crate::sys::conn::{self, Connection};
+use crate::sys::conn::Connection;
 use crate::collections::slab::Slab;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
 use crate::wayland::wl_display;
-use crate::wayland::{Encode, Id, Object, WlError};
+use crate::wayland::{Encode, Id, WaylandObject, WlError};
 
 // ===== ClientId =====
 
@@ -83,7 +81,7 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn insert_object<O: Object>(&mut self, object: &O) -> Result<(), WlError> {
+    pub fn insert_object<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
         self.state.objects.insert_object(object)
     }
 

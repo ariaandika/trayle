@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{Id, InterfaceId, Object as WlObject, WlError};
+use crate::wayland::{Id, InterfaceId, WaylandObject, WlError};
 
 // ===== Object =====
 
@@ -59,7 +59,7 @@ impl Objects {
         self.cap = new_cap;
     }
 
-    pub fn insert_object<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
+    pub fn insert_object<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
         self.insert_inner(
             object.id(),
             Some(Object {
@@ -73,7 +73,7 @@ impl Objects {
     }
 
     /// This has the same effect of inserting the id and immediately remove it.
-    pub fn use_one<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
+    pub fn use_one<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
         self.insert_inner(object.id(), None)
     }
 
