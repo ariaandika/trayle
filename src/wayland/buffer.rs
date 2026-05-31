@@ -145,14 +145,6 @@ impl MessageBuf {
         self.fd_len -= 1;
         Some(fd)
     }
-
-    pub fn as_msghdr(&mut self) -> MsgHdr<'_> {
-        MsgHdr::new(self)
-    }
-
-    pub fn as_spare_msghdr(&mut self) -> MsgHdr<'_> {
-        MsgHdr::spare(self)
-    }
 }
 
 impl MessageBuf {
@@ -170,6 +162,7 @@ impl MessageBuf {
 impl std::ops::Deref for MessageBuf {
     type Target = [u8];
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         self.as_slice()
     }
@@ -177,7 +170,8 @@ impl std::ops::Deref for MessageBuf {
 
 // ===== CMSG LMAO =====
 
-const IMPOSTOR_CMSGHDR: usize = size_of::<libc::cmsghdr>() / FDSIZE;
+const CMSGHDR_SIZE: usize = size_of::<libc::cmsghdr>();
+const IMPOSTOR_CMSGHDR: usize = CMSGHDR_SIZE / FDSIZE;
 
 // - 1 for the actual header
 // - the rest is actually `MAXFD` of fds
@@ -195,6 +189,8 @@ const _: () = assert!(matches!(
     (CMSG_SPACE, CMSG_ALIGN)
 ));
 
+const _: () = unsafe { assert!(CMSGHDR_SIZE == libc::CMSG_LEN(0) as usize) };
+
 fn cmsg_len(fd_len: usize) -> usize {
     unsafe { libc::CMSG_LEN((fd_len * FDSIZE) as u32) as usize }
 }
@@ -203,7 +199,7 @@ fn cmsg_space(fd_len: usize) -> usize {
     unsafe { libc::CMSG_SPACE((fd_len * FDSIZE) as u32) as usize }
 }
 
-const CONTROL_MESSAGE: CmsgBuf = unsafe {
+const NEW_CMSG: CmsgBuf = unsafe {
     let mut buf = [std::mem::zeroed::<libc::cmsghdr>(); _];
     buf[0].cmsg_level = libc::SOL_SOCKET;
     buf[0].cmsg_type = libc::SCM_RIGHTS;
@@ -212,30 +208,89 @@ const CONTROL_MESSAGE: CmsgBuf = unsafe {
 
 // ===== syscall =====
 
-fn sendmsg(buffer: &mut MessageBuf, socket: i32) -> Poll<Result<(), WriteError>> {
-    debug_assert!(!buffer.is_empty());
-    let mut msg = buffer.as_msghdr();
+fn sendmsg(buf: &mut MessageBuf, socket: i32) -> Poll<Result<(), WriteError>> {
+    debug_assert!(!buf.is_empty());
+
+    let mut cmsg = NEW_CMSG;
+    let (msg_control, msg_controllen) = if buf.fd_len == 0 {
+        (ptr::null_mut(), 0)
+    } else {
+        cmsg[0].cmsg_len = cmsg_len(buf.fd_len);
+        unsafe {
+            let dst = libc::CMSG_DATA(&cmsg[0]);
+            dst.copy_from_nonoverlapping(
+                buf.base_ptr().as_ptr().add(buf.fd_off * FDSIZE),
+                buf.fd_len * FDSIZE,
+            );
+        };
+        (cmsg.as_mut_ptr().cast(), cmsg_space(buf.fd_len))
+    };
+    let mut msghdr = libc::msghdr {
+        msg_name: ptr::null_mut(),
+        msg_namelen: 0,
+        msg_iov: &mut libc::iovec {
+            iov_base: buf.ptr.as_ptr().cast(),
+            iov_len: buf.len(),
+        },
+        msg_iovlen: 1,
+        msg_control,
+        msg_controllen,
+        msg_flags: 0,
+    };
+
     loop {
-        let Ok(write) = unsafe { libc::sendmsg(socket, msg.as_ptr(), 0) }.try_into() else {
+        let Ok(write) = unsafe { libc::sendmsg(socket, &msghdr, 0) }.try_into() else {
             return match Errno::get() {
-                libc::EWOULDBLOCK => Poll::Pending,
-                _ => Poll::Ready(Err(WriteError)),
+                libc::EWOULDBLOCK => Pending,
+                _ => Ready(Err(WriteError)),
             };
         };
-        if msg.advance(write) {
+
+        if write == buf.len() {
+            buf.clear();
             break;
         }
+
+        buf.advance(write);
+
+        // update the advance message buffer
+        let iov_mut = unsafe { &mut *msghdr.msg_iov };
+        iov_mut.iov_base = buf.ptr.as_ptr().cast();
+        iov_mut.iov_len = buf.len();
+
+        // Ancillary data is received as if it were queued along with the first normal data octet in
+        // the segment (if any).
+        //
+        // https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
+        //
+        // unset the ancillary data
+        msghdr.msg_control = ptr::null_mut();
+        msghdr.msg_controllen = 0;
     }
+
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buffer: &mut MessageBuf, socket: i32) -> Poll<Result<(), ReadError>> {
+fn recvmsg(buf: &mut MessageBuf, socket: i32) -> Poll<Result<(), ReadError>> {
     use ReadError as E;
-    debug_assert!(!buffer.spare_capacity_mut().is_empty());
+    debug_assert!(buf.len < buf.cap);
 
-    let mut msghdr = buffer.as_spare_msghdr();
+    let mut iovec = libc::iovec {
+        iov_base: unsafe { buf.ptr.as_ptr().add(buf.off).cast() },
+        iov_len: buf.cap - buf.len,
+    };
+    let mut cmsg = NEW_CMSG;
+    let mut msghdr = libc::msghdr {
+        msg_name: ptr::null_mut(),
+        msg_namelen: 0,
+        msg_iov: &mut iovec,
+        msg_iovlen: 1,
+        msg_control: cmsg.as_mut_ptr().cast(),
+        msg_controllen: CMSG_SPACE,
+        msg_flags: 0,
+    };
 
-    let Ok(read) = unsafe { libc::recvmsg(socket, msghdr.as_mut_ptr(), 0) }.try_into() else {
+    let Ok(read) = unsafe { libc::recvmsg(socket, &mut msghdr, 0) }.try_into() else {
         return match Errno::get() {
             libc::EWOULDBLOCK => Poll::Pending,
             _ => Poll::Ready(Err(E::Errno)),
@@ -244,14 +299,43 @@ fn recvmsg(buffer: &mut MessageBuf, socket: i32) -> Poll<Result<(), ReadError>> 
     if read == 0 {
         return Poll::Ready(Err(E::ConnectionAborted));
     }
-    if msghdr.is_truncated() {
-        return Poll::Ready(Err(E::ControlDataTruncated));
+    if msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC {
+        return Poll::Ready(Err(E::TruncatedControlData));
     }
-    if unsafe { msghdr.advance_mut(read) } {
-        Ready(Ok(()))
-    } else {
-        Ready(Err(E::ControlDataType))
+
+    debug_assert!(unsafe { libc::CMSG_FIRSTHDR(&msghdr).is_aligned() });
+    let mut cmsg_ref = unsafe { libc::CMSG_FIRSTHDR(&msghdr).as_ref() };
+    while let Some(cmsg) = cmsg_ref {
+        let (libc::SOL_SOCKET, libc::SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
+            return Ready(Err(E::InvalidControlData));
+        };
+
+        let cmsg_data = unsafe { libc::CMSG_DATA(cmsg) };
+        let cmsg_len = cmsg.cmsg_len - CMSGHDR_SIZE;
+        let fd_count = cmsg_len / FDSIZE;
+        let remaining = MAXFD - buf.fd_off - buf.fd_len;
+
+        if fd_count > remaining {
+            return Ready(Err(E::FdCapacityOverflow));
+        }
+
+        unsafe {
+            buf.base_ptr()
+                .as_ptr()
+                .add(buf.fd_off + buf.fd_len)
+                .cast::<u8>()
+                .copy_from_nonoverlapping(cmsg_data, cmsg_len);
+        }
+        buf.fd_len += fd_count;
+
+        debug_assert!(buf.fd_len <= MAXFD);
+
+        cmsg_ref = unsafe { libc::CMSG_NXTHDR(&msghdr, cmsg).as_ref() };
     }
+
+    unsafe { buf.advance_mut(read) };
+
+    Ready(Ok(()))
 }
 
 // ===== Error =====
@@ -262,8 +346,9 @@ simple_errno! {
 
 pub enum ReadError {
     Errno,
-    ControlDataType,
-    ControlDataTruncated,
+    FdCapacityOverflow,
+    InvalidControlData,
+    TruncatedControlData,
     ConnectionAborted,
 }
 
@@ -277,166 +362,11 @@ impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Errno => write!(f, "failed to read socket: {Errno}"),
-            Self::ControlDataType => "unexpected ancillary data type".fmt(f),
-            Self::ControlDataTruncated => "ancillary data truncated".fmt(f),
+            Self::FdCapacityOverflow => write!(f, "fd capacity overflow"),
+            Self::InvalidControlData => "unexpected ancillary data type".fmt(f),
+            Self::TruncatedControlData => "ancillary data truncated".fmt(f),
             Self::ConnectionAborted => "connection aborted by the peer".fmt(f),
         }
-    }
-}
-
-// ===== MsgHdr =====
-
-pub struct MsgHdr<'a> {
-    msghdr: libc::msghdr,
-    buffer: &'a mut MessageBuf,
-}
-
-impl<'a> MsgHdr<'a> {
-    fn new(buffer: &'a mut MessageBuf) -> Self {
-        Self {
-            msghdr: libc::msghdr {
-                msg_name: ptr::null_mut(),
-                msg_namelen: 0,
-                msg_iov: &mut libc::iovec {
-                    iov_base: buffer.ptr.as_ptr().cast(),
-                    iov_len: buffer.len,
-                },
-                msg_iovlen: 1,
-                msg_control: if buffer.fd_len == 0 {
-                    ptr::null_mut()
-                } else {
-                    let mut cmsg = CONTROL_MESSAGE;
-                    cmsg[0].cmsg_len = cmsg_len(buffer.fd_len);
-                    unsafe {
-                        let dst = libc::CMSG_DATA(&cmsg[0]);
-                        dst.copy_from_nonoverlapping(
-                            buffer.base_ptr().as_ptr().add(buffer.fd_off * FDSIZE),
-                            buffer.fd_len * FDSIZE
-                        );
-                    };
-                    cmsg.as_mut_ptr().cast()
-                },
-                msg_controllen: if buffer.fd_len == 0 { 0 } else { cmsg_space(buffer.fd_len) },
-                msg_flags: 0,
-            },
-            buffer,
-        }
-    }
-
-    fn spare(buffer: &'a mut MessageBuf) -> Self {
-        let spare = buffer.spare_capacity_mut();
-        Self {
-            msghdr: libc::msghdr {
-                msg_name: ptr::null_mut(),
-                msg_namelen: 0,
-                msg_iov: &mut libc::iovec {
-                    iov_base: spare.as_mut_ptr().cast(),
-                    iov_len: spare.len(),
-                },
-                msg_iovlen: 1,
-                msg_control: {
-                    let mut cmsg = CONTROL_MESSAGE;
-                    cmsg.as_mut_ptr().cast()
-                },
-                msg_controllen: CMSG_SPACE,
-                msg_flags: 0,
-            },
-            buffer,
-        }
-    }
-
-    pub const fn as_ptr(&self) -> *const libc::msghdr {
-        &raw const self.msghdr
-    }
-
-    pub const fn as_mut_ptr(&mut self) -> *mut libc::msghdr {
-        &raw mut self.msghdr
-    }
-
-    pub fn is_empty(&self) -> bool {
-        self.buffer.is_empty()
-    }
-
-    pub fn is_truncated(&self) -> bool {
-        self.msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC
-    }
-}
-
-impl<'a> MsgHdr<'a> {
-    /// Advance the buffer after `sendmsg` call.
-    ///
-    /// Returns `true` if buffer has fully written.
-    ///
-    /// `write` must be the successfull value returned from `sendmsg` call.
-    pub fn advance(&mut self, write: usize) -> bool {
-        self.buffer.advance(write);
-
-        if self.is_empty() {
-            // reset the indexes
-            self.buffer.clear();
-            return true;
-        }
-
-        // update the advance message buffer
-        let iov_mut = unsafe { &mut *self.msghdr.msg_iov };
-        iov_mut.iov_base = self.buffer.as_ptr() as *mut _;
-        iov_mut.iov_len = self.buffer.len();
-
-        // Ancillary data is received as if it were queued along with the first normal data octet in
-        // the segment (if any).
-        //
-        // https://unix.stackexchange.com/questions/185011/what-happens-with-unix-stream-ancillary-data-on-partial-reads
-        //
-        // unset the ancillary data
-        self.msghdr.msg_control = ptr::null_mut();
-        self.msghdr.msg_controllen = 0;
-
-        false
-    }
-
-    /// Mark `read` size data as initialized.
-    ///
-    /// This will also copy the ancillary data. Returns `true` if this is successfull.
-    ///
-    /// # Safety
-    ///
-    /// `read` size after the last element must be initialized.
-    pub unsafe fn advance_mut(&mut self, read: usize) -> bool {
-        unsafe {
-            let mut cmsg_ptr = libc::CMSG_FIRSTHDR(&self.msghdr);
-            while !cmsg_ptr.is_null() {
-                let cmsg = &*cmsg_ptr;
-
-                let (libc::SOL_SOCKET, libc::SCM_RIGHTS) = (cmsg.cmsg_level, cmsg.cmsg_type) else {
-                    return false;
-                };
-
-                let cmsg_data = libc::CMSG_DATA(cmsg);
-                let cmsg_len = cmsg.cmsg_len - const { libc::CMSG_LEN(0) as usize };
-                let fd_count = cmsg_len / FDSIZE;
-                let remaining = MAXFD - self.buffer.fd_off - self.buffer.fd_len;
-
-                if fd_count > remaining {
-                    return false;
-                }
-
-                self.buffer
-                    .base_ptr()
-                    .as_ptr()
-                    .add(self.buffer.fd_off + self.buffer.fd_len)
-                    .cast::<u8>()
-                    .copy_from_nonoverlapping(cmsg_data, cmsg_len);
-                self.buffer.fd_len += fd_count;
-
-                debug_assert!(self.buffer.fd_len <= MAXFD);
-
-                cmsg_ptr = libc::CMSG_NXTHDR(&self.msghdr, cmsg_ptr);
-            }
-
-            self.buffer.advance_mut(read);
-        }
-
-        true
     }
 }
 
