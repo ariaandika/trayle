@@ -1,4 +1,3 @@
-use crate::seat::Seat;
 use crate::wayland::prelude::*;
 
 simple_object! {
@@ -6,15 +5,9 @@ simple_object! {
 }
 
 impl Keyboard {
-    pub fn keymap_xkb_v1(&self, seat: &Seat) -> Message<Keymap> {
-        Message::new(
-            self,
-            Keymap {
-                format: KeymapFormat::XkbV1,
-                fd: seat.keymap_memfd(),
-                size: seat.keymap_size(),
-            },
-        )
+    /// Send `wl_keyboard::keymap` event.
+    pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
+        Message::new(self, Keymap { format, fd, size })
     }
 }
 

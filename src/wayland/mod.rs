@@ -1,6 +1,6 @@
 pub use id::{Id, NewId};
 pub use op::OpCode;
-pub use message::{Frame, Object};
+pub use message::{Frame, Message, Object};
 pub use error::WlError;
 pub use decode::Decode;
 pub use encode::Encode;

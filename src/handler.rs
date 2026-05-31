@@ -160,7 +160,7 @@ impl RequestHandler<WlSeat::GetKeyboard> for State<'_> {
     fn handle(mut self, req: WlSeat::GetKeyboard) -> Result<(), WlError> {
         let keyboard = req.keyboard.get();
         self.client.objects_mut().insert_object(&keyboard)?;
-        self.send(keyboard.keymap_xkb_v1(self.seat));
+        self.send(self.seat.to_keymap_event(&keyboard));
         Ok(())
     }
 }
