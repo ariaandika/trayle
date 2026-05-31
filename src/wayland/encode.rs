@@ -1,26 +1,42 @@
 use crate::collections::buffer::Buffer;
-use crate::wayland::{Id, OpCode, roundup4};
+use crate::wayland::{Id, roundup4};
 
 /// Encodable wayland message.
 pub trait Encode: Sized {
+    const OPCODE: u16;
+
+    fn object_id(&self) -> Id;
+
     fn encode(self, encoder: Encoder);
 
+    #[inline]
     fn encode_to(self, write_buf: &mut Buffer) {
-        self.encode(Encoder::new(write_buf));
+        let id = self.object_id().to_u32();
+        let op = Self::OPCODE;
+        self.encode(Encoder { id, op, write_buf });
     }
 }
 
 // ===== Encoder =====
 
+macro_rules! encode_me {
+    ($en:ident, $me:ident, $($f:ident),*) => {{
+        use super::encode::PrimitiveEncode;
+        let len = 8u16$(.wrapping_add($me.$f.size()))*;
+        let mut writer = unsafe { $en.encode(len) };
+        $(writer .write($me.$f);)*
+    }};
+}
+
+pub(super) use encode_me;
+
 pub struct Encoder<'a> {
+    id: u32,
+    op: u16,
     write_buf: &'a mut Buffer,
 }
 
 impl<'a> Encoder<'a> {
-    fn new(write_buf: &'a mut Buffer) -> Self {
-        Self { write_buf }
-    }
-
     pub fn push_fd(&mut self, fd: i32) {
         assert!(self.write_buf.push_fd(fd), "fd capacity overflow");
     }
@@ -30,22 +46,23 @@ impl<'a> Encoder<'a> {
     /// `len` must be the exact length of the required size.
     ///
     /// Caller must ensure `len` bytes are initialized.
-    pub unsafe fn encode<Op: OpCode>(self, id: Id, op: Op, len: u16) -> Writer<'a> {
-        self.encode_inner(id, op.to_op(), len)
+    pub unsafe fn encode(self, len: u16) -> Writer<'a> {
+        self.encode_inner(len)
     }
 
-    pub fn encode_one<Op: OpCode, E: PrimitiveEncode>(self, id: Id, op: Op, value: E) {
+    /// Utility function to encode one argument.
+    pub fn encode1<E: PrimitiveEncode>(self, value: E) {
         let size = 8 + value.size();
-        value.encode(&mut self.encode_inner(id, op.to_op(), size));
+        value.encode(&mut self.encode_inner(size));
     }
 
-    fn encode_inner(self, id: Id, op: u16, len: u16) -> Writer<'a> {
+    fn encode_inner(self, len: u16) -> Writer<'a> {
         self.write_buf.reserve(len as usize);
         let ptr = self.write_buf.spare_capacity_mut().as_mut_ptr();
         unsafe {
             self.write_buf.advance_mut(len as usize);
-            ptr.cast::<u32>().write_unaligned(id.to_u32());
-            ptr.add(4).cast::<u16>().write_unaligned(op);
+            ptr.cast::<u32>().write_unaligned(self.id);
+            ptr.add(4).cast::<u16>().write_unaligned(self.op);
             ptr.add(6).cast::<u16>().write_unaligned(len);
             Writer {
                 ptr: ptr.add(8).cast(),
@@ -80,17 +97,35 @@ impl<'a> Writer<'a> {
 
 // ===== primitive =====
 
+pub trait WaylandEnum {
+    fn to_u32(self) -> u32;
+}
+
 pub trait PrimitiveEncode {
     fn size(&self) -> u16;
 
     fn encode(self, writer: &mut Writer);
 }
 
+impl<E: WaylandEnum> PrimitiveEncode for E {
+    #[inline]
+    fn size(&self) -> u16 {
+        4
+    }
+
+    #[inline]
+    fn encode(self, writer: &mut Writer) {
+        self.to_u32().encode(writer);
+    }
+}
+
 macro_rules! impl_int {
     ($me:ty) => {
         impl PrimitiveEncode for $me {
+            #[inline]
             fn size(&self) -> u16 { 4 }
 
+            #[inline]
             fn encode(self, writer: &mut Writer) {
                 writer.write_ne_bytes(self.to_ne_bytes());
             }
@@ -103,6 +138,7 @@ impl_int!(i32);
 impl_int!(Id);
 
 impl PrimitiveEncode for &str {
+    #[inline]
     fn size(&self) -> u16 {
         4 + roundup4!(self.len() as u16 + 1)
     }
@@ -121,6 +157,7 @@ impl PrimitiveEncode for &str {
 }
 
 impl PrimitiveEncode for Option<&str> {
+    #[inline]
     fn size(&self) -> u16 {
         4 + match self {
             Some(s) => roundup4!(s.len() as u16 + 1),
@@ -128,6 +165,7 @@ impl PrimitiveEncode for Option<&str> {
         }
     }
 
+    #[inline]
     fn encode(self, writer: &mut Writer) {
         match self {
             Some(s) => s.encode(writer),

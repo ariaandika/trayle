@@ -67,15 +67,15 @@ pub struct Global<'a> {
 }
 
 impl Encode for Message<Global<'_>> {
+    const OPCODE: u16 = EventOp::Global as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
+    #[inline]
     fn encode(self, encoder: Encoder) {
-        let iface_len = self.interface.len() as u16;
-        let len = const { 8 + 4 + 4 + 4 } + roundup4!(iface_len + 1);
-        unsafe {
-            encoder.encode(self.id(), EventOp::Global, len)
-                .write(self.name)
-                .write(self.interface)
-                .write(self.version)
-        };
+        encode_me!(encoder, self, name, interface, version);
     }
 }
-

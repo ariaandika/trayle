@@ -33,9 +33,23 @@ pub struct Keymap {
 }
 
 impl Encode for Message<Keymap> {
+    const OPCODE: u16 = EventOp::Keymap as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
+    #[inline]
     fn encode(self, mut encoder: Encoder) {
         encoder.push_fd(self.fd);
-        let mut writer = unsafe { encoder.encode(self.id(), EventOp::Keymap, 16) };
-        writer.write(self.format as u32).write(self.size);
+        encode_me!(encoder, self, format, size);
+    }
+}
+
+impl WaylandEnum for KeymapFormat {
+    #[inline]
+    fn to_u32(self) -> u32 {
+        self as u32
     }
 }

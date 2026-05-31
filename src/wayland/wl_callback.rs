@@ -25,7 +25,13 @@ pub struct Done {
 }
 
 impl Encode for Message<Done> {
+    const OPCODE: u16 = EventOp::Done as u16;
+
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
     fn encode(self, encoder: Encoder) {
-        encoder.encode_one(self.id(), EventOp::Done, self.callback_data);
+        encoder.encode1(self.callback_data);
     }
 }

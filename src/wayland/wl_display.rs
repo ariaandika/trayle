@@ -99,16 +99,16 @@ pub struct Error<'a> {
 }
 
 impl Encode for Error<'_> {
+    const OPCODE: u16 = EventOp::Error as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        Id::wl_display()
+    }
+
+    #[inline]
     fn encode(self, encoder: Encoder) {
-        let msg_len = self.message.len() as u16;
-        let len = const { 8 + 4 + 4 + 4 } + roundup4!(msg_len + 1);
-        unsafe {
-            encoder
-                .encode(Id::wl_display(), EventOp::Error, len)
-                .write(self.object_id)
-                .write(self.code)
-                .write(self.message)
-        };
+        encode_me!(encoder, self, object_id, code, message);
     }
 }
 
@@ -123,7 +123,15 @@ pub struct DeleteId {
 }
 
 impl Encode for DeleteId {
+    const OPCODE: u16 = EventOp::DeleteId as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        Id::wl_display()
+    }
+
+    #[inline]
     fn encode(self, encoder: Encoder) {
-        encoder.encode_one(Id::wl_display(), EventOp::DeleteId, self.id);
+        encoder.encode1(self.id);
     }
 }

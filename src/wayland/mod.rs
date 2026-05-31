@@ -31,12 +31,12 @@ mod prelude {
     pub use super::message::{Message, WaylandObject};
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};
-    pub use super::encode::{Encode, Encoder};
+    pub use super::encode::{Encode, Encoder, WaylandEnum};
     pub use super::interface::InterfaceId;
 
-    pub(super) use super::roundup4;
     pub(super) use super::op::opcode;
     pub(super) use super::message::simple_object;
+    pub(super) use super::encode::encode_me;
 }
 
 macro_rules! roundup4 {

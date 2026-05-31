@@ -51,7 +51,15 @@ pub struct Capabilities {
 }
 
 impl Encode for Message<Capabilities> {
+    const OPCODE: u16 = EventOp::Capabilities as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
+    #[inline]
     fn encode(self, encoder: Encoder) {
-        encoder.encode_one(self.id(), EventOp::Capabilities, self.capabilities.to_u32());
+        encoder.encode1(self.capabilities.to_u32());
     }
 }
