@@ -33,6 +33,7 @@ use compositor::seat::Seat;
 use rt::event::EventSources;
 
 mod sys;
+mod alloc;
 mod collections;
 mod wayland;
 mod compositor;

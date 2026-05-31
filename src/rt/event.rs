@@ -3,7 +3,7 @@ use std::os::fd::AsRawFd;
 use std::ptr::NonNull;
 use std::slice;
 
-use crate::collections::alloc;
+use crate::alloc;
 use crate::sys::epoll::{CreateError, Epoll, EpollEvent, Interest};
 
 const MAX_EVENT: usize = 128;

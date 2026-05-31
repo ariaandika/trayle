@@ -1,8 +1,8 @@
 use std::ptr::NonNull;
 use std::{mem, slice};
 
+use crate::alloc;
 use crate::sys::conn::Connection;
-use crate::collections::alloc;
 use crate::collections::buffer::{Buffer, SmallBuf};
 use crate::compositor::objects::Objects;
 use crate::wayland::wl_display;
