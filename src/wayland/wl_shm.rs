@@ -1,9 +1,5 @@
 use crate::wayland::prelude::*;
 
-simple_object! {
-    pub struct WlShm;
-}
-
 // ===== Op =====
 
 opcode! {
@@ -27,6 +23,7 @@ pub struct CreatePool {
 impl Decode for CreatePool {
     type Output<'a> = Self;
 
+    #[inline]
     fn decode(mut decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
         let fd = decoder.pop_fd()?;
         let mut reader = decoder.body();
@@ -35,5 +32,23 @@ impl Decode for CreatePool {
             fd,
             size: reader.read()?,
         })
+    }
+}
+
+impl Encode for Message<CreatePool> {
+    const OPCODE: u16 = RequestOp::CreatePool as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
+    #[inline]
+    fn encode(self, mut encoder: Encoder) {
+        encoder.push_fd(self.fd);
+        const SIZE: u16 = const { 8u16 + 4 + 4 };
+        unsafe { encoder.encode(SIZE) }
+            .write(self.id)
+            .write(self.size);
     }
 }

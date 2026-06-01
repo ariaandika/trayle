@@ -17,6 +17,10 @@ impl Capability {
         Self(0)
     }
 
+    pub const fn from_u32(flags: u32) -> Self {
+        Self(flags)
+    }
+
     pub const fn add_pointer(self) -> Self {
         Self(self.0 | POINTER)
     }

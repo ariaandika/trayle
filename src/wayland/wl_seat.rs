@@ -37,6 +37,7 @@ pub struct GetKeyboard {
 impl Decode for GetKeyboard {
     type Output<'a> = Self;
 
+    #[inline]
     fn decode(decoder: Decoder) -> Result<Self, WlError> {
         Ok(Self {
             keyboard: decoder.read()?,
@@ -44,10 +45,33 @@ impl Decode for GetKeyboard {
     }
 }
 
+impl Encode for Message<GetKeyboard> {
+    const OPCODE: u16 = RequestOp::GetKeyboard as u16;
+
+    #[inline]
+    fn object_id(&self) -> Id {
+        self.id()
+    }
+
+    #[inline]
+    fn encode(self, encoder: Encoder) {
+        encoder.encode1(self.keyboard);
+    }
+}
+
 // ===== Capabilities =====
 
 pub struct Capabilities {
     capabilities: Capability,
+}
+
+impl Decode for Capabilities {
+    type Output<'a> = Self;
+
+    #[inline]
+    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self { capabilities: Capability::from_u32(decoder.read()?)  })
+    }
 }
 
 impl Encode for Message<Capabilities> {

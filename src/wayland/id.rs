@@ -97,6 +97,14 @@ impl<T> NewId<T> {
     }
 }
 
+impl<T> Copy for NewId<T> {}
+
+impl<T> Clone for NewId<T> {
+    fn clone(&self) -> Self {
+        *self
+    }
+}
+
 impl<T> std::fmt::Debug for NewId<T> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_struct("NewId").field("id", &self.id).finish()
