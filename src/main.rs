@@ -26,7 +26,7 @@ use std::task::Poll::*;
 
 use sys::listener::{Listener, SocketPath};
 use sys::sigfd::Sigfd;
-use wayland::{MessageBuf, Frame};
+use wayland::MessageBuf;
 use compositor::clients::{ClientId, ClientMut, Clients};
 use compositor::seat::Seat;
 use rt::event::EventSources;
@@ -142,15 +142,12 @@ fn event_loop() -> Result<(), FatalError> {
             if interest.is_read() {
                 let mut client = ClientMut::new(client, &mut write_buf);
                 loop {
-                    match Frame::from_bytes(&mut read_buf) {
-                        Ready(Ok(header)) => handler::router(header, &mut client, &mut compositor)
-                            .map_err(|_| FatalError)?,
-                        Ready(Err(err)) => {
-                            client.send_global_error(err);
-                            log::error!(client, "{err}");
+                    if read_buf.has_frame() {
+                        if handler::router(&mut read_buf, &mut client, &mut compositor).is_err() {
                             return Err(FatalError);
                         }
-                        Pending => match read_buf.recvmsg(&client) {
+                    } else {
+                        match read_buf.recvmsg(&client) {
                             Ready(Ok(())) => continue,
                             Ready(Err(err)) => {
                                 if !err.is_connection_aborted() {
@@ -159,7 +156,7 @@ fn event_loop() -> Result<(), FatalError> {
                                 return Err(FatalError);
                             }
                             Pending => break,
-                        },
+                        }
                     }
                 }
             }
@@ -200,7 +197,7 @@ fn event_loop() -> Result<(), FatalError> {
                 }
                 events.delete(client);
                 clients.remove(id);
-                log::debug!(client, "id={id} disconnected (read)");
+                log::debug!(client, "id={id} disconnected");
             },
         }
 

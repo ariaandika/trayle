@@ -1,5 +1,3 @@
-use std::task::Poll::{self, *};
-
 use crate::wayland::{MessageBuf, Id, InterfaceId, WlError};
 
 // ===== WaylandObject =====
@@ -75,36 +73,35 @@ impl<T> std::ops::DerefMut for Message<T> {
 /// Encoded message.
 pub struct Frame<'a> {
     /// - guarantee to contains one valid length message
-    /// - guarantee that Id is non-zero
     read_buf: &'a mut MessageBuf,
 }
 
 impl<'a> Frame<'a> {
-    pub fn from_bytes(read_buf: &'a mut MessageBuf) -> Poll<Result<Self, WlError>> {
+    #[inline]
+    pub fn has_frame(read_buf: &MessageBuf) -> bool {
         let Some(header) = read_buf.first_chunk::<8>() else {
-            return Pending;
+            return false;
         };
-        if header.starts_with(b"\0\0\0\0") {
-            return Ready(Err(WlError::ZeroId));
-        }
-        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
-        if len < 8 {
-            return Ready(Err(WlError::InvalidSize));
-        }
-        if read_buf.len() < len as usize {
-            return Pending;
-        }
-        Ready(Ok(Self { read_buf }))
+        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap()) as usize;
+        read_buf.len() >= len
     }
 
-    pub fn parts(&self) -> (Id, u16) {
-        // SAFETY: invariant
-        unsafe {
-            (
-                self.read_buf.as_ptr().cast::<Id>().read_unaligned(),
-                self.read_buf.as_ptr().add(4).cast::<u16>().read_unaligned(),
-            )
+    pub fn new(read_buf: &'a mut MessageBuf) -> Result<(Id, u16, Self), WlError> {
+        let Some(header) = read_buf.first_chunk::<8>() else {
+            return Err(WlError::InvalidSize);
+        };
+        let Some(id) = Id::from_ne_bytes(*header[..4].as_array().unwrap()) else {
+            return Err(WlError::ZeroId);
+        };
+        let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
+        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
+        if len < 8 {
+            return Err(WlError::InvalidSize);
         }
+        if read_buf.len() < len as usize {
+            return Err(WlError::InvalidSize);
+        }
+        Ok((id, op, Self { read_buf }))
     }
 
     #[inline]

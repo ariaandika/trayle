@@ -1,7 +1,7 @@
 use crate::compositor::clients::ClientMut;
 use crate::{Compositor, log};
 
-use crate::wayland::{Decode, Frame, InterfaceId, OpCode, WlError};
+use crate::wayland::{Decode, Frame, InterfaceId, MessageBuf, OpCode, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
@@ -23,18 +23,23 @@ static GLOBALS: [(&str, u32, InterfaceId); 9] = [
 ];
 
 
-pub fn router(frame: Frame, client: &mut ClientMut, compositor: &mut Compositor) -> Result<(), ()> {
-    match router_inner(frame, client, compositor) {
+pub fn router(
+    read_buf: &mut MessageBuf,
+    client: &mut ClientMut,
+    compositor: &mut Compositor,
+) -> Result<(), ()> {
+    match router_inner(read_buf, client, compositor) {
         Ok(()) => Ok(()),
         Err(error) => {
+            log::error!(client, "{error}");
             client.send_global_error(error);
             Err(())
-        },
+        }
     }
 }
 
-fn router_inner(frame: Frame, client: &mut ClientMut, compositor: &mut Compositor) -> Result<(), WlError> {
-    let (id, op) = frame.parts();
+fn router_inner(read_buf: &mut MessageBuf, client: &mut ClientMut, compositor: &mut Compositor) -> Result<(), WlError> {
+    let (id, op, frame) = Frame::new(read_buf)?;
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
     } else {

@@ -168,6 +168,15 @@ impl std::ops::Deref for MessageBuf {
     }
 }
 
+// ===== Frame =====
+
+impl MessageBuf {
+    #[inline]
+    pub fn has_frame(&self) -> bool {
+        super::Frame::has_frame(self)
+    }
+}
+
 // ===== CMSG LMAO =====
 
 const CMSGHDR_SIZE: usize = size_of::<libc::cmsghdr>();
