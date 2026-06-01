@@ -1,7 +1,7 @@
 use crate::compositor::clients::ClientMut;
 use crate::{Compositor, log};
 
-use crate::wayland::{Decode, Frame, InterfaceId, MessageBuf, OpCode, WlError};
+use crate::wayland::{self, Decode, Frame, InterfaceId, MessageBuf, OpCode, WlError};
 
 use crate::wayland::wl_display as WlDisplay;
 use crate::wayland::wl_registry as WlRegistry;
@@ -88,7 +88,7 @@ fn router_inner(read_buf: &mut MessageBuf, client: &mut ClientMut, compositor: &
             GetKeyboard,
         }
         WlDataDeviceManager {
-            CreateDataSource todo,
+            CreateDataSource,
             GetDataDevice,
             Release todo,
         }
@@ -209,16 +209,25 @@ mod wl_seat {
 
 mod wl_data_device_manager {
     use super::*;
-    use crate::wayland::InterfaceId;
-    use crate::wayland::wl_data_device_manager::GetDataDevice;
+    use wayland::wl_data_device_manager::{CreateDataSource, GetDataDevice};
+
+    impl RequestHandler<CreateDataSource> for Compositor {
+        fn handle(&mut self, req: CreateDataSource, client: &mut ClientMut) -> Result<(), WlError> {
+            let data_source = req.data_source.get();
+            client.insert(&data_source)
+        }
+    }
 
     impl RequestHandler<GetDataDevice> for Compositor {
         fn handle(&mut self, req: GetDataDevice, client: &mut ClientMut) -> Result<(), WlError> {
-            let _ = req.seat;
-            client
-                .objects_mut()
-                .insert_with(req.id, InterfaceId::WlDataDevice, NOVALUE)?;
-            Ok(())
+            let data_device = req.data_device.get();
+            let Some(object) = client.get_object(req.seat) else {
+                return Err(WlError::UnknownObject);
+            };
+            let InterfaceId::WlSeat = object.interface() else {
+                return Err(WlError::UnknownObject);
+            };
+            client.insert(&data_device)
         }
     }
 }

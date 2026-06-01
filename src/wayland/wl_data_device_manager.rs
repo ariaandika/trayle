@@ -1,8 +1,6 @@
 use crate::wayland::prelude::*;
-
-simple_object! {
-    pub struct WlDataDeviceManager;
-}
+use crate::wayland::wl_data_device::WlDataDevice;
+use crate::wayland::wl_data_source::WlDataSource;
 
 // ===== Op =====
 
@@ -20,14 +18,15 @@ opcode! {
 #[allow(dead_code)]
 pub struct CreateDataSource {
     // wl_data_source
-    pub id: Id,
+    pub data_source: NewId<WlDataSource>,
 }
 
 impl Decode for CreateDataSource {
     type Output<'a> = Self;
 
+    #[inline]
     fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
-        Ok(Self { id: decoder.read()? })
+        Ok(Self { data_source: decoder.read()? })
     }
 }
 
@@ -36,7 +35,7 @@ impl Decode for CreateDataSource {
 #[derive(Debug)]
 pub struct GetDataDevice {
     // <wl_data_device>
-    pub id: Id,
+    pub data_device: NewId<WlDataDevice>,
     // <wl_seat>
     pub seat: Id,
 }
@@ -44,10 +43,11 @@ pub struct GetDataDevice {
 impl Decode for GetDataDevice {
     type Output<'a> = Self;
 
+    #[inline]
     fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
         let mut reader = decoder.body();
         Ok(Self {
-            id: reader.read()?,
+            data_device: reader.read()?,
             seat: reader.read()?,
         })
     }
