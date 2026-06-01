@@ -1,4 +1,4 @@
-use crate::wayland::{Id, MessageBuf, roundup4};
+use crate::wayland::{Id, MessageBuf, NewId, roundup4};
 
 /// Encodable wayland message.
 pub trait Encode: Sized {
@@ -135,6 +135,16 @@ macro_rules! impl_int {
 impl_int!(u32);
 impl_int!(i32);
 impl_int!(Id);
+
+impl<T> Write for NewId<T> {
+    fn size(&self) -> u16 {
+        self.id().size()
+    }
+
+    fn encode(self, writer: &mut Writer) {
+        self.id().encode(writer);
+    }
+}
 
 impl Write for &str {
     #[inline]

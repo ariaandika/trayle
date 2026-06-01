@@ -74,11 +74,19 @@ pub struct NewId<T> {
 }
 
 impl<T> NewId<T> {
-    pub fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
-        Some(Self {
-            id: Id::from_ne_bytes(ne)?,
+    pub const fn new(id: Id) -> Self {
+        Self {
+            id,
             _p: std::marker::PhantomData,
-        })
+        }
+    }
+
+    pub fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
+        Id::from_ne_bytes(ne).map(Self::new)
+    }
+
+    pub const fn id(&self) -> Id {
+        self.id
     }
 
     pub fn get(self) -> T
