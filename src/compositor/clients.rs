@@ -77,7 +77,12 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn insert_object<O: WaylandObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
+    pub fn insert<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
+        self.state.objects.insert(object, 0)
+    }
+
+    #[inline]
+    pub fn insert_with_value<O: WaylandObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
         self.state.objects.insert(object, value)
     }
 

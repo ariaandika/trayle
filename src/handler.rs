@@ -140,7 +140,7 @@ mod wl_display {
     impl RequestHandler<GetRegistry> for Compositor {
         fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
             let registry = request.registry.get();
-            client.insert_object(&registry, NOVALUE)?;
+            client.insert(&registry)?;
 
             // FEAT: encode globals at startup
             for ((iface, version, _), i) in GLOBALS.iter().zip(0..) {
@@ -188,7 +188,7 @@ mod wl_compositor {
     impl RequestHandler<CreateSurface> for Compositor {
         fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
             let surface = req.surface.get();
-            client.insert_object(&surface, NOVALUE)
+            client.insert(&surface)
         }
     }
 }
@@ -200,7 +200,7 @@ mod wl_seat {
     impl RequestHandler<GetKeyboard> for Compositor {
         fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
             let keyboard = req.keyboard.get();
-            client.insert_object(&keyboard, NOVALUE)?;
+            client.insert(&keyboard)?;
             client.send(self.seat.to_keymap_event(&keyboard));
             Ok(())
         }
