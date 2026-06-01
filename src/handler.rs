@@ -10,6 +10,8 @@ use crate::wayland::wl_shm as WlShm;
 use crate::wayland::wl_seat as WlSeat;
 use crate::wayland::wl_data_device_manager as WlDataDeviceManager;
 
+const NOVALUE: usize = 0;
+
 static GLOBALS: [(&str, u32, InterfaceId); 9] = [
     ("wl_compositor", 7, InterfaceId::WlCompositor),
     ("wl_shm", 2, InterfaceId::WlShm),
@@ -138,7 +140,7 @@ mod wl_display {
     impl RequestHandler<GetRegistry> for Compositor {
         fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
             let registry = request.registry.get();
-            client.insert_object(&registry)?;
+            client.insert_object(&registry, NOVALUE)?;
 
             // FEAT: encode globals at startup
             for ((iface, version, _), i) in GLOBALS.iter().zip(0..) {
@@ -166,7 +168,7 @@ mod wl_registry {
             if bind.id_version > *version {
                 return Err(WlError::UnknownBind);
             }
-            client.objects_mut().insert(bind.id, *iface)?;
+            client.objects_mut().insert_with(bind.id, *iface, NOVALUE)?;
 
             // some interface has side-effect after binding
             if let InterfaceId::WlSeat = iface {
@@ -186,7 +188,7 @@ mod wl_compositor {
     impl RequestHandler<CreateSurface> for Compositor {
         fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
             let surface = req.surface.get();
-            client.insert_object(&surface)
+            client.insert_object(&surface, NOVALUE)
         }
     }
 }
@@ -198,7 +200,7 @@ mod wl_seat {
     impl RequestHandler<GetKeyboard> for Compositor {
         fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
             let keyboard = req.keyboard.get();
-            client.insert_object(&keyboard)?;
+            client.insert_object(&keyboard, NOVALUE)?;
             client.send(self.seat.to_keymap_event(&keyboard));
             Ok(())
         }
@@ -215,7 +217,7 @@ mod wl_data_device_manager {
             let _ = req.seat;
             client
                 .objects_mut()
-                .insert(req.id, InterfaceId::WlDataDevice)?;
+                .insert_with(req.id, InterfaceId::WlDataDevice, NOVALUE)?;
             Ok(())
         }
     }

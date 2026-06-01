@@ -1,9 +1,9 @@
 use std::os::fd::{AsRawFd, OwnedFd};
 
 use crate::collections::slab::Slab;
-use crate::compositor::objects::Objects;
+use crate::compositor::objects::{Object, Objects};
 use crate::wayland::wl_display;
-use crate::wayland::{MessageBuf, Encode, Id, SmallBuf, WaylandObject, WlError};
+use crate::wayland::{Encode, Id, MessageBuf, SmallBuf, WaylandObject, WlError};
 
 // ===== ClientId =====
 
@@ -72,13 +72,13 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn get_object(&mut self, id: Id) -> Option<&mut super::objects::Object> {
+    pub fn get_object(&mut self, id: Id) -> Option<&mut Object> {
         self.state.objects.get_mut(id)
     }
 
     #[inline]
-    pub fn insert_object<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
-        self.state.objects.insert_object(object)
+    pub fn insert_object<O: WaylandObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
+        self.state.objects.insert(object, value)
     }
 
     #[inline]
