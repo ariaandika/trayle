@@ -20,7 +20,7 @@ pub trait Encode: Sized {
 
 macro_rules! encode_me {
     ($en:ident, $me:ident, $($f:ident),*) => {{
-        use super::encode::PrimitiveEncode;
+        use super::encode::Write;
         let len = 8u16$(.wrapping_add($me.$f.size()))*;
         let mut writer = unsafe { $en.encode(len) };
         $(writer .write($me.$f);)*
@@ -50,7 +50,7 @@ impl<'a> Encoder<'a> {
     }
 
     /// Utility function to encode one argument.
-    pub fn encode1<E: PrimitiveEncode>(self, value: E) {
+    pub fn encode1<E: Write>(self, value: E) {
         let size = 8 + value.size();
         value.encode(&mut self.encode_inner(size));
     }
@@ -79,7 +79,7 @@ pub struct Writer<'a> {
 }
 
 impl<'a> Writer<'a> {
-    pub fn write<E: PrimitiveEncode>(&mut self, value: E) -> &mut Self {
+    pub fn write<E: Write>(&mut self, value: E) -> &mut Self {
         value.encode(self);
         self
     }
@@ -94,19 +94,19 @@ impl<'a> Writer<'a> {
     }
 }
 
-// ===== primitive =====
+// ===== Writable =====
 
 pub trait WaylandEnum {
     fn to_u32(self) -> u32;
 }
 
-pub trait PrimitiveEncode {
+pub trait Write {
     fn size(&self) -> u16;
 
     fn encode(self, writer: &mut Writer);
 }
 
-impl<E: WaylandEnum> PrimitiveEncode for E {
+impl<E: WaylandEnum> Write for E {
     #[inline]
     fn size(&self) -> u16 {
         4
@@ -120,7 +120,7 @@ impl<E: WaylandEnum> PrimitiveEncode for E {
 
 macro_rules! impl_int {
     ($me:ty) => {
-        impl PrimitiveEncode for $me {
+        impl Write for $me {
             #[inline]
             fn size(&self) -> u16 { 4 }
 
@@ -136,7 +136,7 @@ impl_int!(u32);
 impl_int!(i32);
 impl_int!(Id);
 
-impl PrimitiveEncode for &str {
+impl Write for &str {
     #[inline]
     fn size(&self) -> u16 {
         4 + roundup4!(self.len() as u16 + 1)
@@ -155,7 +155,7 @@ impl PrimitiveEncode for &str {
     }
 }
 
-impl PrimitiveEncode for Option<&str> {
+impl Write for Option<&str> {
     #[inline]
     fn size(&self) -> u16 {
         4 + match self {

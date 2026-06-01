@@ -29,7 +29,7 @@ impl<'a> Decoder<'a> {
         }
     }
 
-    pub fn read<T: PrimitiveDecode<'a>>(self) -> Result<T, WlError> {
+    pub fn read<T: Read<'a>>(self) -> Result<T, WlError> {
         T::decode(&mut self.body())
     }
 
@@ -45,7 +45,7 @@ pub struct Reader<'a> {
 }
 
 impl<'a> Reader<'a> {
-    pub fn read<T: PrimitiveDecode<'a>>(&mut self) -> Result<T, WlError> {
+    pub fn read<T: Read<'a>>(&mut self) -> Result<T, WlError> {
         T::decode(self)
     }
 
@@ -58,37 +58,37 @@ impl<'a> Reader<'a> {
     }
 }
 
-// ===== primitive =====
+// ===== Readable =====
 
-pub trait PrimitiveDecode<'a>: Sized {
+pub trait Read<'a>: Sized {
     fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError>;
 }
 
-impl PrimitiveDecode<'_> for u32 {
+impl Read<'_> for u32 {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         reader.read_ne_bytes().map(u32::from_ne_bytes)
     }
 }
 
-impl PrimitiveDecode<'_> for Id {
+impl Read<'_> for Id {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         Id::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
     }
 }
 
-impl<T> PrimitiveDecode<'_> for NewId<T> {
+impl<T> Read<'_> for NewId<T> {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         NewId::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
     }
 }
 
-impl PrimitiveDecode<'_> for i32 {
+impl Read<'_> for i32 {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         reader.read_ne_bytes().map(i32::from_ne_bytes)
     }
 }
 
-impl<'a> PrimitiveDecode<'a> for &'a str {
+impl<'a> Read<'a> for &'a str {
     fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError> {
         let len = u32::decode(reader)?;
         if len == 0 {
