@@ -3,7 +3,7 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use crate::collections::slab::Slab;
 use crate::compositor::objects::{Object, Objects};
 use crate::wayland::wl_display;
-use crate::wayland::{Encode, MessageBuf, ObjectId, SmallBuf, WaylandObject, WlError};
+use crate::wayland::{Encode, MessageBuf, ObjectId, SmallBuf, WlObject, WlError};
 
 // ===== ClientId =====
 
@@ -77,12 +77,12 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn insert<O: WaylandObject>(&mut self, object: &O) -> Result<(), WlError> {
+    pub fn insert<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
         self.state.objects.insert(object, 0)
     }
 
     #[inline]
-    pub fn insert_with_value<O: WaylandObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
+    pub fn insert_with_value<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
         self.state.objects.insert(object, value)
     }
 

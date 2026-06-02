@@ -1,38 +1,4 @@
-use crate::wayland::{Interface, MessageBuf, ObjectId, WlError};
-
-// ===== WaylandObject =====
-
-pub trait WaylandObject {
-    const INTERFACE_ID: Interface;
-
-    fn id(&self) -> ObjectId;
-}
-
-macro_rules! simple_object {
-    (pub struct $struct_name:ident;) => {
-        #[derive(Debug)]
-        pub struct $struct_name {
-            id: ObjectId,
-        }
-
-        impl FromObjectId for $struct_name {
-            #[inline]
-            fn from_object_id(id: ObjectId) -> Self {
-                Self { id }
-            }
-        }
-
-        impl WaylandObject for $struct_name {
-            const INTERFACE_ID: Interface = Interface::$struct_name;
-
-            fn id(&self) -> ObjectId {
-                self.id
-            }
-        }
-    };
-}
-
-pub(super) use simple_object;
+use crate::wayland::{WlObject, MessageBuf, ObjectId, WlError};
 
 // ===== Message =====
 
@@ -42,9 +8,9 @@ pub struct Message<T> {
 }
 
 impl<T> Message<T> {
-    pub fn new<O: WaylandObject>(object: &O, payload: T) -> Self {
+    pub fn new<O: WlObject>(object: &O, payload: T) -> Self {
         Self {
-            id: object.id(),
+            id: object.as_object_id(),
             payload,
         }
     }

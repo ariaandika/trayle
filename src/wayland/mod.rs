@@ -1,17 +1,19 @@
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use op::OpCode;
-pub use message::{Frame, Message, WaylandObject};
+pub use object::WlObject;
+pub use message::{Frame, Message};
 pub use buffer::{MessageBuf, SmallBuf};
 pub use error::WlError;
 pub use decode::Decode;
 pub use encode::Encode;
-pub use interface::Interface;
+pub use interface::{AsInterface, Interface};
 
 mod object_id;
 mod op;
+mod object;
+mod error;
 mod message;
 mod buffer;
-mod error;
 mod decode;
 mod encode;
 
@@ -32,14 +34,15 @@ pub mod wl_keyboard;
 mod prelude {
     pub use super::object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
     pub use super::op::OpCode;
-    pub use super::message::{Message, WaylandObject};
+    pub use super::object::WlObject;
+    pub use super::message::Message;
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};
     pub use super::encode::{Encode, Encoder, WaylandEnum};
-    pub use super::interface::Interface;
+    pub use super::interface::{AsInterface, Interface};
 
     pub(super) use super::op::opcode;
-    pub(super) use super::message::simple_object;
+    pub(super) use super::object::simple_object;
     pub(super) use super::encode::encode_me;
 }
 

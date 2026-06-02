@@ -159,8 +159,8 @@ impl Encode for Error<'_> {
 // ===== DeleteId =====
 
 #[inline]
-pub fn delete_id<O: WaylandObject>(object: &O) -> DeleteId {
-    DeleteId { id: object.id() }
+pub fn delete_id<O: WlObject>(object: &O) -> DeleteId {
+    DeleteId { id: object.as_object_id() }
 }
 
 pub struct DeleteId {

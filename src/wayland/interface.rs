@@ -45,3 +45,9 @@ declare! {
     ZwpLinuxBufferParamsV1,
     ZwpLinuxDmabufFeedbackV1,
 }
+
+/// Object that is a wayland interface.
+pub trait AsInterface {
+    /// The interface of this object is associated with.
+    const INTERFACE: Interface;
+}
