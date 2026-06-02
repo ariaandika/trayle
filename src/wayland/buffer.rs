@@ -370,7 +370,7 @@ impl ReadError {
 impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Errno => write!(f, "failed to read socket: {Errno}"),
+            Self::Errno => write!(f, "{Errno}"),
             Self::FdCapacityOverflow => write!(f, "fd capacity overflow"),
             Self::InvalidControlData => "unexpected ancillary data type".fmt(f),
             Self::TruncatedControlData => "ancillary data truncated".fmt(f),

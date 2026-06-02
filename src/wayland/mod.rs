@@ -13,10 +13,10 @@ mod op;
 mod object;
 mod error;
 mod message;
-mod buffer;
 mod decode;
 mod encode;
 
+pub mod buffer;
 pub mod interface;
 
 pub mod wl_display;
