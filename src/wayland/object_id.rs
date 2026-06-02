@@ -66,6 +66,20 @@ impl ObjectId {
     }
 }
 
+impl FromObjectId for ObjectId {
+    #[inline]
+    fn from_object_id(id: ObjectId) -> Self {
+        id
+    }
+}
+
+impl AsObjectId for ObjectId {
+    #[inline]
+    fn as_object_id(&self) -> ObjectId {
+        *self
+    }
+}
+
 impl PartialEq<u32> for ObjectId {
     #[inline]
     fn eq(&self, other: &u32) -> bool {
@@ -112,6 +126,20 @@ impl<T> NewId<T> {
         T: FromObjectId,
     {
         T::from_object_id(self.id)
+    }
+}
+
+impl<T> FromObjectId for NewId<T> {
+    #[inline]
+    fn from_object_id(id: ObjectId) -> Self {
+        Self::new(id)
+    }
+}
+
+impl<T> AsObjectId for NewId<T> {
+    #[inline]
+    fn as_object_id(&self) -> ObjectId {
+        self.id
     }
 }
 
