@@ -101,6 +101,7 @@ impl Drop for LogGuard {
 
 // ===== macros =====
 
+#[macro_export]
 macro_rules! names {
     (client) => {*b"client"};
     (epoll ) => {*b"epoll "};
@@ -110,20 +111,30 @@ macro_rules! names {
     ($($tt:tt)*) => {compile_error!(stringify!(stringify!($($tt)*)))};
 }
 
+#[macro_export]
 macro_rules! log {
     ($l:ident, $s:ident, $($tt:tt)*) => {{
-        crate::log::log_me(
-            const { crate::log::build_prefix(crate::log::Level::$l, crate::log::names!($s)) },
+        $crate::log::log_me(
+            const { $crate::log::build_prefix($crate::log::Level::$l, $crate::log::names!($s)) },
             format_args!($($tt)*)
         );
-        crate::log::flush();
+        $crate::log::flush();
     }};
 }
 
-macro_rules! error { ($($tt:tt)*) => { crate::log::log!(Error, $($tt)*) }; }
-macro_rules! _warn { ($($tt:tt)*) => { crate::log::log!(Warn, $($tt)*) }; }
-macro_rules! info  { ($($tt:tt)*) => { crate::log::log!(Info, $($tt)*) }; }
-macro_rules! debug { ($($tt:tt)*) => { crate::log::log!(Debug, $($tt)*) }; }
-macro_rules! trace { ($($tt:tt)*) => { crate::log::log!(Trace, $($tt)*) }; }
+#[macro_export]
+macro_rules! error { ($($tt:tt)*) => { $crate::log::log!(Error, $($tt)*) }; }
 
-pub(crate) use {names, log, error, _warn as warn, info, debug, trace};
+#[macro_export]
+macro_rules! _warn { ($($tt:tt)*) => { $crate::log::log!(Warn, $($tt)*) }; }
+
+#[macro_export]
+macro_rules! info  { ($($tt:tt)*) => { $crate::log::log!(Info, $($tt)*) }; }
+
+#[macro_export]
+macro_rules! debug { ($($tt:tt)*) => { $crate::log::log!(Debug, $($tt)*) }; }
+
+#[macro_export]
+macro_rules! trace { ($($tt:tt)*) => { $crate::log::log!(Trace, $($tt)*) }; }
+
+pub use {names, log, error, _warn as warn, info, debug, trace};
