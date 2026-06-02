@@ -50,9 +50,9 @@ pub struct Bind<'a> {
 impl<'a> Bind<'a> {
     /// Create object from current bind id.
     ///
-    /// Note that this does not check for interface correction.
+    /// Note that this does not check for matching interface.
     #[inline]
-    pub fn get<O: FromObjectId>(self) -> O {
+    pub fn create<O: FromObjectId>(self) -> O {
         O::from_object_id(self.id)
     }
 }

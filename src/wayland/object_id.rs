@@ -95,9 +95,9 @@ impl std::fmt::Display for ObjectId {
 
 // ===== NewId =====
 
-/// A new id for given object.
+/// A new id for an object.
 ///
-/// Create the actual object using [`NewId::get`].
+/// Create the actual object using [`NewId::create`].
 pub struct NewId<T> {
     id: ObjectId,
     _p: std::marker::PhantomData<T>,
@@ -121,7 +121,7 @@ impl<T> NewId<T> {
 
     /// Create the actual object.
     #[inline]
-    pub fn get(self) -> T
+    pub fn create(self) -> T
     where
         T: FromObjectId,
     {

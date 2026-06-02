@@ -294,7 +294,7 @@ mod wl_display {
 
     impl RequestHandler<Sync> for Compositor {
         fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
-            let callback = sync.callback.get();
+            let callback = sync.callback.create();
             client.objects_mut().use_one(&callback)?;
             client.send(callback.done(69));
             client.send(DeleteId::new(&callback));
@@ -304,7 +304,7 @@ mod wl_display {
 
     impl RequestHandler<GetRegistry> for Compositor {
         fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
-            let registry = request.registry.get();
+            let registry = request.registry.create();
             client.insert(&registry)?;
 
             for ((iface, version, _), i) in GLOBALS.iter().zip(0..) {
@@ -336,7 +336,7 @@ mod wl_registry {
 
             // some interface has side-effect after binding
             if let Interface::WlSeat = iface {
-                let seat = bind.get::<WlSeat>();
+                let seat = bind.create::<WlSeat>();
                 client.send(seat.capabilities(self.seat.capability()));
             }
 
@@ -351,7 +351,7 @@ mod wl_compositor {
 
     impl RequestHandler<CreateSurface> for Compositor {
         fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
-            let surface = req.surface.get();
+            let surface = req.surface.create();
             client.insert(&surface)
         }
     }
@@ -363,7 +363,7 @@ mod wl_seat {
 
     impl RequestHandler<GetKeyboard> for Compositor {
         fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
-            let keyboard = req.keyboard.get();
+            let keyboard = req.keyboard.create();
             client.insert(&keyboard)?;
             client.send(self.seat.to_keymap_event(&keyboard));
             Ok(())
@@ -377,14 +377,14 @@ mod wl_data_device_manager {
 
     impl RequestHandler<CreateDataSource> for Compositor {
         fn handle(&mut self, req: CreateDataSource, client: &mut ClientMut) -> Result<(), WlError> {
-            let data_source = req.data_source.get();
+            let data_source = req.data_source.create();
             client.insert(&data_source)
         }
     }
 
     impl RequestHandler<GetDataDevice> for Compositor {
         fn handle(&mut self, req: GetDataDevice, client: &mut ClientMut) -> Result<(), WlError> {
-            let data_device = req.data_device.get();
+            let data_device = req.data_device.create();
             let Some(object) = client.get_object(req.seat) else {
                 return Err(WlError::UnknownObject);
             };
