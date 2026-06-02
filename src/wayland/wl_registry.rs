@@ -42,7 +42,7 @@ impl<'a> Bind<'a> {
     /// Note that this does not check for interface correction.
     #[inline]
     pub fn get<O: FromObjectId>(self) -> O {
-        O::from_id(self.id)
+        O::from_object_id(self.id)
     }
 }
 

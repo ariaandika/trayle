@@ -17,7 +17,7 @@ macro_rules! simple_object {
 
         impl FromObjectId for $struct_name {
             #[inline]
-            fn from_id(id: ObjectId) -> Self {
+            fn from_object_id(id: ObjectId) -> Self {
                 Self { id }
             }
         }
@@ -86,11 +86,12 @@ impl<'a> Frame<'a> {
         read_buf.len() >= len
     }
 
+    #[inline]
     pub fn new(read_buf: &'a mut MessageBuf) -> Result<(ObjectId, u16, Self), WlError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(WlError::InvalidSize);
         };
-        let Some(id) = ObjectId::from_ne_bytes(*header[..4].as_array().unwrap()) else {
+        let Some(id) = ObjectId::new(u32::from_ne_bytes(*header[..4].as_array().unwrap())) else {
             return Err(WlError::ZeroId);
         };
         let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());

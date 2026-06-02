@@ -1,4 +1,4 @@
-pub use object_id::{NewId, ObjectId};
+pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use op::OpCode;
 pub use message::{Frame, Message, WaylandObject};
 pub use buffer::{MessageBuf, SmallBuf};
@@ -30,7 +30,7 @@ pub mod wl_seat;
 pub mod wl_keyboard;
 
 mod prelude {
-    pub use super::object_id::{FromObjectId, NewId, ObjectId};
+    pub use super::object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
     pub use super::op::OpCode;
     pub use super::message::{Message, WaylandObject};
     pub use super::error::WlError;

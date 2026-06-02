@@ -72,13 +72,13 @@ impl Read<'_> for u32 {
 
 impl Read<'_> for ObjectId {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        ObjectId::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
+        ObjectId::new(u32::from_ne_bytes(reader.read_ne_bytes()?)).ok_or(WlError::ZeroId)
     }
 }
 
 impl<T> Read<'_> for NewId<T> {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        NewId::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
+        reader.read().map(NewId::new)
     }
 }
 

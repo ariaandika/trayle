@@ -1,10 +1,22 @@
 use std::num::NonZeroU32;
 
+// ===== traits =====
+
+// the naming follows fd convention: FromRawFd and AsRawFd
+
+/// Create an object with given object id.
 pub trait FromObjectId {
-    fn from_id(id: ObjectId) -> Self;
+    /// Create this object with given object id.
+    fn from_object_id(id: ObjectId) -> Self;
 }
 
-// ===== Id =====
+/// Object that contains an object id.
+pub trait AsObjectId {
+    /// Returns this object id.
+    fn as_object_id(&self) -> ObjectId;
+}
+
+// ===== ObjectId =====
 
 /// Object ID.
 ///
@@ -13,16 +25,15 @@ pub trait FromObjectId {
 /// range `[0xff000000, 0xffffffff]`.
 ///
 /// The `0` ID is reserved to represent a null or non-existent object.
-///
-/// For efficiency purposes, the IDs are densely packed in the sense that the ID `N` will not be
-/// used until `N-1` has been used. This ordering is not merely a guideline, but a strict
-/// requirement, and there are implementations of the protocol that rigorously enforce this rule,
-/// including the ubiquitous libwayland.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
 pub struct ObjectId(NonZeroU32);
 
 impl ObjectId {
+    /// Creates object id from `u32`.
+    ///
+    /// Returns `None` if the id is `0`.
+    #[inline]
     pub const fn new(id: u32) -> Option<Self> {
         match NonZeroU32::new(id) {
             Some(x) => Some(Self(x)),
@@ -30,31 +41,33 @@ impl ObjectId {
         }
     }
 
-    pub const fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
-        Self::new(u32::from_ne_bytes(ne))
-    }
-
+    /// Returns object id for `wl_display`.
+    #[inline]
     pub const fn wl_display() -> Self {
         const { Self(NonZeroU32::new(1).unwrap()) }
     }
 
     /// Returns `true` if id is special id for `wl_display`.
+    #[inline]
     pub const fn is_display(self) -> bool {
         self.0.get() == 1
     }
 
     /// Returns ID as `u32`.
+    #[inline]
     pub const fn to_u32(self) -> u32 {
         self.0.get()
     }
 
     /// Returns the memory representation of this integer as a byte array in native byte order
+    #[inline]
     pub const fn to_ne_bytes(self) -> [u8; 4] {
         self.0.get().to_ne_bytes()
     }
 }
 
 impl PartialEq<u32> for ObjectId {
+    #[inline]
     fn eq(&self, other: &u32) -> bool {
         self.0.get() == *other
     }
@@ -68,12 +81,17 @@ impl std::fmt::Display for ObjectId {
 
 // ===== NewId =====
 
+/// A new id for given object.
+///
+/// Create the actual object using [`NewId::get`].
 pub struct NewId<T> {
     id: ObjectId,
     _p: std::marker::PhantomData<T>,
 }
 
 impl<T> NewId<T> {
+    /// Creates `NewId` from given object id.
+    #[inline]
     pub const fn new(id: ObjectId) -> Self {
         Self {
             id,
@@ -81,19 +99,19 @@ impl<T> NewId<T> {
         }
     }
 
-    pub fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
-        ObjectId::from_ne_bytes(ne).map(Self::new)
-    }
-
+    /// Returns the new object id.
+    #[inline]
     pub const fn object_id(&self) -> ObjectId {
         self.id
     }
 
+    /// Create the actual object.
+    #[inline]
     pub fn get(self) -> T
     where
         T: FromObjectId,
     {
-        T::from_id(self.id)
+        T::from_object_id(self.id)
     }
 }
 
