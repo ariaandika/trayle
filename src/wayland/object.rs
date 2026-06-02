@@ -9,7 +9,8 @@ impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 // ===== macros =====
 
 macro_rules! simple_object {
-    (pub struct $struct_name:ident;) => {
+    ($(#[$($meta:tt)*])?pub struct $struct_name:ident;) => {
+        $(#[$($meta)*])?
         #[derive(Debug)]
         pub struct $struct_name {
             id: ObjectId,

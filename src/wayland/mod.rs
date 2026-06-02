@@ -34,7 +34,6 @@ pub mod wl_keyboard;
 mod prelude {
     pub use super::object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
     pub use super::op::OpCode;
-    pub use super::object::WlObject;
     pub use super::message::Message;
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};

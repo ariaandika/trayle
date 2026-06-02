@@ -1,4 +1,4 @@
-use crate::wayland::{WlObject, MessageBuf, ObjectId, WlError};
+use crate::wayland::{AsObjectId, MessageBuf, ObjectId, WlError};
 
 // ===== Message =====
 
@@ -8,7 +8,7 @@ pub struct Message<T> {
 }
 
 impl<T> Message<T> {
-    pub fn new<O: WlObject>(object: &O, payload: T) -> Self {
+    pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
         Self {
             id: object.as_object_id(),
             payload,

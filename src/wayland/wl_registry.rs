@@ -1,11 +1,19 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
+    /// `wl_registry` interface.
     pub struct WlRegistry;
 }
 
+#[rustfmt::skip]
 impl WlRegistry {
-    /// Send `wl_registry::global` event.
+    /// Create `wl_registry::bind` request.
+    #[inline]
+    pub fn bind<'a>(&self, name: u32, id_name: &'a str, id_version: u32, id: ObjectId) -> Message<Bind<'a>> {
+        Message::new(self, Bind { name, id_name, id_version, id })
+    }
+
+    /// Create `wl_registry::global` event.
     #[inline]
     pub fn global<'a>(&self, name: u32, interface: &'a str, version: u32) -> Message<Global<'a>> {
         Message::new(self, Global { name, interface, version })
@@ -28,6 +36,7 @@ opcode! {
 
 // ===== Bind =====
 
+/// `wl_registry::bind` request.
 #[derive(Debug)]
 pub struct Bind<'a> {
     pub name: u32,
@@ -35,6 +44,8 @@ pub struct Bind<'a> {
     pub id_version: u32,
     pub id: ObjectId,
 }
+
+// perhaps create new runtime value new_id type ?
 
 impl<'a> Bind<'a> {
     /// Create object from current bind id.
@@ -46,7 +57,7 @@ impl<'a> Bind<'a> {
     }
 }
 
-impl Decode for Bind<'static> {
+impl Decode for Bind<'_> {
     type Output<'a> = Bind<'a>;
 
     #[inline]
@@ -77,6 +88,8 @@ impl Encode for Message<Bind<'_>> {
 
 // ===== Global =====
 
+/// `wl_registry::global` event.
+#[derive(Debug)]
 pub struct Global<'a> {
     pub name: u32,
     pub interface: &'a str,

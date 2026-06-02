@@ -3,10 +3,19 @@ use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
 
 simple_object! {
+    /// `wl_seat` interface.
     pub struct WlSeat;
 }
 
 impl WlSeat {
+    /// Create `wl_seat::get_keyboard` request.
+    #[inline]
+    pub fn get_keyboard(&self, keyboard: NewId<WlKeyboard>) -> Message<GetKeyboard> {
+        Message::new(self, GetKeyboard { keyboard })
+    }
+
+    /// Create `wl_seat::capabilities` event.
+    #[inline]
     pub fn capabilities(&self, capabilities: Capability) -> Message<Capabilities> {
         Message::new(self, Capabilities { capabilities })
     }
@@ -29,6 +38,7 @@ opcode! {
 
 // ===== GetKeyboard =====
 
+/// `wl_seat::get_keyboard` request.
 #[derive(Debug)]
 pub struct GetKeyboard {
     pub keyboard: NewId<WlKeyboard>,
@@ -61,6 +71,7 @@ impl Encode for Message<GetKeyboard> {
 
 // ===== Capabilities =====
 
+/// `wl_seat::capabilities` event.
 pub struct Capabilities {
     capabilities: Capability,
 }

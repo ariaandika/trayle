@@ -1,10 +1,12 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
+    /// `wl_callback` interface.
     pub struct WlCallback;
 }
 
 impl WlCallback {
+    /// Create `wl_callback::done` event.
     #[inline]
     pub fn done(&self, callback_data: u32) -> Message<Done> {
         Message::new(self, Done { callback_data })
@@ -21,8 +23,9 @@ opcode! {
 
 // ===== Done =====
 
+#[derive(Debug)]
 pub struct Done {
-    callback_data: u32,
+    pub callback_data: u32,
 }
 
 impl Decode for Done {

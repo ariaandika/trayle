@@ -20,9 +20,18 @@ opcode! {
 
 // ===== Sync =====
 
+/// `wl_display::sync` request.
 #[derive(Debug)]
 pub struct Sync {
     pub callback: NewId<WlCallback>,
+}
+
+impl Sync {
+    /// Create `wl_display::sync` request.
+    #[inline]
+    pub const fn new(callback: NewId<WlCallback>) -> Self {
+        Self { callback }
+    }
 }
 
 impl Decode for Sync {
@@ -52,9 +61,18 @@ impl Encode for Sync {
 
 // ===== GetRegistry =====
 
+/// `wl_display::get_registry` request.
 #[derive(Debug)]
 pub struct GetRegistry {
     pub registry: NewId<WlRegistry>,
+}
+
+impl GetRegistry {
+    /// Create `wl_display::get_registry` request.
+    #[inline]
+    pub const fn new(registry: NewId<WlRegistry>) -> Self {
+        Self { registry }
+    }
 }
 
 impl Decode for GetRegistry {
@@ -84,7 +102,9 @@ impl Encode for GetRegistry {
 
 // ===== Error =====
 
-pub enum DisplayError {
+/// `wl_display::error` enum.
+#[derive(Debug, Clone, Copy)]
+pub enum WlDisplayError {
     /// server couldn't find object
     InvalidObject,
     /// method doesn't exist on the specified interface or malformed request
@@ -96,39 +116,52 @@ pub enum DisplayError {
     Implementation,
 }
 
-pub fn error_from(id: ObjectId, error: WlError) -> Error<'static> {
-    use WlError as E;
+/// `wl_display::error` event.
+#[derive(Debug)]
+pub struct Error<'a> {
+    pub object_id: ObjectId,
+    pub code: u32,
+    pub message: &'a str,
+}
 
-    const MALFORMED: (ObjectId, DisplayError) = (ObjectId::wl_display(), DisplayError::InvalidMethod);
-    const SEMANTIC: (ObjectId, DisplayError) = (ObjectId::wl_display(), DisplayError::InvalidObject);
+impl<'a> Error<'a> {
+    /// Create `wl_display::error` event.
+    #[inline]
+    pub const fn new(object_id: ObjectId, code: u32, message: &'a str) -> Self {
+        Self { object_id, code, message }
+    }
 
-    let (object_id, code) = match error {
-        E::UnknownOp => MALFORMED,
-        E::UnknownObject => SEMANTIC,
-        E::UnknownBind => SEMANTIC,
-        E::InvalidSize => MALFORMED,
-        E::InvalidNewId => SEMANTIC,
-        E::ZeroId => SEMANTIC,
-        E::Null => SEMANTIC,
-        E::NonUtf8 => SEMANTIC,
-        E::MissingFd => MALFORMED,
-        E::NotYetImplemented => (ObjectId::wl_display(), DisplayError::Implementation),
-    };
-    let _ = id;
-    Error {
-        object_id,
-        code: code as u32,
-        message: error.message(),
+    /// Create `wl_display::error` event from [`WlError`].
+    #[inline]
+    pub fn from_wl_error(id: ObjectId, error: WlError) -> Error<'static> {
+        use WlError as E;
+
+        const MALFORMED: (ObjectId, WlDisplayError) = (ObjectId::wl_display(), WlDisplayError::InvalidMethod);
+        const SEMANTIC: (ObjectId, WlDisplayError) = (ObjectId::wl_display(), WlDisplayError::InvalidObject);
+
+        // in the future if there is id specific error.
+        let _ = id;
+        let (object_id, code) = match error {
+            E::UnknownOp => MALFORMED,
+            E::UnknownObject => SEMANTIC,
+            E::UnknownBind => SEMANTIC,
+            E::InvalidSize => MALFORMED,
+            E::InvalidNewId => SEMANTIC,
+            E::ZeroId => SEMANTIC,
+            E::Null => SEMANTIC,
+            E::NonUtf8 => SEMANTIC,
+            E::MissingFd => MALFORMED,
+            E::NotYetImplemented => (ObjectId::wl_display(), WlDisplayError::Implementation),
+        };
+        Error {
+            object_id,
+            code: code as u32,
+            message: error.message(),
+        }
     }
 }
 
-pub struct Error<'a> {
-    object_id: ObjectId,
-    code: u32,
-    message: &'a str,
-}
-
-impl Decode for Error<'static> {
+impl Decode for Error<'_> {
     type Output<'a> = Error<'a>;
 
     #[inline]
@@ -158,13 +191,17 @@ impl Encode for Error<'_> {
 
 // ===== DeleteId =====
 
-#[inline]
-pub fn delete_id<O: WlObject>(object: &O) -> DeleteId {
-    DeleteId { id: object.as_object_id() }
-}
-
+/// `wl_display::delete_id` event.
 pub struct DeleteId {
     id: ObjectId,
+}
+
+impl DeleteId {
+    /// Create `wl_display::delete_id` event.
+    #[inline]
+    pub fn new<O: AsObjectId>(object: &O) -> Self {
+        Self { id: object.as_object_id() }
+    }
 }
 
 impl Decode for DeleteId {

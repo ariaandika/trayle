@@ -1,11 +1,13 @@
 use crate::wayland::prelude::*;
 
 simple_object! {
+    /// `wl_keyboard` interface.
     pub struct WlKeyboard;
 }
 
 impl WlKeyboard {
-    /// Send `wl_keyboard::keymap` event.
+    /// Create `wl_keyboard::keymap` event.
+    #[inline]
     pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
         Message::new(self, Keymap { format, fd, size })
     }
@@ -21,12 +23,8 @@ opcode! {
 
 // ===== Keymap =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum KeymapFormat {
-    NoKeymap,
-    XkbV1
-}
-
+/// `wl_keyboard::keymap` event.
+#[derive(Debug)]
 pub struct Keymap {
     format: KeymapFormat,
     fd: i32,
@@ -61,6 +59,15 @@ impl Encode for Message<Keymap> {
         encoder.push_fd(self.fd);
         encode_me!(encoder, self, format, size);
     }
+}
+
+// ===== KeymapFormat =====
+
+/// `wl_keyboard::keymap_format` enum.
+#[derive(Debug, Clone, Copy)]
+pub enum KeymapFormat {
+    NoKeymap,
+    XkbV1
 }
 
 impl<'a> super::decode::Read<'a> for KeymapFormat {

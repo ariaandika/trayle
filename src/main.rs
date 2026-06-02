@@ -290,14 +290,14 @@ trait RequestHandler<Request>: Sized {
 
 mod wl_display {
     use super::*;
-    use torio::wayland::wl_display::{GetRegistry, Sync, delete_id};
+    use torio::wayland::wl_display::{DeleteId, GetRegistry, Sync};
 
     impl RequestHandler<Sync> for Compositor {
         fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
             let callback = sync.callback.get();
             client.objects_mut().use_one(&callback)?;
             client.send(callback.done(69));
-            client.send(delete_id(&callback));
+            client.send(DeleteId::new(&callback));
             Ok(())
         }
     }
