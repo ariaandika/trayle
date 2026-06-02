@@ -1,13 +1,13 @@
-pub use id::{Id, NewId};
+pub use object_id::{NewId, ObjectId};
 pub use op::OpCode;
 pub use message::{Frame, Message, WaylandObject};
 pub use buffer::{MessageBuf, SmallBuf};
 pub use error::WlError;
 pub use decode::Decode;
 pub use encode::Encode;
-pub use interface::InterfaceId;
+pub use interface::Interface;
 
-mod id;
+mod object_id;
 mod op;
 mod message;
 mod buffer;
@@ -30,13 +30,13 @@ pub mod wl_seat;
 pub mod wl_keyboard;
 
 mod prelude {
-    pub use super::id::{FromId, Id, NewId};
+    pub use super::object_id::{FromObjectId, NewId, ObjectId};
     pub use super::op::OpCode;
     pub use super::message::{Message, WaylandObject};
     pub use super::error::WlError;
     pub use super::decode::{Decode, Decoder};
     pub use super::encode::{Encode, Encoder, WaylandEnum};
-    pub use super::interface::InterfaceId;
+    pub use super::interface::Interface;
 
     pub(super) use super::op::opcode;
     pub(super) use super::message::simple_object;

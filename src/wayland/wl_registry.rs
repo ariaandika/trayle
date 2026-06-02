@@ -33,7 +33,7 @@ pub struct Bind<'a> {
     pub name: u32,
     pub id_name: &'a str,
     pub id_version: u32,
-    pub id: Id,
+    pub id: ObjectId,
 }
 
 impl<'a> Bind<'a> {
@@ -41,7 +41,7 @@ impl<'a> Bind<'a> {
     ///
     /// Note that this does not check for interface correction.
     #[inline]
-    pub fn get<O: FromId>(self) -> O {
+    pub fn get<O: FromObjectId>(self) -> O {
         O::from_id(self.id)
     }
 }
@@ -65,7 +65,7 @@ impl Encode for Message<Bind<'_>> {
     const OPCODE: u16 = RequestOp::Bind as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 
@@ -101,7 +101,7 @@ impl Encode for Message<Global<'_>> {
     const OPCODE: u16 = EventOp::Global as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 

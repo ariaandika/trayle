@@ -1,4 +1,4 @@
-use crate::wayland::{Frame, Id, NewId, WlError, roundup4};
+use crate::wayland::{Frame, NewId, ObjectId, WlError, roundup4};
 
 /// Decodable wayland message.
 pub trait Decode {
@@ -70,9 +70,9 @@ impl Read<'_> for u32 {
     }
 }
 
-impl Read<'_> for Id {
+impl Read<'_> for ObjectId {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        Id::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
+        ObjectId::from_ne_bytes(reader.read_ne_bytes()?).ok_or(WlError::ZeroId)
     }
 }
 

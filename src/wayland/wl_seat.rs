@@ -49,7 +49,7 @@ impl Encode for Message<GetKeyboard> {
     const OPCODE: u16 = RequestOp::GetKeyboard as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 
@@ -78,7 +78,7 @@ impl Encode for Message<Capabilities> {
     const OPCODE: u16 = EventOp::Capabilities as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 

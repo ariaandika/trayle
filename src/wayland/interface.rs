@@ -1,7 +1,7 @@
 macro_rules! declare {
     ($($s:ident::$u:ident,)*;$($up:ident,)*) => {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-        pub enum InterfaceId {
+        pub enum Interface {
             $($u,)*
             $($up,)*
         }

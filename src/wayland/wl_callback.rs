@@ -38,7 +38,7 @@ impl Encode for Message<Done> {
     const OPCODE: u16 = EventOp::Done as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 

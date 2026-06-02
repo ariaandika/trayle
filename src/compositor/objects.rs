@@ -1,18 +1,18 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{Id, InterfaceId, WaylandObject, WlError};
+use crate::wayland::{Interface, ObjectId, WaylandObject, WlError};
 
 // ===== Object =====
 
 pub struct Object {
-    interface: InterfaceId,
+    interface: Interface,
     value: usize,
 }
 
 impl Object {
     #[inline]
-    pub fn interface(&self) -> InterfaceId {
+    pub fn interface(&self) -> Interface {
         self.interface
     }
 
@@ -79,7 +79,7 @@ impl Objects {
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
     #[inline]
-    pub fn insert_with(&mut self, object_id: Id, interface: InterfaceId, value: usize) -> Result<(), WlError> {
+    pub fn insert_with(&mut self, object_id: ObjectId, interface: Interface, value: usize) -> Result<(), WlError> {
         self.insert_inner(object_id, Some(Object { interface, value }))
     }
 
@@ -89,7 +89,7 @@ impl Objects {
         self.insert_inner(object.id(), None)
     }
 
-    fn insert_inner(&mut self, id: Id, object: Option<Object>) -> Result<(), WlError> {
+    fn insert_inner(&mut self, id: ObjectId, object: Option<Object>) -> Result<(), WlError> {
         if self.len == self.cap {
             self.grow();
         }
@@ -120,7 +120,7 @@ impl Objects {
     }
 
     #[inline]
-    pub fn get_mut(&mut self, id: Id) -> Option<&mut Object> {
+    pub fn get_mut(&mut self, id: ObjectId) -> Option<&mut Object> {
         debug_assert!(!id.is_display());
         let idx = (id.to_u32() - 2) as usize;
         if idx < self.len {

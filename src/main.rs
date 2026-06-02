@@ -168,16 +168,16 @@ fn event_loop() -> Result<(), FatalError> {
 
 // ===== handler =====
 
-use torio::wayland::{Decode, Frame, InterfaceId, MessageBuf, OpCode, WlError};
+use torio::wayland::{Decode, Frame, Interface, MessageBuf, OpCode, WlError};
 
 const NOVALUE: usize = 0;
 
-static GLOBALS: [(&str, u32, InterfaceId); 5] = [
-    ("wl_compositor", 7, InterfaceId::WlCompositor),
-    ("wl_shm", 2, InterfaceId::WlShm),
-    ("wl_data_device_manager", 4, InterfaceId::WlDataDeviceManager),
-    ("wl_seat", 10, InterfaceId::WlSeat),
-    ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
+static GLOBALS: [(&str, u32, Interface); 5] = [
+    ("wl_compositor", 7, Interface::WlCompositor),
+    ("wl_shm", 2, Interface::WlShm),
+    ("wl_data_device_manager", 4, Interface::WlDataDeviceManager),
+    ("wl_seat", 10, Interface::WlSeat),
+    ("xdg_wm_base", 7, Interface::XdgWmBase),
 ];
 
 pub struct Compositor {
@@ -208,7 +208,7 @@ fn router_inner(
 
     let (id, op, frame) = Frame::new(read_buf)?;
     let interface = if id.is_display() {
-        InterfaceId::WlDisplay
+        Interface::WlDisplay
     } else {
         match client.get_object(id) {
             Some(object) => object.interface(),
@@ -231,7 +231,7 @@ fn router_inner(
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
                 $(
-                    InterfaceId::$iface => handle_me!(@OP $iface {$($tt)*}),
+                    Interface::$iface => handle_me!(@OP $iface {$($tt)*}),
                 )*
                 _ => compositor.todo(interface, op),
             }
@@ -265,7 +265,7 @@ fn router_inner(
 impl Compositor {
     fn call_handler<Request>(
         &mut self,
-        _interface: InterfaceId,
+        _interface: Interface,
         request: Request,
         client: &mut ClientMut,
     ) -> Result<(), WlError>
@@ -278,7 +278,7 @@ impl Compositor {
         self.handle(request, client)
     }
 
-    fn todo(&mut self, interface: InterfaceId, op: u16) -> Result<(), WlError> {
+    fn todo(&mut self, interface: Interface, op: u16) -> Result<(), WlError> {
         log::error!(client, "<- `{interface:?}::{op}` is not yet implemented");
         WlError::todo()
     }
@@ -335,7 +335,7 @@ mod wl_registry {
             client.objects_mut().insert_with(bind.id, *iface, NOVALUE)?;
 
             // some interface has side-effect after binding
-            if let InterfaceId::WlSeat = iface {
+            if let Interface::WlSeat = iface {
                 let seat = bind.get::<WlSeat>();
                 client.send(seat.capabilities(self.seat.capability()));
             }
@@ -388,7 +388,7 @@ mod wl_data_device_manager {
             let Some(object) = client.get_object(req.seat) else {
                 return Err(WlError::UnknownObject);
             };
-            let InterfaceId::WlSeat = object.interface() else {
+            let Interface::WlSeat = object.interface() else {
                 return Err(WlError::UnknownObject);
             };
             client.insert(&data_device)

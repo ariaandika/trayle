@@ -1,10 +1,10 @@
-use crate::wayland::{Id, MessageBuf, NewId, roundup4};
+use crate::wayland::{MessageBuf, NewId, ObjectId, roundup4};
 
 /// Encodable wayland message.
 pub trait Encode: Sized {
     const OPCODE: u16;
 
-    fn object_id(&self) -> Id;
+    fn object_id(&self) -> ObjectId;
 
     fn encode(self, encoder: Encoder);
 
@@ -134,15 +134,15 @@ macro_rules! impl_int {
 
 impl_int!(u32);
 impl_int!(i32);
-impl_int!(Id);
+impl_int!(ObjectId);
 
 impl<T> Write for NewId<T> {
     fn size(&self) -> u16 {
-        self.id().size()
+        self.object_id().size()
     }
 
     fn encode(self, writer: &mut Writer) {
-        self.id().encode(writer);
+        self.object_id().encode(writer);
     }
 }
 

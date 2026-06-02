@@ -34,7 +34,7 @@ impl Encode for Message<CreateDataSource> {
     const OPCODE: u16 = RequestOp::CreateDataSource as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 
@@ -51,7 +51,7 @@ pub struct GetDataDevice {
     // <wl_data_device>
     pub data_device: NewId<WlDataDevice>,
     // <wl_seat>
-    pub seat: Id,
+    pub seat: ObjectId,
 }
 
 impl Decode for GetDataDevice {
@@ -71,7 +71,7 @@ impl Encode for Message<GetDataDevice> {
     const OPCODE: u16 = RequestOp::GetDataDevice as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 

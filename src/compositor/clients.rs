@@ -3,7 +3,7 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use crate::collections::slab::Slab;
 use crate::compositor::objects::{Object, Objects};
 use crate::wayland::wl_display;
-use crate::wayland::{Encode, Id, MessageBuf, SmallBuf, WaylandObject, WlError};
+use crate::wayland::{Encode, MessageBuf, ObjectId, SmallBuf, WaylandObject, WlError};
 
 // ===== ClientId =====
 
@@ -72,7 +72,7 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn get_object(&mut self, id: Id) -> Option<&mut Object> {
+    pub fn get_object(&mut self, id: ObjectId) -> Option<&mut Object> {
         self.state.objects.get_mut(id)
     }
 
@@ -93,7 +93,7 @@ impl<'a> ClientMut<'a> {
 
     #[inline]
     pub fn send_global_error(&mut self, error: WlError) {
-        wl_display::error_from(Id::wl_display(), error).encode_to(self.write_buf);
+        wl_display::error_from(ObjectId::wl_display(), error).encode_to(self.write_buf);
     }
 }
 

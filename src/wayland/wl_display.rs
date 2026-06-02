@@ -40,8 +40,8 @@ impl Encode for Sync {
     const OPCODE: u16 = RequestOp::Sync as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
-        Id::wl_display()
+    fn object_id(&self) -> ObjectId {
+        ObjectId::wl_display()
     }
 
     #[inline]
@@ -72,8 +72,8 @@ impl Encode for GetRegistry {
     const OPCODE: u16 = RequestOp::GetRegistry as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
-        Id::wl_display()
+    fn object_id(&self) -> ObjectId {
+        ObjectId::wl_display()
     }
 
     #[inline]
@@ -96,11 +96,11 @@ pub enum DisplayError {
     Implementation,
 }
 
-pub fn error_from(id: Id, error: WlError) -> Error<'static> {
+pub fn error_from(id: ObjectId, error: WlError) -> Error<'static> {
     use WlError as E;
 
-    const MALFORMED: (Id, DisplayError) = (Id::wl_display(), DisplayError::InvalidMethod);
-    const SEMANTIC: (Id, DisplayError) = (Id::wl_display(), DisplayError::InvalidObject);
+    const MALFORMED: (ObjectId, DisplayError) = (ObjectId::wl_display(), DisplayError::InvalidMethod);
+    const SEMANTIC: (ObjectId, DisplayError) = (ObjectId::wl_display(), DisplayError::InvalidObject);
 
     let (object_id, code) = match error {
         E::UnknownOp => MALFORMED,
@@ -112,7 +112,7 @@ pub fn error_from(id: Id, error: WlError) -> Error<'static> {
         E::Null => SEMANTIC,
         E::NonUtf8 => SEMANTIC,
         E::MissingFd => MALFORMED,
-        E::NotYetImplemented => (Id::wl_display(), DisplayError::Implementation),
+        E::NotYetImplemented => (ObjectId::wl_display(), DisplayError::Implementation),
     };
     let _ = id;
     Error {
@@ -123,7 +123,7 @@ pub fn error_from(id: Id, error: WlError) -> Error<'static> {
 }
 
 pub struct Error<'a> {
-    object_id: Id,
+    object_id: ObjectId,
     code: u32,
     message: &'a str,
 }
@@ -146,8 +146,8 @@ impl Encode for Error<'_> {
     const OPCODE: u16 = EventOp::Error as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
-        Id::wl_display()
+    fn object_id(&self) -> ObjectId {
+        ObjectId::wl_display()
     }
 
     #[inline]
@@ -164,7 +164,7 @@ pub fn delete_id<O: WaylandObject>(object: &O) -> DeleteId {
 }
 
 pub struct DeleteId {
-    id: Id,
+    id: ObjectId,
 }
 
 impl Decode for DeleteId {
@@ -182,8 +182,8 @@ impl Encode for DeleteId {
     const OPCODE: u16 = EventOp::DeleteId as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
-        Id::wl_display()
+    fn object_id(&self) -> ObjectId {
+        ObjectId::wl_display()
     }
 
     #[inline]

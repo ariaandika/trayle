@@ -1,31 +1,31 @@
-use crate::wayland::{MessageBuf, Id, InterfaceId, WlError};
+use crate::wayland::{Interface, MessageBuf, ObjectId, WlError};
 
 // ===== WaylandObject =====
 
 pub trait WaylandObject {
-    const INTERFACE_ID: InterfaceId;
+    const INTERFACE_ID: Interface;
 
-    fn id(&self) -> Id;
+    fn id(&self) -> ObjectId;
 }
 
 macro_rules! simple_object {
     (pub struct $struct_name:ident;) => {
         #[derive(Debug)]
         pub struct $struct_name {
-            id: Id,
+            id: ObjectId,
         }
 
-        impl FromId for $struct_name {
+        impl FromObjectId for $struct_name {
             #[inline]
-            fn from_id(id: Id) -> Self {
+            fn from_id(id: ObjectId) -> Self {
                 Self { id }
             }
         }
 
         impl WaylandObject for $struct_name {
-            const INTERFACE_ID: InterfaceId = InterfaceId::$struct_name;
+            const INTERFACE_ID: Interface = Interface::$struct_name;
 
-            fn id(&self) -> Id {
+            fn id(&self) -> ObjectId {
                 self.id
             }
         }
@@ -37,7 +37,7 @@ pub(super) use simple_object;
 // ===== Message =====
 
 pub struct Message<T> {
-    id: Id,
+    id: ObjectId,
     payload: T,
 }
 
@@ -49,7 +49,7 @@ impl<T> Message<T> {
         }
     }
 
-    pub fn id(&self) -> Id {
+    pub fn id(&self) -> ObjectId {
         self.id
     }
 }
@@ -86,11 +86,11 @@ impl<'a> Frame<'a> {
         read_buf.len() >= len
     }
 
-    pub fn new(read_buf: &'a mut MessageBuf) -> Result<(Id, u16, Self), WlError> {
+    pub fn new(read_buf: &'a mut MessageBuf) -> Result<(ObjectId, u16, Self), WlError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(WlError::InvalidSize);
         };
-        let Some(id) = Id::from_ne_bytes(*header[..4].as_array().unwrap()) else {
+        let Some(id) = ObjectId::from_ne_bytes(*header[..4].as_array().unwrap()) else {
             return Err(WlError::ZeroId);
         };
         let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());

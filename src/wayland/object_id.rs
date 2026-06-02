@@ -1,7 +1,7 @@
 use std::num::NonZeroU32;
 
-pub trait FromId {
-    fn from_id(id: Id) -> Self;
+pub trait FromObjectId {
+    fn from_id(id: ObjectId) -> Self;
 }
 
 // ===== Id =====
@@ -20,9 +20,9 @@ pub trait FromId {
 /// including the ubiquitous libwayland.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 #[repr(transparent)]
-pub struct Id(NonZeroU32);
+pub struct ObjectId(NonZeroU32);
 
-impl Id {
+impl ObjectId {
     pub const fn new(id: u32) -> Option<Self> {
         match NonZeroU32::new(id) {
             Some(x) => Some(Self(x)),
@@ -54,13 +54,13 @@ impl Id {
     }
 }
 
-impl PartialEq<u32> for Id {
+impl PartialEq<u32> for ObjectId {
     fn eq(&self, other: &u32) -> bool {
         self.0.get() == *other
     }
 }
 
-impl std::fmt::Display for Id {
+impl std::fmt::Display for ObjectId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
@@ -69,12 +69,12 @@ impl std::fmt::Display for Id {
 // ===== NewId =====
 
 pub struct NewId<T> {
-    id: Id,
+    id: ObjectId,
     _p: std::marker::PhantomData<T>,
 }
 
 impl<T> NewId<T> {
-    pub const fn new(id: Id) -> Self {
+    pub const fn new(id: ObjectId) -> Self {
         Self {
             id,
             _p: std::marker::PhantomData,
@@ -82,16 +82,16 @@ impl<T> NewId<T> {
     }
 
     pub fn from_ne_bytes(ne: [u8; 4]) -> Option<Self> {
-        Id::from_ne_bytes(ne).map(Self::new)
+        ObjectId::from_ne_bytes(ne).map(Self::new)
     }
 
-    pub const fn id(&self) -> Id {
+    pub const fn object_id(&self) -> ObjectId {
         self.id
     }
 
     pub fn get(self) -> T
     where
-        T: FromId,
+        T: FromObjectId,
     {
         T::from_id(self.id)
     }

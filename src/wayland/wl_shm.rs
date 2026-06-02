@@ -15,7 +15,7 @@ opcode! {
 #[allow(dead_code)]
 pub struct CreatePool {
     /// <wl_shm_pool>
-    pub id: Id,
+    pub id: ObjectId,
     pub fd: i32,
     pub size: i32,
 }
@@ -39,7 +39,7 @@ impl Encode for Message<CreatePool> {
     const OPCODE: u16 = RequestOp::CreatePool as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 

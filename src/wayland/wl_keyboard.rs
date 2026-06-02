@@ -52,7 +52,7 @@ impl Encode for Message<Keymap> {
     const OPCODE: u16 = EventOp::Keymap as u16;
 
     #[inline]
-    fn object_id(&self) -> Id {
+    fn object_id(&self) -> ObjectId {
         self.id()
     }
 
