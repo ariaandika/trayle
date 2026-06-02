@@ -15,7 +15,7 @@ mod error;
 mod decode;
 mod encode;
 
-mod interface;
+pub mod interface;
 
 pub mod wl_display;
 pub mod wl_registry;

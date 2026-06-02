@@ -169,24 +169,14 @@ fn event_loop() -> Result<(), FatalError> {
 // ===== handler =====
 
 use torio::wayland::{Decode, Frame, InterfaceId, MessageBuf, OpCode, WlError};
-use torio::wayland::wl_display as WlDisplay;
-use torio::wayland::wl_registry as WlRegistry;
-use torio::wayland::wl_compositor as WlCompositor;
-use torio::wayland::wl_shm as WlShm;
-use torio::wayland::wl_seat as WlSeat;
-use torio::wayland::wl_data_device_manager as WlDataDeviceManager;
 
 const NOVALUE: usize = 0;
 
-static GLOBALS: [(&str, u32, InterfaceId); 9] = [
+static GLOBALS: [(&str, u32, InterfaceId); 5] = [
     ("wl_compositor", 7, InterfaceId::WlCompositor),
     ("wl_shm", 2, InterfaceId::WlShm),
     ("wl_data_device_manager", 4, InterfaceId::WlDataDeviceManager),
     ("wl_seat", 10, InterfaceId::WlSeat),
-    ("wl_subcompositor", 1, InterfaceId::WlSubCompositor),
-    ("wl_fixes", 2, InterfaceId::WlFixes),
-    ("zwp_linux_dmabuf_v1", 5, InterfaceId::ZwpLinuxDmabufV1),
-    ("zwp_linux_dmabuf_feedback_v1", 5, InterfaceId::ZwpLinuxDmabufFeedbackV1),
     ("xdg_wm_base", 7, InterfaceId::XdgWmBase),
 ];
 
@@ -214,6 +204,8 @@ fn router_inner(
     client: &mut ClientMut,
     compositor: &mut Compositor,
 ) -> Result<(), WlError> {
+    use torio::wayland::interface::prelude::*;
+
     let (id, op, frame) = Frame::new(read_buf)?;
     let interface = if id.is_display() {
         InterfaceId::WlDisplay
@@ -298,14 +290,14 @@ trait RequestHandler<Request>: Sized {
 
 mod wl_display {
     use super::*;
-    use torio::wayland::wl_display::{GetRegistry, Sync};
+    use torio::wayland::wl_display::{GetRegistry, Sync, delete_id};
 
     impl RequestHandler<Sync> for Compositor {
         fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
             let callback = sync.callback.get();
             client.objects_mut().use_one(&callback)?;
             client.send(callback.done(69));
-            client.send(WlDisplay::delete_id(&callback));
+            client.send(delete_id(&callback));
             Ok(())
         }
     }
