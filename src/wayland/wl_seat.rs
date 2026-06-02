@@ -60,7 +60,7 @@ impl Encode for Message<GetKeyboard> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]
@@ -90,7 +90,7 @@ impl Encode for Message<Capabilities> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

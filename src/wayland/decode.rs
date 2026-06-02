@@ -4,8 +4,10 @@ use crate::wayland::{Frame, NewId, ObjectId, WlError, roundup4};
 pub trait Decode {
     type Output<'a>;
 
+    /// Decode wayland message.
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError>;
 
+    /// Decode wayland message from a [`Frame`].
     fn decode_with<'a>(message: Frame<'a>) -> Result<Self::Output<'a>, WlError> {
         Self::decode(Decoder::new(message))
     }
@@ -13,6 +15,9 @@ pub trait Decode {
 
 // ===== Decoder =====
 
+/// Message decoder API.
+///
+/// This is for internal usage only. To decode a message, use [`Decode::decode_with`].
 pub struct Decoder<'a> {
     message: Frame<'a>,
 }
@@ -22,6 +27,7 @@ impl<'a> Decoder<'a> {
         Self { message }
     }
 
+    /// Remove and returns fd from buffer.
     pub fn pop_fd(&mut self) -> Result<i32, WlError> {
         match self.message.pop_fd() {
             Some(ok) => Ok(ok),
@@ -29,22 +35,26 @@ impl<'a> Decoder<'a> {
         }
     }
 
+    /// Read one primitive value.
     pub fn read<T: Read<'a>>(self) -> Result<T, WlError> {
-        T::decode(&mut self.body())
+        T::decode(&mut self.reader())
     }
 
-    pub fn body(self) -> Reader<'a> {
+    /// Consume decoder and returns [`Reader`].
+    pub fn reader(self) -> Reader<'a> {
         Reader { read_buf: self.message.body() }
     }
 }
 
 // ===== Reader =====
 
+/// Primitive type reader.
 pub struct Reader<'a> {
     read_buf: &'a [u8],
 }
 
 impl<'a> Reader<'a> {
+    /// Read one primitive value.
     pub fn read<T: Read<'a>>(&mut self) -> Result<T, WlError> {
         T::decode(self)
     }

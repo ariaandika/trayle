@@ -62,7 +62,7 @@ impl Decode for Bind<'_> {
 
     #[inline]
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Bind {
             name: reader.read()?,
             id_name: reader.read()?,
@@ -77,7 +77,7 @@ impl Encode for Message<Bind<'_>> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]
@@ -101,7 +101,7 @@ impl Decode for Global<'static> {
 
     #[inline]
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Global {
             name: reader.read()?,
             interface: reader.read()?,
@@ -115,7 +115,7 @@ impl Encode for Message<Global<'_>> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

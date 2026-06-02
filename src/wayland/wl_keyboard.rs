@@ -37,7 +37,7 @@ impl Decode for Keymap {
     #[inline]
     fn decode<'a>(mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
         let fd = decoder.pop_fd()?;
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Self {
             format: reader.read()?,
             fd,
@@ -51,7 +51,7 @@ impl Encode for Message<Keymap> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

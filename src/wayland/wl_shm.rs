@@ -26,7 +26,7 @@ impl Decode for CreatePool {
     #[inline]
     fn decode(mut decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
         let fd = decoder.pop_fd()?;
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Self {
             id: reader.read()?,
             fd,
@@ -40,7 +40,7 @@ impl Encode for Message<CreatePool> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

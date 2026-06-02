@@ -15,7 +15,7 @@ impl<T> Message<T> {
         }
     }
 
-    pub fn id(&self) -> ObjectId {
+    pub fn object_id(&self) -> ObjectId {
         self.id
     }
 }

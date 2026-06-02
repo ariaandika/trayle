@@ -42,7 +42,7 @@ impl Encode for Message<Done> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

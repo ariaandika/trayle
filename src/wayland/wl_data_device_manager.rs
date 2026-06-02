@@ -35,7 +35,7 @@ impl Encode for Message<CreateDataSource> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]
@@ -59,7 +59,7 @@ impl Decode for GetDataDevice {
 
     #[inline]
     fn decode(decoder: Decoder<'_>) -> Result<Self::Output<'_>, WlError> {
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Self {
             data_device: reader.read()?,
             seat: reader.read()?,
@@ -72,7 +72,7 @@ impl Encode for Message<GetDataDevice> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]

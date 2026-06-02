@@ -166,7 +166,7 @@ impl Decode for Error<'_> {
 
     #[inline]
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        let mut reader = decoder.body();
+        let mut reader = decoder.reader();
         Ok(Error {
             object_id: reader.read()?,
             code: reader.read()?,

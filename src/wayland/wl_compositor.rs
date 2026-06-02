@@ -32,7 +32,7 @@ impl Encode for Message<CreateSurface> {
 
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.id()
+        self.object_id()
     }
 
     #[inline]
