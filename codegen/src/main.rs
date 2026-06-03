@@ -3,6 +3,7 @@ use std::fs::read_to_string;
 
 use crate::str::Str;
 use crate::error::Error;
+use crate::io::Write;
 
 mod str;
 mod io;
@@ -17,6 +18,7 @@ fn main() -> Result<(), Error> {
 
     let content = Str::new(read_to_string(path)?);
     let _result = parser::parse_wayland(content)?;
+    writeln!(std::io::stdout().lock(), "test");
 
     Ok(())
 }

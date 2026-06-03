@@ -59,6 +59,15 @@ fn parse_interface(parser: &mut Parser) -> Result<Interface, Error> {
                 };
                 items.push(item);
             }
+            items.sort_by(|a, b|{
+                use std::cmp::Ordering;
+                match (a, b) {
+                    (Item::Operation(a), Item::Operation(b)) => a.kind.cmp(&b.kind),
+                    (Item::Operation(_), Item::Enum(_)) => Ordering::Less,
+                    (Item::Enum(_), Item::Operation(_)) => Ordering::Greater,
+                    (Item::Enum(_), Item::Enum(_)) => Ordering::Equal,
+                }
+            });
             items
         },
     })

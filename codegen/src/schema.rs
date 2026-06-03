@@ -26,7 +26,7 @@ pub enum Item {
     Enum(Enum),
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub enum OpKind {
     Request,
     Event,
