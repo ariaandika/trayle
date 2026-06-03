@@ -5,6 +5,7 @@ use crate::str::Str;
 use crate::error::Error;
 
 mod str;
+mod io;
 mod error;
 mod parser;
 mod schema;
