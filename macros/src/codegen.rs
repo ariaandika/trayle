@@ -1,3 +1,5 @@
+use std::iter::once;
+
 use proc_macro::*;
 
 macro_rules! generate {
@@ -98,6 +100,10 @@ macro_rules! gen_token {
     (:) => {proc_macro::Punct::new(':', Spacing::Alone)};
     (#) => {proc_macro::Punct::new('#', Spacing::Alone)};
     (?) => {proc_macro::Punct::new('?', Spacing::Alone)};
+    ($lf:lifetime) => {(
+        proc_macro::Punct::new('\'', Spacing::Joint),
+        proc_macro::Ident::new(&stringify!($lf)[1..], Span::call_site()),
+    )};
     ($l:literal) => {proc_macro::Literal::new(stringify!($l), proc_macro::Span::call_site())};
     ($t:ident) => {proc_macro::Ident::new(stringify!($t), proc_macro::Span::call_site())};
     () => {};
@@ -115,22 +121,30 @@ pub trait ToTokens: Sized {
         self.clone().into_tokens(tokens);
     }
 
-    // fn into_token_stream(self) -> TokenStream {
-    //     let mut tokens = TokenStream::new();
-    //     self.into_tokens(&mut tokens);
-    //     tokens
-    // }
+    fn into_token_stream(self) -> TokenStream {
+        let mut tokens = TokenStream::new();
+        self.into_tokens(&mut tokens);
+        tokens
+    }
+}
+
+impl<T: ToTokens> ToTokens for Option<T> {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        if let Some(me) = self {
+            me.into_tokens(tokens);
+        }
+    }
 }
 
 impl ToTokens for Ident {
     fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend([self]);
+        tokens.extend(once(self));
     }
 }
 
 impl ToTokens for Punct {
     fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend([self]);
+        tokens.extend(once(self));
     }
 }
 
@@ -140,15 +154,21 @@ impl ToTokens for [Punct; 2] {
     }
 }
 
+impl ToTokens for (Punct, Ident) {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        tokens.extend([TokenTree::from(self.0), self.1.into()]);
+    }
+}
+
 impl ToTokens for Group {
     fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend([self]);
+        tokens.extend(once(self));
     }
 }
 
 impl ToTokens for Literal {
     fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend([self]);
+        tokens.extend(once(self));
     }
 }
 

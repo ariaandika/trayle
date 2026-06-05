@@ -2,12 +2,20 @@ use crate::wayland::prelude::*;
 use crate::wayland::wl_callback::WlCallback;
 use crate::wayland::wl_registry::WlRegistry;
 
-// ===== Op =====
-
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum RequestOp {
     Sync,
     GetRegistry,
+}
+
+#[derive(Debug)]
+pub struct Sync {
+    pub callback: NewId<WlCallback>,
+}
+
+#[derive(Debug)]
+pub struct GetRegistry {
+    pub registry: NewId<WlRegistry>,
 }
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -16,81 +24,19 @@ pub enum EventOp {
     DeleteId,
 }
 
-// ===== Sync =====
-
-/// `wl_display::sync` request.
+/// `wl_display::error` event.
 #[derive(Debug)]
-pub struct Sync {
-    pub callback: NewId<WlCallback>,
+pub struct Error<'a> {
+    pub object_id: ObjectId,
+    pub code: u32,
+    pub message: &'a str,
 }
 
-impl Sync {
-    /// Create `wl_display::sync` request.
-    #[inline]
-    pub const fn new(callback: NewId<WlCallback>) -> Self {
-        Self { callback }
-    }
-}
-
-impl Decode for Sync {
-    type Output<'a> = Self;
-
-    #[inline]
-    fn decode(decoder: Decoder) -> Result<Self, WlError> {
-        Ok(Self {
-            callback: decoder.read()?,
-        })
-    }
-}
-
-impl Encode for Sync {
-    const OPCODE: u16 = RequestOp::Sync as u16;
-
-    #[inline]
-    fn encode(self, encoder: Encoder) {
-        encoder.encode1(self.callback);
-    }
-}
-
-// ===== GetRegistry =====
-
-/// `wl_display::get_registry` request.
 #[derive(Debug)]
-pub struct GetRegistry {
-    pub registry: NewId<WlRegistry>,
+pub struct DeleteId {
+    pub id: ObjectId,
 }
 
-impl GetRegistry {
-    /// Create `wl_display::get_registry` request.
-    #[inline]
-    pub const fn new(registry: NewId<WlRegistry>) -> Self {
-        Self { registry }
-    }
-}
-
-impl Decode for GetRegistry {
-    type Output<'a> = Self;
-
-    #[inline]
-    fn decode(decoder: Decoder) -> Result<Self, WlError> {
-        Ok(Self {
-            registry: decoder.read()?,
-        })
-    }
-}
-
-impl Encode for GetRegistry {
-    const OPCODE: u16 = RequestOp::GetRegistry as u16;
-
-    #[inline]
-    fn encode(self, encoder: Encoder) {
-        encoder.encode1(self.registry);
-    }
-}
-
-// ===== Error =====
-
-/// `wl_display::error` enum.
 #[derive(Debug, Clone, Copy)]
 pub enum WlDisplayError {
     /// server couldn't find object
@@ -104,12 +50,27 @@ pub enum WlDisplayError {
     Implementation,
 }
 
-/// `wl_display::error` event.
-#[derive(Debug)]
-pub struct Error<'a> {
-    pub object_id: ObjectId,
-    pub code: u32,
-    pub message: &'a str,
+// ===== constructor =====
+
+impl Sync {
+    #[inline]
+    pub const fn new(callback: NewId<WlCallback>) -> Self {
+        Self { callback }
+    }
+}
+
+impl GetRegistry {
+    #[inline]
+    pub const fn new(registry: NewId<WlRegistry>) -> Self {
+        Self { registry }
+    }
+}
+
+impl DeleteId {
+    #[inline]
+    pub fn new<O: AsObjectId>(object: &O) -> Self {
+        Self { id: object.object_id() }
+    }
 }
 
 impl<'a> Error<'a> {
@@ -149,41 +110,54 @@ impl<'a> Error<'a> {
     }
 }
 
+// ===== impls =====
+
+// `wl_display` does not use derive macro, it has single unique implementation than other interfaces
+
+macro_rules! msg {
+    ($($name:ident$(<$l:lifetime>)?),*) => {$(
+        impl AsInterface for $name$(<$l>)? {
+            const INTERFACE: Interface = Interface::WlDisplay;
+        }
+        impl AsObjectId for $name$(<$l>)? {
+            #[inline]
+            fn object_id(&self) -> ObjectId {
+                ObjectId::wl_display()
+            }
+        }
+    )*};
+}
+msg!(Sync, GetRegistry, Error<'_>, DeleteId);
+
+impl Decode for Sync {
+    type Output<'a> = Self;
+
+    #[inline]
+    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self { callback: decoder.read()? })
+    }
+}
+
+impl Decode for GetRegistry {
+    type Output<'a> = Self;
+
+    #[inline]
+    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+        Ok(Self { registry: decoder.read()? })
+    }
+}
+
 impl Decode for Error<'_> {
     type Output<'a> = Error<'a>;
 
     #[inline]
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
         let mut reader = decoder.reader();
-        Ok(Error {
+        Ok(Self::Output {
             object_id: reader.read()?,
             code: reader.read()?,
             message: reader.read()?,
         })
-    }
-}
-
-impl Encode for Error<'_> {
-    const OPCODE: u16 = EventOp::Error as u16;
-
-    #[inline]
-    fn encode(self, encoder: Encoder) {
-        encode_me!(encoder, self, object_id, code, message);
-    }
-}
-
-// ===== DeleteId =====
-
-/// `wl_display::delete_id` event.
-pub struct DeleteId {
-    id: ObjectId,
-}
-
-impl DeleteId {
-    /// Create `wl_display::delete_id` event.
-    #[inline]
-    pub fn new<O: AsObjectId>(object: &O) -> Self {
-        Self { id: object.object_id() }
     }
 }
 
@@ -192,9 +166,39 @@ impl Decode for DeleteId {
 
     #[inline]
     fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self {
-            id: decoder.read()?,
-        })
+        Ok(Self { id: decoder.read()? })
+    }
+}
+
+impl Encode for Sync {
+    const OPCODE: u16 = RequestOp::Sync as u16;
+
+    #[inline]
+    fn encode(self, encoder: Encoder) {
+        encoder.encode1(self.callback);
+    }
+}
+
+impl Encode for GetRegistry {
+    const OPCODE: u16 = RequestOp::GetRegistry as u16;
+
+    #[inline]
+    fn encode(self, encoder: Encoder) {
+        encoder.encode1(self.registry);
+    }
+}
+
+impl Encode for Error<'_> {
+    const OPCODE: u16 = EventOp::Error as u16;
+
+    #[inline]
+    fn encode(self, encoder: Encoder) {
+        use super::encode::Write;
+        let len = 16 + self.message.size();
+        unsafe { encoder.encode(len) }
+            .write(self.object_id)
+            .write(self.code)
+            .write(self.message);
     }
 }
 
@@ -207,19 +211,3 @@ impl Encode for DeleteId {
     }
 }
 
-macro_rules! msg {
-    ($($name:ident$(<$l:lifetime>)?),*) => {$(
-        impl AsInterface for $name$(<$l>)? {
-            const INTERFACE: Interface = Interface::WlDisplay;
-        }
-
-        impl AsObjectId for $name$(<$l>)? {
-            #[inline]
-            fn object_id(&self) -> ObjectId {
-                ObjectId::wl_display()
-            }
-        }
-    )*};
-}
-
-msg!(Sync, GetRegistry, Error<'_>, DeleteId);

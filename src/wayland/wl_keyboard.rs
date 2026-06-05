@@ -1,73 +1,43 @@
 use crate::wayland::prelude::*;
 
-#[derive(Debug, Interface)]
+#[derive(Interface, Debug)]
 pub struct WlKeyboard {
     id: ObjectId,
 }
-
-impl WlKeyboard {
-    /// Create `wl_keyboard::keymap` event.
-    #[inline]
-    pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
-        Message::new(self, Keymap { format, fd, size })
-    }
-}
-
-// ===== Op =====
 
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Keymap,
 }
 
-// ===== Keymap =====
-
-/// `wl_keyboard::keymap` event.
-#[derive(Debug)]
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
 pub struct Keymap {
-    format: KeymapFormat,
-    fd: i32,
-    size: u32,
+    pub format: KeymapFormat,
+    #[fd]
+    pub fd: i32,
+    pub size: u32,
 }
 
-impl Decode for Keymap {
-    type Output<'a> = Self;
-
-    #[inline]
-    fn decode<'a>(mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        let fd = decoder.pop_fd()?;
-        let mut reader = decoder.reader();
-        Ok(Self {
-            format: reader.read()?,
-            fd,
-            size: reader.read()?,
-        })
-    }
-}
-
-impl Encode for Message<Keymap> {
-    const OPCODE: u16 = EventOp::Keymap as u16;
-
-    #[inline]
-    fn encode(self, mut encoder: Encoder) {
-        encoder.push_fd(self.fd);
-        encode_me!(encoder, self, format, size);
-    }
-}
-
-// ===== KeymapFormat =====
-
-/// `wl_keyboard::keymap_format` enum.
 #[derive(Debug, Clone, Copy)]
 pub enum KeymapFormat {
     NoKeymap,
     XkbV1
 }
 
-impl<'a> super::decode::Read<'a> for KeymapFormat {
+// ===== impls =====
+
+impl WlKeyboard {
     #[inline]
-    fn decode(reader: &mut super::decode::Reader<'a>) -> Result<Self, WlError> {
-        match reader.read()? {
+    pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
+        Message::new(self, Keymap { format, fd, size })
+    }
+}
+
+impl super::decode::Read<'_> for KeymapFormat {
+    #[inline]
+    fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {
+        match reader.read::<u32>()? as u8 {
             0 => Ok(Self::NoKeymap),
             1 => Ok(Self::XkbV1),
             _ => Err(WlError::UnknownObject),

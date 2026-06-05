@@ -18,6 +18,12 @@ impl Error {
             span: Span::call_site(),
         }
     }
+
+    pub fn context(self, cx: &str) -> Error {
+        let Self { mut msg, span } = self;
+        msg.insert_str(0, cx);
+        Self { msg, span }
+    }
 }
 
 impl From<Error> for TokenStream {

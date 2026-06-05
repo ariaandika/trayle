@@ -61,7 +61,7 @@ impl Parser {
 
     pub fn peek(&mut self) -> Option<&Tree> {
         if self.cache[0].is_none() {
-            self.cache[0] = self.next();
+            self.cache[0] = self.iter.next();
         }
         self.cache[0].as_ref()
     }
@@ -80,6 +80,13 @@ impl Parser {
 impl Parser {
     next_tree!(next_ident(self) -> Ident);
     try_tree!(ident(self) -> Ident, "identifier");
+
+    pub fn is_punct_of(&mut self, punct: char) -> Option<()> {
+        self.peek().and_then(|e| match e {
+            Tree::Punct(ok) if ok.as_char() == punct => Some(()),
+            _ => None,
+        })
+    }
 
     pub fn next_ident_of(&mut self, expect: &str) -> Option<Ident> {
         self.next_if_map(|e| match e {
@@ -131,7 +138,10 @@ macro_rules! try_tree {
         pub fn $fn(&mut $me) -> Result<$tr, Error> {
             match $me.iter.next() {
                 Some(Tree::$tr(ok)) => Ok(ok),
-                Some(span) => Err(Error::new(concat!("expected ", $ex).into(), span.span())),
+                Some(span) => Err(Error::new(
+                    format!(concat!("expected ", $ex, ", found {:?}"), span),
+                    span.span()
+                )),
                 None => Err(Error::new("unexpected EOF".into(), Span::call_site())),
             }
         }

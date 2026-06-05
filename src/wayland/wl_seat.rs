@@ -2,26 +2,10 @@ use crate::compositor::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
 
-#[derive(Debug, Interface)]
+#[derive(Interface, Debug)]
 pub struct WlSeat {
     id: ObjectId,
 }
-
-impl WlSeat {
-    /// Create `wl_seat::get_keyboard` request.
-    #[inline]
-    pub fn get_keyboard(&self, keyboard: NewId<WlKeyboard>) -> Message<GetKeyboard> {
-        Message::new(self, GetKeyboard { keyboard })
-    }
-
-    /// Create `wl_seat::capabilities` event.
-    #[inline]
-    pub fn capabilities(&self, capabilities: Capability) -> Message<Capabilities> {
-        Message::new(self, Capabilities { capabilities })
-    }
-}
-
-// ===== op =====
 
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum RequestOp {
@@ -29,60 +13,52 @@ pub enum RequestOp {
     GetKeyboard,
 }
 
+#[derive(Message, Debug)]
+#[request(WlSeat)]
+pub struct GetKeyboard {
+    pub keyboard: NewId<WlKeyboard>,
+}
+
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Capabilities,
 }
 
-// ===== GetKeyboard =====
-
-/// `wl_seat::get_keyboard` request.
-#[derive(Debug)]
-pub struct GetKeyboard {
-    pub keyboard: NewId<WlKeyboard>,
-}
-
-impl Decode for GetKeyboard {
-    type Output<'a> = Self;
-
-    #[inline]
-    fn decode(decoder: Decoder) -> Result<Self, WlError> {
-        Ok(Self {
-            keyboard: decoder.read()?,
-        })
-    }
-}
-
-impl Encode for Message<GetKeyboard> {
-    const OPCODE: u16 = RequestOp::GetKeyboard as u16;
-
-    #[inline]
-    fn encode(self, encoder: Encoder) {
-        encoder.encode1(self.keyboard);
-    }
-}
-
-// ===== Capabilities =====
-
-/// `wl_seat::capabilities` event.
+#[derive(Message, Debug)]
+#[event(WlSeat)]
 pub struct Capabilities {
-    capabilities: Capability,
+    pub capabilities: Capability,
 }
 
-impl Decode for Capabilities {
-    type Output<'a> = Self;
+// ===== impls =====
+
+impl WlSeat {
+    #[inline]
+    pub fn get_keyboard(&self, keyboard: NewId<WlKeyboard>) -> Message<GetKeyboard> {
+        Message::new(self, GetKeyboard { keyboard })
+    }
 
     #[inline]
-    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self { capabilities: Capability::from_u32(decoder.read()?)  })
+    pub fn capabilities(&self, capabilities: Capability) -> Message<Capabilities> {
+        Message::new(self, Capabilities { capabilities })
     }
 }
 
-impl Encode for Message<Capabilities> {
-    const OPCODE: u16 = EventOp::Capabilities as u16;
+impl super::decode::Read<'_> for Capability {
+    #[inline]
+    fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {
+        Ok(Self::from_u32(reader.read()?))
+    }
+}
+
+impl super::encode::Write for Capability {
+    #[inline]
+    fn size(&self) -> u16 {
+        4
+    }
 
     #[inline]
-    fn encode(self, encoder: Encoder) {
-        encoder.encode1(self.capabilities.to_u32());
+    fn encode(self, writer: &mut super::encode::Writer) {
+        self.to_u32().encode(writer);
     }
 }

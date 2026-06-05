@@ -1,46 +1,26 @@
 use crate::wayland::prelude::*;
 
-#[derive(Debug, Interface)]
+#[derive(Interface, Debug)]
 pub struct WlCallback {
     id: ObjectId,
 }
-
-impl WlCallback {
-    /// Create `wl_callback::done` event.
-    #[inline]
-    pub fn done(&self, callback_data: u32) -> Message<Done> {
-        Message::new(self, Done { callback_data })
-    }
-}
-
-// ===== Op =====
 
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Done,
 }
 
-// ===== Done =====
-
-#[derive(Debug)]
+#[derive(Message, Debug)]
+#[event(WlCallback)]
 pub struct Done {
     pub callback_data: u32,
 }
 
-impl Decode for Done {
-    type Output<'a> = Done;
+// ===== impls =====
 
+impl WlCallback {
     #[inline]
-    fn decode<'a>(decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-        Ok(Self { callback_data: decoder.read()? })
-    }
-}
-
-impl Encode for Message<Done> {
-    const OPCODE: u16 = EventOp::Done as u16;
-
-    #[inline]
-    fn encode(self, encoder: Encoder) {
-        encoder.encode1(self.callback_data);
+    pub fn done(&self, callback_data: u32) -> Message<Done> {
+        Message::new(self, Done { callback_data })
     }
 }

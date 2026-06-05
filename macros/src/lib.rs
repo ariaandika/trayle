@@ -1,9 +1,9 @@
 use proc_macro::*;
 
-use crate::codegen::generate;
+use crate::codegen::{ToTokens, generate};
 use crate::error::Error;
 use crate::parser::Parser;
-use crate::syntax::Attributes;
+use crate::syntax::{Attributes, Lifetimes};
 
 mod parser;
 mod syntax;
@@ -94,6 +94,126 @@ fn impl_op_code(mut parser: Parser) -> Result<TokenStream, Error> {
             fn to_op(self) -> u16 {
                 self as u16
             }
+        }
+    })
+}
+
+/// Implement `Decode`, `Encode`, `AsInterface`.
+#[proc_macro_derive(Message, attributes(request, event, fd))]
+pub fn message(tokens: TokenStream) -> TokenStream {
+    impl_message(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
+    let attrs = parser.parse::<Attributes>()?;
+    let _ = parser.ident_of("pub")?;
+    let _ = parser.ident_of("struct")?;
+    let name = parser.ident()?;
+    let lf = Lifetimes::parse_opt(&mut parser)?;
+    let plf = lf.as_ref().map(|_|generate!(<'_>));
+
+    let kind_attr = attrs.attrs.into_iter().find_map(|e|{
+        let mut parser = Parser::new(e.tokens);
+        let name = parser.next_ident()?;
+        let opkind = match name.to_string().as_str() {
+            "request" => Ident::new("RequestOp", name.span()),
+            "event" => Ident::new("EventOp", name.span()),
+            _ => return None,
+        };
+        let content = parser.next_group_of(Delimiter::Parenthesis)?;
+        let iface = Parser::new(content.stream()).next_ident()?;
+
+        Some((opkind, iface))
+    });
+    let Some((opkind, iface)) = kind_attr else {
+        return Err(Error::new(
+            "`request` or `event` attribute with interface name is required".into(),
+            name.span()
+        ));
+    };
+
+    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
+    let mut dec_fd = TokenStream::new();
+    let mut dec_read = TokenStream::new();
+    let mut enc_len = Literal::u16_suffixed(8).into_token_stream();
+    let mut enc_fd = TokenStream::new();
+    let mut enc_write = TokenStream::new();
+
+    loop {
+        let is_fd = if body.is_punct_of('#').is_some() {
+            let attrs = body.parse::<Attributes>()?;
+            let _ = body.next_ident_of("pub");
+
+            attrs.attrs.into_iter().any(|e|{
+                match e.tokens.into_iter().next() {
+                    Some(TokenTree::Ident(id)) => id.to_string().as_str() == "fd",
+                    _ => false,
+                }
+            })
+        } else if body.next_ident_of("pub").is_some() {
+            false
+        } else {
+            break;
+        };
+        let name = body.ident()?;
+        let col = body.punct_of(':')?;
+
+        // only support type which does not have comma in the middle
+        while let Some(tree) = body.next() {
+            if let TokenTree::Punct(punct) = tree
+                && punct.as_char() == ','
+            {
+                break;
+            }
+        }
+
+        name.to_tokens(&mut dec_read);
+
+        if is_fd {
+            generate!(let #&name = decoder.pop_fd()?;).into_tokens(&mut dec_fd);
+            generate!(,).into_tokens(&mut dec_read);
+            generate!(encoder.push_fd(self.#name);).into_tokens(&mut enc_fd);
+        } else {
+            col.into_tokens(&mut dec_read);
+            generate!(reader.read()?,).into_tokens(&mut dec_read);
+
+            generate!(+ self.#&name.size()).into_tokens(&mut enc_len);
+            generate!(.write(self.#name)).into_tokens(&mut enc_write);
+        }
+    }
+
+    let coding_mut = if dec_fd.is_empty() {
+        None
+    } else {
+        Some(generate!(mut))
+    };
+
+    Ok(generate! {
+        impl Decode for #&name #&plf {
+            type Output<'a> = #&name #lf;
+
+            #[inline]
+            fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+                #dec_fd
+                let mut reader = decoder.reader();
+                Ok(#&name { #dec_read })
+            }
+        }
+
+        impl Encode for Message<#&name #&plf> {
+            const OPCODE: u16 = #opkind::#&name as u16;
+
+            #[inline]
+            fn encode(self, #coding_mut encoder: Encoder) {
+                use super::encode::Write;
+                #enc_fd
+                let len = #enc_len;
+                unsafe { encoder.encode(len) } #enc_write;
+            }
+        }
+
+        impl AsInterface for #name #plf {
+            const INTERFACE: Interface = Interface::#iface;
         }
     })
 }

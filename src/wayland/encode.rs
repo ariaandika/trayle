@@ -16,17 +16,6 @@ pub trait Encode: Sized + AsObjectId {
 
 // ===== Encoder =====
 
-macro_rules! encode_me {
-    ($en:ident, $me:ident, $($f:ident),*) => {{
-        use super::encode::Write;
-        let len = 8u16$(.wrapping_add($me.$f.size()))*;
-        let mut writer = unsafe { $en.encode(len) };
-        $(writer .write($me.$f);)*
-    }};
-}
-
-pub(super) use encode_me;
-
 pub struct Encoder<'a> {
     id: u32,
     op: u16,
