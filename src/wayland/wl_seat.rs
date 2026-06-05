@@ -32,18 +32,6 @@ pub struct Capabilities {
 
 // ===== impls =====
 
-impl WlSeat {
-    #[inline]
-    pub fn get_keyboard(&self, keyboard: NewId<WlKeyboard>) -> Message<GetKeyboard> {
-        Message::new(self, GetKeyboard { keyboard })
-    }
-
-    #[inline]
-    pub fn capabilities(&self, capabilities: Capability) -> Message<Capabilities> {
-        Message::new(self, Capabilities { capabilities })
-    }
-}
-
 impl super::decode::Read<'_> for Capability {
     #[inline]
     fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {

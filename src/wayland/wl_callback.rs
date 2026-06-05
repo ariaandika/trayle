@@ -15,12 +15,3 @@ pub enum EventOp {
 pub struct Done {
     pub callback_data: u32,
 }
-
-// ===== impls =====
-
-impl WlCallback {
-    #[inline]
-    pub fn done(&self, callback_data: u32) -> Message<Done> {
-        Message::new(self, Done { callback_data })
-    }
-}

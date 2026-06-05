@@ -140,6 +140,8 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut enc_len = Literal::u16_suffixed(8).into_token_stream();
     let mut enc_fd = TokenStream::new();
     let mut enc_write = TokenStream::new();
+    let mut ctor_args = TokenStream::new();
+    let mut ctor = TokenStream::new();
     let mut len = 0;
 
     loop {
@@ -164,12 +166,14 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         let col = body.punct_of(':')?;
 
         // only support type which does not have comma in the middle
+        let mut ty = TokenStream::new();
         while let Some(tree) = body.next() {
-            if let TokenTree::Punct(punct) = tree
+            if let TokenTree::Punct(punct) = &tree
                 && punct.as_char() == ','
             {
                 break;
             }
+            tree.into_tokens(&mut ty)
         }
 
         if len == 1 {
@@ -182,14 +186,17 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         if is_fd {
             generate!(let #&name = decoder.pop_fd()?;).into_tokens(&mut dec_fd);
             generate!(,).into_tokens(&mut dec_read);
-            generate!(encoder.push_fd(self.#name);).into_tokens(&mut enc_fd);
+            generate!(encoder.push_fd(self.#&name);).into_tokens(&mut enc_fd);
         } else {
             col.into_tokens(&mut dec_read);
             generate!(reader.read()?,).into_tokens(&mut dec_read);
 
             generate!(+ self.#&name.size()).into_tokens(&mut enc_len);
-            generate!(.write(self.#name)).into_tokens(&mut enc_write);
+            generate!(.write(self.#&name)).into_tokens(&mut enc_write);
         }
+
+        generate!(, #&name: #ty).into_tokens(&mut ctor_args);
+        generate!(#name,).into_tokens(&mut ctor);
     }
 
     let coding_mut = if dec_fd.is_empty() {
@@ -219,7 +226,22 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         }
     };
 
+    let ctor = if ctor.is_empty() {
+        None
+    } else {
+        let mname = Ident::new(&to_snake(&name.to_string()), name.span());
+        Some(generate! {
+            impl #&iface {
+                pub fn #mname #&lf (&self #ctor_args) -> Message<#&name #&lf> {
+                    Message::new(self, #&name { #ctor })
+                }
+            }
+        })
+    };
+
     Ok(generate! {
+        #ctor
+
         impl Decode for #&name #&plf {
             type Output<'a> = #&name #lf;
 
@@ -242,4 +264,20 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
             const INTERFACE: Interface = Interface::#iface;
         }
     })
+}
+
+fn to_snake(string: &str) -> String {
+    let mut output = String::with_capacity(string.len());
+    let mut chars = string.chars();
+    if let Some(first) = chars.next() {
+        output.extend(first.to_lowercase());
+    }
+    for ch in chars {
+        if ch.is_uppercase() {
+            output.extend(std::iter::once('_').chain(ch.to_lowercase()));
+        } else {
+            output.push(ch);
+        }
+    }
+    output
 }

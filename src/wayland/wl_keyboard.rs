@@ -27,13 +27,6 @@ pub enum KeymapFormat {
 
 // ===== impls =====
 
-impl WlKeyboard {
-    #[inline]
-    pub fn keymap(&self, format: KeymapFormat, fd: i32, size: u32) -> Message<Keymap> {
-        Message::new(self, Keymap { format, fd, size })
-    }
-}
-
 impl super::decode::Read<'_> for KeymapFormat {
     #[inline]
     fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {

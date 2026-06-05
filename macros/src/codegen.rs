@@ -172,6 +172,17 @@ impl ToTokens for Literal {
     }
 }
 
+impl ToTokens for TokenTree {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        match self {
+            TokenTree::Group(g) => g.into_tokens(tokens),
+            TokenTree::Ident(i) => i.into_tokens(tokens),
+            TokenTree::Punct(p) => p.into_tokens(tokens),
+            TokenTree::Literal(l) => l.into_tokens(tokens),
+        }
+    }
+}
+
 impl ToTokens for TokenStream {
     fn into_tokens(self, tokens: &mut TokenStream) {
         tokens.extend(self);

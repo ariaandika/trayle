@@ -34,39 +34,6 @@ pub struct Global<'a> {
 
 // ===== impls =====
 
-impl WlRegistry {
-    #[inline]
-    pub fn bind<'a>(
-        &self,
-        name: u32,
-        id_name: &'a str,
-        id_version: u32,
-        id: ObjectId,
-    ) -> Message<Bind<'a>> {
-        Message::new(
-            self,
-            Bind {
-                name,
-                id_name,
-                id_version,
-                id,
-            },
-        )
-    }
-
-    #[inline]
-    pub fn global<'a>(&self, name: u32, interface: &'a str, version: u32) -> Message<Global<'a>> {
-        Message::new(
-            self,
-            Global {
-                name,
-                interface,
-                version,
-            },
-        )
-    }
-}
-
 impl<'a> Bind<'a> {
     /// Create object from current bind id.
     ///
