@@ -2,11 +2,10 @@ use crate::wayland::prelude::*;
 
 // ===== Op =====
 
-opcode! {
-    pub enum RequestOp {
-        CreatePool,
-        Release,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    CreatePool,
+    Release,
 }
 
 // ===== CreatePool =====

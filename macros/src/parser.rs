@@ -78,6 +78,7 @@ impl Parser {
 // TokenTree
 
 impl Parser {
+    next_tree!(next_ident(self) -> Ident);
     try_tree!(ident(self) -> Ident, "identifier");
 
     pub fn next_ident_of(&mut self, expect: &str) -> Option<Ident> {
@@ -137,4 +138,16 @@ macro_rules! try_tree {
     };
 }
 
-use {try_tree};
+
+macro_rules! next_tree {
+    ($fn:ident($me:ident) -> $tr:ident) => {
+        pub fn $fn(&mut $me) -> Option<$tr> {
+            $me.next_if_map(|e| match e {
+                Tree::$tr(ok) => Ok(ok),
+                tree => Err(tree),
+            })
+        }
+    };
+}
+
+use {try_tree, next_tree};

@@ -23,17 +23,15 @@ impl WlSeat {
 
 // ===== op =====
 
-opcode! {
-    pub enum RequestOp {
-        GetPointer,
-        GetKeyboard,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    GetPointer,
+    GetKeyboard,
 }
 
-opcode! {
-    pub enum EventOp {
-        Capabilities,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Capabilities,
 }
 
 // ===== GetKeyboard =====

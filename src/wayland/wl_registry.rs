@@ -22,16 +22,14 @@ impl WlRegistry {
 
 // ===== Op =====
 
-opcode! {
-    pub enum RequestOp {
-        Bind,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    Bind,
 }
 
-opcode! {
-    pub enum EventOp {
-        Global,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Global,
 }
 
 // ===== Bind =====

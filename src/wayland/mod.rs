@@ -40,10 +40,9 @@ mod prelude {
     pub use super::encode::{Encode, Encoder, WaylandEnum};
     pub use super::interface::{AsInterface, Interface};
 
-    pub(super) use super::op::opcode;
     pub(super) use super::encode::encode_me;
 
-    pub use macros::Interface;
+    pub use macros::{Interface, OpCode};
 }
 
 macro_rules! roundup4 {

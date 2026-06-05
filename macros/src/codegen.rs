@@ -10,6 +10,8 @@ macro_rules! generate {
 }
 
 macro_rules! gen_extends {
+
+    // arbitrary input
     ($tokens:ident #&$i:ident $($tt:tt)*) => {{
         crate::codegen::ToTokens::to_tokens(&$i, &mut $tokens);
         crate::codegen::gen_extends!($tokens $($tt)*);
@@ -18,6 +20,8 @@ macro_rules! gen_extends {
         crate::codegen::ToTokens::into_tokens($i, &mut $tokens);
         crate::codegen::gen_extends!($tokens $($tt)*);
     }};
+
+    // groups
     ($tokens:ident { $($gt:tt)* } $($tt:tt)*) => {{
         crate::codegen::ToTokens::into_tokens(
             Group::new(proc_macro::Delimiter::Brace, crate::codegen::generate!($($gt)*)),
@@ -39,6 +43,8 @@ macro_rules! gen_extends {
         );
         crate::codegen::gen_extends!($tokens $($tt)*);
     }};
+
+    // else
     ($tokens:ident $t:tt $($tt:tt)*) => {{
         crate::codegen::ToTokens::into_tokens(crate::codegen::gen_token!($t), &mut $tokens);
         crate::codegen::gen_extends!($tokens $($tt)*);
@@ -47,14 +53,31 @@ macro_rules! gen_extends {
 }
 
 macro_rules! gen_token {
-    (->) => {[
-        proc_macro::Punct::new('-', Spacing::Joint),
-        proc_macro::Punct::new('>', Spacing::Joint),
-    ]};
     (::) => {[
         proc_macro::Punct::new(':', Spacing::Joint),
         proc_macro::Punct::new(':', Spacing::Joint),
     ]};
+    (==) => {[
+        proc_macro::Punct::new('=', Spacing::Joint),
+        proc_macro::Punct::new('=', Spacing::Joint),
+    ]};
+    (=>) => {[
+        proc_macro::Punct::new('=', Spacing::Joint),
+        proc_macro::Punct::new('>', Spacing::Joint),
+    ]};
+    (<=) => {[
+        proc_macro::Punct::new('<', Spacing::Joint),
+        proc_macro::Punct::new('=', Spacing::Joint),
+    ]};
+    (>=) => {[
+        proc_macro::Punct::new('>', Spacing::Joint),
+        proc_macro::Punct::new('=', Spacing::Joint),
+    ]};
+    (->) => {[
+        proc_macro::Punct::new('-', Spacing::Joint),
+        proc_macro::Punct::new('>', Spacing::Joint),
+    ]};
+    (_) => {proc_macro::Ident::new("_", Span::call_site())};
     (=) => {proc_macro::Punct::new('=', Spacing::Alone)};
     (<) => {proc_macro::Punct::new('<', Spacing::Alone)};
     (>) => {proc_macro::Punct::new('>', Spacing::Alone)};
@@ -75,6 +98,7 @@ macro_rules! gen_token {
     (:) => {proc_macro::Punct::new(':', Spacing::Alone)};
     (#) => {proc_macro::Punct::new('#', Spacing::Alone)};
     (?) => {proc_macro::Punct::new('?', Spacing::Alone)};
+    ($l:literal) => {proc_macro::Literal::new(stringify!($l), proc_macro::Span::call_site())};
     ($t:ident) => {proc_macro::Ident::new(stringify!($t), proc_macro::Span::call_site())};
     () => {};
 }
@@ -125,5 +149,11 @@ impl ToTokens for Group {
 impl ToTokens for Literal {
     fn into_tokens(self, tokens: &mut TokenStream) {
         tokens.extend([self]);
+    }
+}
+
+impl ToTokens for TokenStream {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        tokens.extend(self);
     }
 }

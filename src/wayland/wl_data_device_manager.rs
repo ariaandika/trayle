@@ -4,12 +4,11 @@ use crate::wayland::wl_data_source::WlDataSource;
 
 // ===== Op =====
 
-opcode! {
-    pub enum RequestOp {
-        CreateDataSource,
-        GetDataDevice,
-        Release,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    CreateDataSource,
+    GetDataDevice,
+    Release,
 }
 
 // ===== CreateDataSource =====

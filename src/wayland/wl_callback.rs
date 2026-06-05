@@ -15,10 +15,9 @@ impl WlCallback {
 
 // ===== Op =====
 
-opcode! {
-    pub enum EventOp {
-        Done,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Done,
 }
 
 // ===== Done =====

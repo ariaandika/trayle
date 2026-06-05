@@ -3,10 +3,9 @@ use crate::wayland::wl_surface::WlSurface;
 
 // ===== Op =====
 
-opcode! {
-    pub enum RequestOp {
-        CreateSurface,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    CreateSurface,
 }
 
 // ===== CreateSurace =====

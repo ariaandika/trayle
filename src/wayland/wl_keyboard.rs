@@ -15,10 +15,9 @@ impl WlKeyboard {
 
 // ===== Op =====
 
-opcode! {
-    pub enum EventOp {
-        Keymap,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Keymap,
 }
 
 // ===== Keymap =====

@@ -4,18 +4,16 @@ use crate::wayland::wl_registry::WlRegistry;
 
 // ===== Op =====
 
-opcode! {
-    pub enum RequestOp {
-        Sync,
-        GetRegistry,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    Sync,
+    GetRegistry,
 }
 
-opcode! {
-    pub enum EventOp {
-        Error,
-        DeleteId,
-    }
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Error,
+    DeleteId,
 }
 
 // ===== Sync =====
