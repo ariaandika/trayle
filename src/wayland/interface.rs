@@ -51,3 +51,7 @@ pub trait AsInterface {
     /// The interface of this object is associated with.
     const INTERFACE: Interface;
 }
+
+impl<T: AsInterface> AsInterface for super::NewId<T> {
+    const INTERFACE: Interface = T::INTERFACE;
+}

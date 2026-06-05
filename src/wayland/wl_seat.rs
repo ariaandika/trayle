@@ -59,11 +59,6 @@ impl Encode for Message<GetKeyboard> {
     const OPCODE: u16 = RequestOp::GetKeyboard as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encoder.encode1(self.keyboard);
     }
@@ -87,11 +82,6 @@ impl Decode for Capabilities {
 
 impl Encode for Message<Capabilities> {
     const OPCODE: u16 = EventOp::Capabilities as u16;
-
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
 
     #[inline]
     fn encode(self, encoder: Encoder) {

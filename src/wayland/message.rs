@@ -2,35 +2,42 @@ use crate::wayland::{AsObjectId, MessageBuf, ObjectId, WlError};
 
 // ===== Message =====
 
+#[derive(Debug)]
 pub struct Message<T> {
     id: ObjectId,
     payload: T,
 }
 
 impl<T> Message<T> {
+    #[inline]
     pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
         Self {
             id: object.object_id(),
             payload,
         }
     }
-
-    pub fn object_id(&self) -> ObjectId {
-        self.id
-    }
 }
 
 impl<T> std::ops::Deref for Message<T> {
     type Target = T;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.payload
     }
 }
 
 impl<T> std::ops::DerefMut for Message<T> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.payload
+    }
+}
+
+impl<T> AsObjectId for Message<T> {
+    #[inline]
+    fn object_id(&self) -> ObjectId {
+        self.id
     }
 }
 

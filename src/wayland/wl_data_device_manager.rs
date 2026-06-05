@@ -34,11 +34,6 @@ impl Encode for Message<CreateDataSource> {
     const OPCODE: u16 = RequestOp::CreateDataSource as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encoder.encode1(self.data_source);
     }
@@ -69,11 +64,6 @@ impl Decode for GetDataDevice {
 
 impl Encode for Message<GetDataDevice> {
     const OPCODE: u16 = RequestOp::GetDataDevice as u16;
-
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
 
     #[inline]
     fn encode(self, encoder: Encoder) {

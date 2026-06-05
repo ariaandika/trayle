@@ -39,11 +39,6 @@ impl Encode for Message<CreatePool> {
     const OPCODE: u16 = RequestOp::CreatePool as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
-
-    #[inline]
     fn encode(self, mut encoder: Encoder) {
         encoder.push_fd(self.fd);
         const SIZE: u16 = const { 8u16 + 4 + 4 };

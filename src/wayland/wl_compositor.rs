@@ -31,11 +31,6 @@ impl Encode for Message<CreateSurface> {
     const OPCODE: u16 = RequestOp::CreateSurface as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encoder.encode1(self.surface);
     }

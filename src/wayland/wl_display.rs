@@ -49,11 +49,6 @@ impl Encode for Sync {
     const OPCODE: u16 = RequestOp::Sync as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        ObjectId::wl_display()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encoder.encode1(self.callback);
     }
@@ -88,11 +83,6 @@ impl Decode for GetRegistry {
 
 impl Encode for GetRegistry {
     const OPCODE: u16 = RequestOp::GetRegistry as u16;
-
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        ObjectId::wl_display()
-    }
 
     #[inline]
     fn encode(self, encoder: Encoder) {
@@ -179,11 +169,6 @@ impl Encode for Error<'_> {
     const OPCODE: u16 = EventOp::Error as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        ObjectId::wl_display()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encode_me!(encoder, self, object_id, code, message);
     }
@@ -219,12 +204,24 @@ impl Encode for DeleteId {
     const OPCODE: u16 = EventOp::DeleteId as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        ObjectId::wl_display()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encoder.encode1(self.id);
     }
 }
+
+macro_rules! msg {
+    ($($name:ident$(<$l:lifetime>)?),*) => {$(
+        impl AsInterface for $name$(<$l>)? {
+            const INTERFACE: Interface = Interface::WlDisplay;
+        }
+
+        impl AsObjectId for $name$(<$l>)? {
+            #[inline]
+            fn object_id(&self) -> ObjectId {
+                ObjectId::wl_display()
+            }
+        }
+    )*};
+}
+
+msg!(Sync, GetRegistry, Error<'_>, DeleteId);

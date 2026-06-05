@@ -2,8 +2,6 @@ use std::num::NonZeroU32;
 
 // ===== traits =====
 
-// the naming follows fd convention: FromRawFd and AsRawFd
-
 /// Create an object with given object id.
 pub trait FromObjectId {
     /// Create this object with given object id.
@@ -88,6 +86,7 @@ impl PartialEq<u32> for ObjectId {
 }
 
 impl std::fmt::Display for ObjectId {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.0.fmt(f)
     }
@@ -146,13 +145,22 @@ impl<T> AsObjectId for NewId<T> {
 impl<T> Copy for NewId<T> {}
 
 impl<T> Clone for NewId<T> {
+    #[inline]
     fn clone(&self) -> Self {
         *self
     }
 }
 
 impl<T> std::fmt::Debug for NewId<T> {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("NewId").field("id", &self.id).finish()
+        self.id.fmt(f)
+    }
+}
+
+impl<T> std::fmt::Display for NewId<T> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.id.fmt(f)
     }
 }

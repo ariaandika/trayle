@@ -76,11 +76,6 @@ impl Encode for Message<Bind<'_>> {
     const OPCODE: u16 = RequestOp::Bind as u16;
 
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
-
-    #[inline]
     fn encode(self, encoder: Encoder) {
         encode_me!(encoder, self, name, id_name, id_version, id);
     }
@@ -112,11 +107,6 @@ impl Decode for Global<'static> {
 
 impl Encode for Message<Global<'_>> {
     const OPCODE: u16 = EventOp::Global as u16;
-
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id()
-    }
 
     #[inline]
     fn encode(self, encoder: Encoder) {

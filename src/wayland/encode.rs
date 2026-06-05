@@ -1,10 +1,8 @@
-use crate::wayland::{MessageBuf, NewId, ObjectId, roundup4};
+use crate::wayland::{AsObjectId, MessageBuf, NewId, ObjectId, roundup4};
 
 /// Encodable wayland message.
-pub trait Encode: Sized {
+pub trait Encode: Sized + AsObjectId {
     const OPCODE: u16;
-
-    fn object_id(&self) -> ObjectId;
 
     fn encode(self, encoder: Encoder);
 
