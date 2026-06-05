@@ -133,11 +133,14 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
     };
 
     let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
+    let mut dec_1 = None;
     let mut dec_fd = TokenStream::new();
     let mut dec_read = TokenStream::new();
+    let mut enc_1 = None;
     let mut enc_len = Literal::u16_suffixed(8).into_token_stream();
     let mut enc_fd = TokenStream::new();
     let mut enc_write = TokenStream::new();
+    let mut len = 0;
 
     loop {
         let is_fd = if body.is_punct_of('#').is_some() {
@@ -155,6 +158,8 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         } else {
             break;
         };
+        len += (!is_fd) as usize;
+
         let name = body.ident()?;
         let col = body.punct_of(':')?;
 
@@ -165,6 +170,11 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
             {
                 break;
             }
+        }
+
+        if len == 1 {
+            dec_1 = Some(name.clone());
+            enc_1 = Some(name.clone());
         }
 
         name.to_tokens(&mut dec_read);
@@ -188,15 +198,34 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         Some(generate!(mut))
     };
 
+    let dec_impl = if len == 1 {
+        generate! { Ok(#&name { #dec_1: decoder.read()? }) }
+    } else {
+        generate! {
+            #dec_fd
+            let mut reader = decoder.reader();
+            Ok(#&name { #dec_read })
+        }
+    };
+
+    let enc_impl = if len == 1 {
+        generate! { encoder.encode1(self.#enc_1); }
+    } else {
+        generate! {
+            use super::encode::Write;
+            #enc_fd
+            let len = #enc_len;
+            unsafe { encoder.encode(len) } #enc_write;
+        }
+    };
+
     Ok(generate! {
         impl Decode for #&name #&plf {
             type Output<'a> = #&name #lf;
 
             #[inline]
             fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-                #dec_fd
-                let mut reader = decoder.reader();
-                Ok(#&name { #dec_read })
+                #dec_impl
             }
         }
 
@@ -205,10 +234,7 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
 
             #[inline]
             fn encode(self, #coding_mut encoder: Encoder) {
-                use super::encode::Write;
-                #enc_fd
-                let len = #enc_len;
-                unsafe { encoder.encode(len) } #enc_write;
+                #enc_impl
             }
         }
 
