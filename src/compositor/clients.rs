@@ -25,9 +25,15 @@ impl ClientId {
     }
 }
 
+impl std::fmt::Debug for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.0.fmt(f)
+    }
+}
+
 impl std::fmt::Display for ClientId {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        (self.0 as u32).fmt(f)
+        self.0.fmt(f)
     }
 }
 
@@ -56,14 +62,15 @@ impl AsRawFd for Client {
 // ===== ClientMut =====
 
 pub struct ClientMut<'a> {
+    id: ClientId,
     state: &'a mut Client,
     write_buf: &'a mut MessageBuf,
 }
 
 impl<'a> ClientMut<'a> {
     #[inline]
-    pub fn new(state: &'a mut Client, write_buf: &'a mut MessageBuf) -> Self {
-        Self { state, write_buf }
+    pub fn new(id: ClientId, state: &'a mut Client, write_buf: &'a mut MessageBuf) -> Self {
+        Self { id, state, write_buf }
     }
 
     #[inline]
@@ -95,6 +102,22 @@ impl<'a> ClientMut<'a> {
     #[inline]
     pub fn send_global_error(&mut self, error: WlError) {
         Error::from_wl_error(ObjectId::wl_display(), error).encode_to(self.write_buf);
+    }
+}
+
+impl<'a> ClientMut<'a> {
+    #[inline]
+    pub fn log_error(&self, args: std::fmt::Arguments) {
+        self.log(crate::log::Level::Error, args);
+    }
+
+    #[inline]
+    pub fn log_debug(&self, args: std::fmt::Arguments) {
+        self.log(crate::log::Level::Debug, args);
+    }
+
+    fn log(&self, level: crate::log::Level, args: std::fmt::Arguments) {
+        crate::log::logger::log_me(level, format_args!("client#{} ", self.id), args);
     }
 }
 

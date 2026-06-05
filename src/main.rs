@@ -39,14 +39,14 @@ fn event_loop() -> Result<(), FatalError> {
 
     loop {
         let Some((key, interest)) = events.next_event() else {
-            log::trace!(epoll, "blocking");
+            log::trace!(target: "polling", "blocking");
             log::flush();
             events.wait(None);
             continue;
         };
 
         if key == SIGFD_KEY {
-            log::info!(sigfd, "{} signal received", sigfd.read());
+            log::info!("{} signal received", sigfd.read());
             break;
         }
 
@@ -56,10 +56,10 @@ fn event_loop() -> Result<(), FatalError> {
                     Ok(fd) => {
                         let (id, client) = clients.insert(fd);
                         events.add(id.to_u64(), client);
-                        log::debug!(client, "id={id} connected");
+                        log::debug!(target: format_args!("client#{id}"), "connected");
                     }
                     Err(err) => {
-                        log::error!(listener, "{err}");
+                        log::error!(target: "listener", "{err}");
                         break;
                     }
                 }
@@ -73,7 +73,7 @@ fn event_loop() -> Result<(), FatalError> {
         let id = ClientId::from_u64(key);
 
         let Some(client) = clients.get_mut(id) else {
-            log::warn!(epoll, "unknown client id from event key: {id}");
+            log::warn!(target: "polling", "unknown client id from event key: {id}");
             continue;
         };
 
@@ -86,7 +86,7 @@ fn event_loop() -> Result<(), FatalError> {
             }
 
             if interest.is_read() {
-                let mut client = ClientMut::new(client, &mut write_buf);
+                let mut client = ClientMut::new(id, client, &mut write_buf);
                 loop {
                     if read_buf.has_frame() {
                         router(&mut read_buf, &mut client, &mut compositor)
@@ -120,7 +120,7 @@ fn event_loop() -> Result<(), FatalError> {
         if result.is_ok() {
             if !read_buf.is_empty() || !write_buf.is_empty() {
                 log::warn!(
-                    client,
+                    target: format_args!("client#{id}"),
                     "partial message read: {}, write: {}",
                     read_buf.len(),
                     write_buf.len()
@@ -135,7 +135,7 @@ fn event_loop() -> Result<(), FatalError> {
             }
             events.delete(client);
             clients.remove(id);
-            log::debug!(client, "id={id} disconnected");
+            log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
 
         read_buf.clear();
@@ -185,7 +185,7 @@ pub fn router(
             )* }
         };
         (@CALL $iface:ident $req:ident todo) => {{
-            compositor.todo(interface, op)
+            compositor.todo(interface, op, client)
         }};
         (@CALL $iface:ident $req:ident) => {
             compositor.call_handler(interface, $iface::$req::decode_with(frame)?, client)
@@ -195,7 +195,7 @@ pub fn router(
                 $(
                     Interface::$iface => handle_me!(@OP $iface {$($tt)*}),
                 )*
-                _ => compositor.todo(interface, op),
+                _ => compositor.todo(interface, op, client),
             }
         };
     }
@@ -227,7 +227,7 @@ pub fn router(
 impl Compositor {
     fn call_handler<Request>(
         &mut self,
-        _interface: Interface,
+        interface: Interface,
         request: Request,
         client: &mut ClientMut,
     ) -> Result<(), WlError>
@@ -235,13 +235,17 @@ impl Compositor {
         Self: RequestHandler<Request>,
         Request: std::fmt::Debug,
     {
-        #[cfg(debug_assertions)]
-        log::trace!(client, "<- {_interface:?}::{request:?}");
+        client.log_debug(format_args!("<- {interface:?}::{request:?}"));
         self.handle(request, client)
     }
 
-    fn todo(&mut self, interface: Interface, op: u16) -> Result<(), WlError> {
-        log::error!(client, "<- `{interface:?}::{op}` is not yet implemented");
+    fn todo<Op: std::fmt::Debug>(
+        &mut self,
+        interface: Interface,
+        op: Op,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError> {
+        client.log_error(format_args!("`{interface:?}::{op:?}` is not yet implemented"));
         WlError::todo()
     }
 }
@@ -365,7 +369,7 @@ struct HandleError;
 impl From<torio::wayland::buffer::ReadError> for HandleError {
     fn from(err: torio::wayland::buffer::ReadError) -> Self {
         if !err.is_connection_aborted() {
-            log::error!(client, "failed to read socket: {err}");
+            log::error!("failed to read socket: {err}");
         }
         Self
     }
@@ -373,14 +377,14 @@ impl From<torio::wayland::buffer::ReadError> for HandleError {
 
 impl From<torio::wayland::buffer::WriteError> for HandleError {
     fn from(err: torio::wayland::buffer::WriteError) -> Self {
-        log::error!(client, "failed to write socket: {err}");
+        log::error!("failed to write socket: {err}");
         Self
     }
 }
 
 impl From<WlError> for HandleError {
     fn from(err: WlError) -> Self {
-        log::error!(client, "failed to handle request: {err}");
+        log::error!("failed to handle request: {err}");
         Self
     }
 }
@@ -389,7 +393,7 @@ pub struct FatalError;
 
 impl<E: std::fmt::Display> From<E> for FatalError {
     fn from(value: E) -> Self {
-        log::error!(setup, "{value}");
+        log::error!("{value}");
         Self
     }
 }
