@@ -1,6 +1,6 @@
 use crate::wayland::prelude::*;
 
-simple_object! {
-    pub struct WlDataSource;
+#[derive(Debug, Interface)]
+pub struct WlDataSource {
+    id: ObjectId,
 }
-

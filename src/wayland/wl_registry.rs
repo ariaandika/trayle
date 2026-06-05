@@ -1,8 +1,8 @@
 use crate::wayland::prelude::*;
 
-simple_object! {
-    /// `wl_registry` interface.
-    pub struct WlRegistry;
+#[derive(Debug, Interface)]
+pub struct WlRegistry {
+    id: ObjectId,
 }
 
 #[rustfmt::skip]

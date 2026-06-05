@@ -1,8 +1,8 @@
 use crate::wayland::prelude::*;
 
-simple_object! {
-    /// `wl_keyboard` interface.
-    pub struct WlKeyboard;
+#[derive(Debug, Interface)]
+pub struct WlKeyboard {
+    id: ObjectId,
 }
 
 impl WlKeyboard {

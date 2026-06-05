@@ -2,9 +2,9 @@ use crate::compositor::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
 
-simple_object! {
-    /// `wl_seat` interface.
-    pub struct WlSeat;
+#[derive(Debug, Interface)]
+pub struct WlSeat {
+    id: ObjectId,
 }
 
 impl WlSeat {

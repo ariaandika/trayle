@@ -5,7 +5,8 @@ edition = "2024"
 
 [dependencies]
 libc = "0.2.185"
+macros = { version = "0.1.0", path = "macros" }
 
 [workspace]
-members = ["codegen", "tomo"]
+members = ["codegen", "macros", "tomo"]
 resolver = "2"

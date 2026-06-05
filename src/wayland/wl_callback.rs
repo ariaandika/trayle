@@ -1,8 +1,8 @@
 use crate::wayland::prelude::*;
 
-simple_object! {
-    /// `wl_callback` interface.
-    pub struct WlCallback;
+#[derive(Debug, Interface)]
+pub struct WlCallback {
+    id: ObjectId,
 }
 
 impl WlCallback {

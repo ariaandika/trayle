@@ -1,0 +1,35 @@
+use proc_macro::*;
+
+// ===== Error =====
+
+pub struct Error {
+    msg: String,
+    span: Span,
+}
+
+impl Error {
+    pub fn new(msg: String, span: Span) -> Self {
+        Self { msg, span }
+    }
+
+    pub fn eof() -> Error {
+        Self {
+            msg: "unexpected EOF".into(),
+            span: Span::call_site(),
+        }
+    }
+}
+
+impl From<Error> for TokenStream {
+    fn from(value: Error) -> Self {
+        <_>::from_iter([
+            TokenTree::Ident(Ident::new("compile_error", value.span)),
+            Punct::new('!', Spacing::Alone).into(),
+            Group::new(
+                Delimiter::Parenthesis,
+                <_>::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
+            ).into(),
+            Punct::new(';', Spacing::Alone).into(),
+        ])
+    }
+}

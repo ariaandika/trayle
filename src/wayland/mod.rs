@@ -41,8 +41,9 @@ mod prelude {
     pub use super::interface::{AsInterface, Interface};
 
     pub(super) use super::op::opcode;
-    pub(super) use super::object::simple_object;
     pub(super) use super::encode::encode_me;
+
+    pub use macros::Interface;
 }
 
 macro_rules! roundup4 {
