@@ -1,4 +1,4 @@
-use crate::wayland::{AsObjectId, MessageBuf, ObjectId, WlError};
+use crate::wayland::{AsInterface, AsObjectId, Interface, MessageBuf, ObjectId, WlError};
 
 // ===== Message =====
 
@@ -39,6 +39,10 @@ impl<T> AsObjectId for Message<T> {
     fn object_id(&self) -> ObjectId {
         self.id
     }
+}
+
+impl<T: AsInterface> AsInterface for Message<T> {
+    const INTERFACE: Interface = T::INTERFACE;
 }
 
 // ===== Frame =====
