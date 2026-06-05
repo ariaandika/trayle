@@ -200,7 +200,7 @@ impl DeleteId {
     /// Create `wl_display::delete_id` event.
     #[inline]
     pub fn new<O: AsObjectId>(object: &O) -> Self {
-        Self { id: object.as_object_id() }
+        Self { id: object.object_id() }
     }
 }
 

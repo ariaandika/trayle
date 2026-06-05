@@ -67,7 +67,7 @@ impl Objects {
     #[inline]
     pub fn insert<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
         self.insert_inner(
-            object.as_object_id(),
+            object.object_id(),
             Some(Object {
                 interface: O::INTERFACE,
                 value,
@@ -86,7 +86,7 @@ impl Objects {
     /// This has the same effect of inserting the id and immediately remove it.
     #[inline]
     pub fn use_one<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
-        self.insert_inner(object.as_object_id(), None)
+        self.insert_inner(object.object_id(), None)
     }
 
     fn insert_inner(&mut self, id: ObjectId, object: Option<Object>) -> Result<(), WlError> {

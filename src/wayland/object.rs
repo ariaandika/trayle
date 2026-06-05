@@ -25,7 +25,7 @@ macro_rules! simple_object {
 
         impl AsObjectId for $struct_name {
             #[inline]
-            fn as_object_id(&self) -> ObjectId {
+            fn object_id(&self) -> ObjectId {
                 self.id
             }
         }

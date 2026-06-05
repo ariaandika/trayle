@@ -13,7 +13,7 @@ pub trait FromObjectId {
 /// Object that contains an object id.
 pub trait AsObjectId {
     /// Returns this object id.
-    fn as_object_id(&self) -> ObjectId;
+    fn object_id(&self) -> ObjectId;
 }
 
 // ===== ObjectId =====
@@ -75,7 +75,7 @@ impl FromObjectId for ObjectId {
 
 impl AsObjectId for ObjectId {
     #[inline]
-    fn as_object_id(&self) -> ObjectId {
+    fn object_id(&self) -> ObjectId {
         *self
     }
 }
@@ -138,7 +138,7 @@ impl<T> FromObjectId for NewId<T> {
 
 impl<T> AsObjectId for NewId<T> {
     #[inline]
-    fn as_object_id(&self) -> ObjectId {
+    fn object_id(&self) -> ObjectId {
         self.id
     }
 }

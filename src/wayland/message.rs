@@ -10,7 +10,7 @@ pub struct Message<T> {
 impl<T> Message<T> {
     pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
         Self {
-            id: object.as_object_id(),
+            id: object.object_id(),
             payload,
         }
     }
