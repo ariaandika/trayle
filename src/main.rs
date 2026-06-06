@@ -235,7 +235,7 @@ impl Compositor {
         Self: RequestHandler<Request>,
         Request: std::fmt::Debug,
     {
-        client.log_debug(format_args!("<- {interface:?}::{request:?}"));
+        client.log_debug(format_args!("<- {interface}::{request:?}"));
         self.handle(request, client)
     }
 
@@ -245,7 +245,7 @@ impl Compositor {
         op: Op,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        client.log_error(format_args!("`{interface:?}::{op:?}` is not yet implemented"));
+        client.log_error(format_args!("`{interface}::{op:?}` is not yet implemented"));
         WlError::todo()
     }
 }

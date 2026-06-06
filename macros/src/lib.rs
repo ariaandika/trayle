@@ -341,7 +341,7 @@ fn impl_protocol(mut parser: Parser) -> Result<TokenStream, Error> {
         let semi = parser.punct_of(';')?;
 
         let name_string = name.to_string();
-        let name_camel = Ident::new(&to_camel(&name_string), name.span());
+        let name_camel = Ident::new(&to_camel(&name_string), Span::call_site());
 
         variants.extend([
             TokenTree::from(name_camel.clone()),
@@ -371,11 +371,19 @@ fn impl_protocol(mut parser: Parser) -> Result<TokenStream, Error> {
             #variants
         }
 
-        impl #name {
+        impl #&name {
             #[doc = " Returns lower cased name of current interface."]
+            #[inline]
             pub fn name(&self) -> &'static str {
-                const LOOKUP: [&'static str; #len] = [#names];
+                static LOOKUP: [&'static str; #len] = [#names];
                 unsafe { LOOKUP.get_unchecked(*self as usize) }
+            }
+        }
+
+        impl std::fmt::Display for #name {
+            #[inline]
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                self.name().fmt(f)
             }
         }
 
