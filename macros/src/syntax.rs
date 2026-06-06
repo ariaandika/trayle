@@ -6,6 +6,12 @@ use crate::Error;
 use crate::codegen::ToTokens;
 use crate::parser::{Parse, Parser};
 
+impl Parse for Ident {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        parser.ident()
+    }
+}
+
 // ===== Lifetime =====
 
 #[derive(Clone)]
@@ -94,6 +100,13 @@ impl Parse for Attribute {
     }
 }
 
+impl ToTokens for Attribute {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        self.hash.into_tokens(tokens);
+        Group::new(self.delim, self.tokens).into_tokens(tokens);
+    }
+}
+
 pub struct Attributes {
     pub attrs: Vec<Attribute>,
 }
@@ -105,6 +118,14 @@ impl Parse for Attributes {
             attrs.push(parser.parse()?);
         }
         Ok(Self { attrs })
+    }
+}
+
+impl ToTokens for Attributes {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        for attr in self.attrs {
+            attr.into_tokens(tokens);
+        }
     }
 }
 

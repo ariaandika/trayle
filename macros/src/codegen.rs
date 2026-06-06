@@ -104,7 +104,7 @@ macro_rules! gen_token {
         proc_macro::Punct::new('\'', Spacing::Joint),
         proc_macro::Ident::new(&stringify!($lf)[1..], Span::call_site()),
     )};
-    ($l:literal) => {proc_macro::Literal::new(stringify!($l), proc_macro::Span::call_site())};
+    ($l:literal) => {proc_macro::Literal::string($l)};
     ($t:ident) => {proc_macro::Ident::new(stringify!($t), proc_macro::Span::call_site())};
     () => {};
 }

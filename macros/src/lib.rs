@@ -3,7 +3,7 @@ use proc_macro::*;
 use crate::codegen::{ToTokens, generate};
 use crate::error::Error;
 use crate::parser::Parser;
-use crate::syntax::{Attributes, Lifetimes};
+use crate::syntax::{Attribute, Attributes, Lifetimes};
 
 mod parser;
 mod syntax;
@@ -15,6 +15,54 @@ mod error;
 pub fn interface(tokens: TokenStream) -> TokenStream {
     impl_interface(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
+
+/// Implement `OpCode`.
+#[proc_macro_derive(OpCode)]
+pub fn op_code(tokens: TokenStream) -> TokenStream {
+    impl_op_code(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+/// Implement `Decode`, `Encode`, `AsInterface`, and add constructor of the message in the interface
+/// object.
+#[proc_macro_derive(Message, attributes(request, event, fd))]
+pub fn message(tokens: TokenStream) -> TokenStream {
+    impl_message(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+/// Define an enum containing all implemented interfaces.
+///
+/// Define module that reexports all interface modules to upper camel case.
+///
+/// For interface that want to be added to the enum, but not yet implemented, add the `#[todo]`
+/// attribute.
+///
+/// The enum will also have a method that returns the snake cased wayland name.
+///
+/// ```ignore
+/// protocol! {
+///     /// Reexport interfaces as upper camel case.
+///     pub mod interfaces;
+///
+///     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///     pub enum Interface;
+///
+///     pub mod wl_display;
+///     pub mod wl_registry;
+///
+///     // variant will be defined, but module will not be declared
+///     #[todo]
+///     pub mod wp_presentation;
+/// }
+///
+/// let wl_display = Interface::WlDisplay;
+/// assert_eq!(wl_display.name(), "wl_display");
+/// ```
+#[proc_macro]
+pub fn protocol(tokens: TokenStream) -> TokenStream {
+    impl_protocol(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+// ===== implementations =====
 
 fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
     let _attrs = parser.parse::<Attributes>()?;
@@ -39,12 +87,6 @@ fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
             const INTERFACE: Interface = Interface::#name;
         }
     })
-}
-
-/// Implement `OpCode`.
-#[proc_macro_derive(OpCode)]
-pub fn op_code(tokens: TokenStream) -> TokenStream {
-    impl_op_code(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
 fn impl_op_code(mut parser: Parser) -> Result<TokenStream, Error> {
@@ -96,12 +138,6 @@ fn impl_op_code(mut parser: Parser) -> Result<TokenStream, Error> {
             }
         }
     })
-}
-
-/// Implement `Decode`, `Encode`, `AsInterface`.
-#[proc_macro_derive(Message, attributes(request, event, fd))]
-pub fn message(tokens: TokenStream) -> TokenStream {
-    impl_message(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
 fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
@@ -264,6 +300,110 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
             const INTERFACE: Interface = Interface::#iface;
         }
     })
+}
+
+fn impl_protocol(mut parser: Parser) -> Result<TokenStream, Error> {
+    let mod_attrs = parser.parse::<Attributes>()?;
+    let mod_vis = parser.ident_of("pub")?;
+    let mod_kw = parser.ident_of("mod")?;
+    let mod_name = parser.ident()?;
+    let _ = parser.punct_of(';')?;
+
+    let attrs = parser.parse::<Attributes>()?;
+    let vis = parser.ident_of("pub")?;
+    let enum_kw = parser.ident_of("enum")?;
+    let name = parser.ident()?;
+    let _ = parser.punct_of(';')?;
+
+    let mut mod_declare = TokenStream::new();
+    let mut reexports = TokenStream::new();
+    let mut variants = TokenStream::new();
+    let mut names = TokenStream::new();
+    let mut len = 0;
+
+    loop {
+        let (vis, attr) = if parser.is_punct_of('#').is_some() {
+            let attr = parser.parse::<Attribute>()?;
+            let vis = parser.ident_of("pub")?;
+            (vis, Some(attr))
+        } else if let Some(vis) = parser.next_ident_of("pub") {
+            (vis, None)
+        } else {
+            break;
+        };
+        len += 1;
+
+        let is_todo = attr
+            .and_then(|attr| Parser::new(attr.tokens).next_ident_of("todo"))
+            .is_some();
+        let mod_kw = parser.ident_of("mod")?;
+        let name = parser.ident()?;
+        let semi = parser.punct_of(';')?;
+
+        let name_string = name.to_string();
+        let name_camel = Ident::new(&to_camel(&name_string), name.span());
+
+        variants.extend([
+            TokenTree::from(name_camel.clone()),
+            Punct::new(',', Spacing::Alone).into(),
+        ]);
+        names.extend([
+            TokenTree::from(Literal::string(&name_string)),
+            Punct::new(',', Spacing::Alone).into(),
+        ]);
+
+        if !is_todo {
+            generate!(pub use super::#&name as #name_camel;).into_tokens(&mut reexports);
+            mod_declare.extend([
+                TokenTree::from(vis),
+                mod_kw.into(),
+                name.into(),
+                semi.into(),
+            ])
+        }
+    }
+
+    let len = Literal::usize_unsuffixed(len);
+
+    Ok(generate! {
+        #attrs
+        #vis #enum_kw #&name {
+            #variants
+        }
+
+        impl #name {
+            #[doc = " Returns lower cased name of current interface."]
+            pub fn name(&self) -> &'static str {
+                const LOOKUP: [&'static str; #len] = [#names];
+                unsafe { LOOKUP.get_unchecked(*self as usize) }
+            }
+        }
+
+        #mod_declare
+
+        #mod_attrs
+        #mod_vis #mod_kw #mod_name {
+            #reexports
+        }
+    })
+}
+
+fn to_camel(string: &str) -> String {
+    let mut output = String::with_capacity(string.len());
+    let mut chars = string.chars();
+    if let Some(first) = chars.next() {
+        output.extend(first.to_uppercase());
+    }
+    while let Some(ch) = chars.next() {
+        if ch == '_' {
+            if let Some(next) = chars.next() {
+                output.extend(next.to_uppercase());
+            }
+        } else {
+            output.push(ch);
+        }
+    }
+    output
 }
 
 fn to_snake(string: &str) -> String {

@@ -166,7 +166,7 @@ pub fn router(
     client: &mut ClientMut,
     compositor: &mut Compositor,
 ) -> Result<(), WlError> {
-    use torio::wayland::interface::prelude::*;
+    use torio::wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf)?;
     let interface = if id.is_display() {

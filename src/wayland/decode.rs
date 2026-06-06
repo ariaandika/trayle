@@ -1,4 +1,4 @@
-use crate::wayland::{Frame, NewId, ObjectId, WlError, roundup4};
+use crate::wayland::{Frame, NewId, ObjectId, WlError};
 
 /// Decodable wayland message.
 pub trait Decode {
