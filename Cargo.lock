@@ -17,24 +17,11 @@ name = "macros"
 version = "0.1.0"
 
 [[package]]
-name = "tcio"
-version = "0.1.4"
-source = "git+https://github.com/ariaandika/tcio#679732ac2d8438b1a077f684ed2b66ef2e50e4e7"
-
-[[package]]
 name = "todex"
 version = "0.1.0"
 dependencies = [
  "libc",
  "macros",
-]
-
-[[package]]
-name = "tomo"
-version = "0.1.0"
-dependencies = [
- "libc",
- "tcio",
 ]
 
 [[package]]

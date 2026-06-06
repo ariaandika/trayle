@@ -7,5 +7,5 @@ edition = "2024"
 todex = { version = "0.1.0", path = "todex" }
 
 [workspace]
-members = ["codegen", "macros", "todex", "tomo"]
+members = ["codegen", "macros", "todex"]
 resolver = "2"
