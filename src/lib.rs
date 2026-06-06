@@ -1,3 +1,30 @@
+//! # The Torio Project Core Module.
+//!
+//! This crate provide low level system calls, generic collections, wayland protocol coding, shared
+//! abstraction and high level state management.
+//!
+//! # Event Loop
+//!
+//! This crate does not provide an event loop.
+//!
+//! [`Poller`][rt::poller::Poller] monitor resources for readiness. Application can register
+//! resources, like listener or socket, then `Poller` will callback with an events ready to proceed.
+//! See its documentation for more details.
+//!
+//! # Wayland
+//!
+//! [`wayland`] module provide protocol definition, decoding, encoding, and wayland primitive types.
+//! See its documentation for more details.
+//!
+//! # State Management
+//!
+//! This crate provide high level state management that can be used by wayland server or client.
+//!
+//! # Collection and Allocation
+//!
+//! Application usually does not interact with data structures or allocation directly, instead uses
+//! high level APIs mentioned previously. But for simple cases, [`collections`] module provide
+//! generic data structures.
 #![allow(clippy::new_without_default)]
 
 pub mod sys;

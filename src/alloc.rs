@@ -1,3 +1,4 @@
+//! Memory allocations.
 use std::ptr::NonNull;
 
 pub fn allocate<T>(cap: usize) -> NonNull<T> {

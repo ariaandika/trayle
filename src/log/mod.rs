@@ -1,3 +1,4 @@
+//! Logging abstraction.
 #![allow(static_mut_refs)]
 
 pub use level::Level;

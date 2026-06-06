@@ -1,3 +1,55 @@
+//! Wayland protocol.
+//!
+//! # Usage
+//!
+//! This API use [`MessageBuf`] as memory management. `MessageBuf` is a bytes buffer that can also
+//! stores fds. Application can establish unix socket externally, then use [`MessageBuf::sendmsg`]
+//! or [`MessageBuf::recvmsg`] to send and receive messages respectively.
+//!
+//! [`MessageBuf::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then
+//! it can be passed to [`Frame`] to decode the actual message. Application can send back a message,
+//! using [`Encode::encode_to`] to the buffer. Note that this operation is buffered, application
+//! requires to flush the message using `MessageBuf::sendmsg` mentioned previously.
+//!
+//! # Types
+//!
+//! [`ObjectId`] represents wayland object id. `ObjectId` cannot be zero. [`NewId`] is a wrapper for
+//! `ObjectId` with generic parameter to represent created object. Other primitive types can be
+//! represented by its respective rust primitive types.
+//!
+//! [`Interface`] is a runtime value representing an interface. This can be used by high level APIs
+//! to store mutliple interfaces in a list without dynamic dispatch.
+//!
+//! [`Message`] associate object id to a message payload. Encoding required its interface object id.
+//! One cannot simply define object id field to a message payload. This struct wraps the payload and
+//! associate it with object id to form a complete encodable message.
+//!
+//! # Error
+//!
+//! All fallible operations returns `Result` with [`WlError`] as the error variant.
+//!
+//! # Traits
+//!
+//! This module also provide traits that can be used by high level APIs:
+//!
+//! - [`FromObjectId`]: Constructs type with given object id.
+//! - [`AsObjectId`]: Type that is associated with an object id.
+//! - [`OpCode`]: Request/event opcode
+//! - [`AsInterface`]: Type that is belong to an interface.
+//! - [`WlObject`]: Type that represent a wayland object.
+//!
+//! # Interfaces
+//!
+//! Interface definitions are provided in the module with the same name of the interface. All
+//! respective types implements all traits mentioned previously.
+//!
+//! Every interface module follows a convention.
+//!
+//! - Object definitions is the UpperCamelCase of the interface name.
+//! - `RequestOp` and `EventOp` representing requests and events of the interface.
+//! - Operation definition are regular struct.
+//! - Interface object contains constructor methods for its operations.
+
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use message::{Frame, Message};
 pub use buffer::{MessageBuf, SmallBuf};

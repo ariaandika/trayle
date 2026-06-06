@@ -2,13 +2,13 @@ use std::num::NonZeroU32;
 
 // ===== traits =====
 
-/// Create an object with given object id.
+/// Constructs type with given object id.
 pub trait FromObjectId {
     /// Create this object with given object id.
     fn from_object_id(id: ObjectId) -> Self;
 }
 
-/// Object that contains an object id.
+/// Type that is associated with an object id.
 pub trait AsObjectId {
     /// Returns this object id.
     fn object_id(&self) -> ObjectId;

@@ -2,6 +2,11 @@ use crate::wayland::{AsInterface, AsObjectId, Interface, MessageBuf, ObjectId, W
 
 // ===== Message =====
 
+/// Associate object id to a message payload.
+///
+/// Encoding a message, requires its interface object id, thus message payload alone cannot
+/// implement the encoding trait. This struct wraps the payload and its associated object id, and is
+/// the one implement the encoding trait.
 #[derive(Debug)]
 pub struct Message<T> {
     id: ObjectId,

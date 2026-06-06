@@ -14,9 +14,9 @@ pub trait OpCode: Sized {
     }
 }
 
-/// Object that is a wayland interface.
+/// Type that is belong to an interface
 pub trait AsInterface {
-    /// The interface of this object is associated with.
+    /// The interface this object belongs to.
     const INTERFACE: Interface;
 }
 
@@ -24,7 +24,7 @@ impl<T: AsInterface> AsInterface for NewId<T> {
     const INTERFACE: Interface = T::INTERFACE;
 }
 
-/// Wayland object.
+/// Type that represent a wayland object.
 pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
 
 impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
