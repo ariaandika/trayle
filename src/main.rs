@@ -1,12 +1,14 @@
 use std::process::ExitCode;
 use std::task::Poll::*;
 
-use torio::sys::listener::{Listener, SocketPath};
-use torio::sys::sigfd::Sigfd;
-use torio::compositor::clients::{ClientId, ClientMut, Clients};
-use torio::compositor::seat::Seat;
-use torio::rt::poller::Poller;
-use torio::log;
+use todex::sys::listener::{Listener, SocketPath};
+use todex::sys::sigfd::Sigfd;
+use todex::wayland::{self, Decode, Frame, Interface, OpCode, WlError};
+use todex::wayland::buffer::{self, MessageBuf};
+use todex::compositor::clients::{ClientId, ClientMut, Clients};
+use todex::compositor::seat::Seat;
+use todex::rt::poller::Poller;
+use todex::log;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -147,8 +149,6 @@ fn event_loop() -> Result<(), FatalError> {
 
 // ===== handler =====
 
-use torio::wayland::{Decode, Frame, Interface, MessageBuf, OpCode, WlError};
-
 static GLOBALS: [(&str, u32, Interface); 5] = [
     ("wl_compositor", 7, Interface::WlCompositor),
     ("wl_shm", 2, Interface::WlShm),
@@ -166,7 +166,7 @@ pub fn router(
     client: &mut ClientMut,
     compositor: &mut Compositor,
 ) -> Result<(), WlError> {
-    use torio::wayland::interfaces::*;
+    use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf)?;
     let interface = if id.is_display() {
@@ -256,7 +256,7 @@ trait RequestHandler<Request>: Sized {
 
 mod wl_display {
     use super::*;
-    use torio::wayland::wl_display::{DeleteId, GetRegistry, Sync};
+    use wayland::wl_display::{DeleteId, GetRegistry, Sync};
 
     impl RequestHandler<Sync> for Compositor {
         fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
@@ -284,8 +284,8 @@ mod wl_display {
 
 mod wl_registry {
     use super::*;
-    use torio::wayland::wl_registry::Bind;
-    use torio::wayland::wl_seat::WlSeat;
+    use wayland::wl_registry::Bind;
+    use wayland::wl_seat::WlSeat;
 
     impl RequestHandler<Bind<'_>> for Compositor {
         fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -313,7 +313,7 @@ mod wl_registry {
 
 mod wl_compositor {
     use super::*;
-    use torio::wayland::wl_compositor::CreateSurface;
+    use wayland::wl_compositor::CreateSurface;
 
     impl RequestHandler<CreateSurface> for Compositor {
         fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
@@ -325,7 +325,7 @@ mod wl_compositor {
 
 mod wl_seat {
     use super::*;
-    use torio::wayland::wl_seat::GetKeyboard;
+    use wayland::wl_seat::GetKeyboard;
 
     impl RequestHandler<GetKeyboard> for Compositor {
         fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
@@ -339,7 +339,7 @@ mod wl_seat {
 
 mod wl_data_device_manager {
     use super::*;
-    use torio::wayland::wl_data_device_manager::{CreateDataSource, GetDataDevice};
+    use wayland::wl_data_device_manager::{CreateDataSource, GetDataDevice};
 
     impl RequestHandler<CreateDataSource> for Compositor {
         fn handle(&mut self, req: CreateDataSource, client: &mut ClientMut) -> Result<(), WlError> {
@@ -366,8 +366,8 @@ mod wl_data_device_manager {
 
 struct HandleError;
 
-impl From<torio::wayland::buffer::ReadError> for HandleError {
-    fn from(err: torio::wayland::buffer::ReadError) -> Self {
+impl From<buffer::ReadError> for HandleError {
+    fn from(err: buffer::ReadError) -> Self {
         if !err.is_connection_aborted() {
             log::error!("failed to read socket: {err}");
         }
@@ -375,8 +375,8 @@ impl From<torio::wayland::buffer::ReadError> for HandleError {
     }
 }
 
-impl From<torio::wayland::buffer::WriteError> for HandleError {
-    fn from(err: torio::wayland::buffer::WriteError) -> Self {
+impl From<buffer::WriteError> for HandleError {
+    fn from(err: buffer::WriteError) -> Self {
         log::error!("failed to write socket: {err}");
         Self
     }
