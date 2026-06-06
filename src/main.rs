@@ -180,7 +180,7 @@ pub fn router(
 
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $($flag:ident)?),* $(,)? }) => {
-            match <_>::from_op(op)? { $(
+            match <_>::try_from_op(op)? { $(
                 $iface::RequestOp::$req => handle_me!(@CALL $iface $req $($flag)?),
             )* }
         };

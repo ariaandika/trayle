@@ -2,9 +2,16 @@ use crate::wayland::{AsObjectId, FromObjectId, Interface, NewId, WlError};
 
 /// Request/event opcode.
 pub trait OpCode: Sized {
-    fn from_op(op: u16) -> Result<Self, WlError>;
+    fn from_op(op: u16) -> Option<Self>;
 
     fn to_op(self) -> u16;
+
+    fn try_from_op(op: u16) -> Result<Self, WlError> {
+        match Self::from_op(op) {
+            Some(ok) => Ok(ok),
+            None => Err(WlError::UnknownOp),
+        }
+    }
 }
 
 /// Object that is a wayland interface.

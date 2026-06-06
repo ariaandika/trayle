@@ -111,16 +111,16 @@ fn impl_op_code(mut parser: Parser) -> Result<TokenStream, Error> {
     let from_op = match i {
         1 => generate! {
             if op == #zero {
-                Ok(Self::#last_variant)
+                Some(Self::#last_variant)
             } else {
-                Err(WlError::UnknownOp)
+                None
             }
         },
         _ => generate! {
             if op as u8 <= Self::#last_variant as u8 {
-                Ok(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
+                Some(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
             } else {
-                Err(WlError::UnknownOp)
+                None
             }
         },
     };
@@ -128,7 +128,7 @@ fn impl_op_code(mut parser: Parser) -> Result<TokenStream, Error> {
     Ok(generate! {
         impl OpCode for #name {
             #[inline]
-            fn from_op(op: u16) -> Result<Self, WlError> {
+            fn from_op(op: u16) -> Option<Self> {
                 #from_op
             }
 
