@@ -10,17 +10,17 @@ pub use crate::sys::epoll::Interest;
 
 const MAX_EVENT: usize = 128;
 
-/// Collections of event sources.
-pub struct EventSources {
+/// Poll for resources readiness.
+pub struct Poller {
     epoll: Epoll,
     events: NonNull<MaybeUninit<EpollEvent>>,
     off: usize,
     len: usize,
 }
 
-impl EventSources {
-    /// Creates new `EventSources`.
-    pub fn new() -> Result<EventSources, CreateError> {
+impl Poller {
+    /// Creates new `Poller`.
+    pub fn new() -> Result<Poller, CreateError> {
         Ok(Self {
             epoll: Epoll::new()?,
             events: alloc::allocate(MAX_EVENT),
@@ -31,7 +31,7 @@ impl EventSources {
 
     /// Add an event source by listening for `read` event from given source's fd.
     ///
-    /// `key` is a value that will be returned by `EventSources::wait` when this source emit an
+    /// `key` is a value that will be returned by `Poller::wait` when this source emit an
     /// event.
     pub fn add<Fd: AsRawFd>(&self, key: u64, source: &Fd) {
         self.epoll.add(key, source);
@@ -50,10 +50,10 @@ impl EventSources {
     }
 }
 
-impl EventSources {
+impl Poller {
     /// Read the next available event.
     ///
-    /// Returns `(key, Interest)`. `key` is value provided from the [`EventSources::add`] calls.
+    /// Returns `(key, Interest)`. `key` is value provided from the [`Poller::add`] calls.
     ///
     /// Returns `None` if no event are available.
     pub fn next_event(&mut self) -> Option<(u64, Interest)> {
@@ -75,7 +75,7 @@ impl EventSources {
 
     /// Block current thread and wait for events.
     ///
-    /// Note that unread events are discarded. Read events using [`EventSources::next_event`].
+    /// Note that unread events are discarded. Read events using [`Poller::next_event`].
     ///
     /// This method will block until either en event source deliver an event, the call is interupted
     /// by a signal handler, or `timeout` expires.
@@ -86,7 +86,7 @@ impl EventSources {
     }
 }
 
-impl Iterator for EventSources {
+impl Iterator for Poller {
     type Item = (u64, Interest);
 
     fn next(&mut self) -> Option<Self::Item> {

@@ -5,7 +5,7 @@ use torio::sys::listener::{Listener, SocketPath};
 use torio::sys::sigfd::Sigfd;
 use torio::compositor::clients::{ClientId, ClientMut, Clients};
 use torio::compositor::seat::Seat;
-use torio::rt::event::EventSources;
+use torio::rt::poller::Poller;
 use torio::log;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
@@ -30,18 +30,18 @@ fn event_loop() -> Result<(), FatalError> {
     let mut clients = Clients::new();
     let mut compositor = Compositor { seat };
 
-    let mut events = EventSources::new()?;
+    let mut poll = Poller::new()?;
 
-    events.add(LISTENER_KEY, &listener);
-    events.add(SIGFD_KEY, &sigfd);
+    poll.add(LISTENER_KEY, &listener);
+    poll.add(SIGFD_KEY, &sigfd);
 
     // ===== event loop =====
 
     loop {
-        let Some((key, interest)) = events.next_event() else {
+        let Some((key, interest)) = poll.next_event() else {
             log::trace!(target: "polling", "blocking");
             log::flush();
-            events.wait(None);
+            poll.wait(None);
             continue;
         };
 
@@ -55,7 +55,7 @@ fn event_loop() -> Result<(), FatalError> {
                 match result {
                     Ok(fd) => {
                         let (id, client) = clients.insert(fd);
-                        events.add(id.to_u64(), client);
+                        poll.add(id.to_u64(), client);
                         log::debug!(target: format_args!("client#{id}"), "connected");
                     }
                     Err(err) => {
@@ -104,11 +104,11 @@ fn event_loop() -> Result<(), FatalError> {
                 match (is_pending, interest.is_write()) {
                     (true, false) => {
                         // first time write pending, add write interest
-                        events.modify(id.to_u64(), true, client);
+                        poll.modify(id.to_u64(), true, client);
                     }
                     (false, true) => {
                         // previous write pending complete, remove write interest
-                        events.modify(id.to_u64(), false, client);
+                        poll.modify(id.to_u64(), false, client);
                     }
                     _ => {}
                 }
@@ -133,7 +133,7 @@ fn event_loop() -> Result<(), FatalError> {
             if !write_buf.is_empty() {
                 let _ = write_buf.sendmsg(client);
             }
-            events.delete(client);
+            poll.delete(client);
             clients.remove(id);
             log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
