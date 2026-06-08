@@ -23,6 +23,7 @@ mod interface;
 mod opcode;
 mod message;
 mod protocol;
+mod wl_enum;
 
 // ===== exports =====
 
@@ -43,6 +44,12 @@ pub fn op_code(tokens: TokenStream) -> TokenStream {
 #[proc_macro_derive(Message, attributes(request, event, fd))]
 pub fn message(tokens: TokenStream) -> TokenStream {
     message::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+/// Implement `WlEnum`.
+#[proc_macro_derive(WlEnum)]
+pub fn wl_enum(tokens: TokenStream) -> TokenStream {
+    wl_enum::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
 /// Define an enum containing all implemented interfaces.

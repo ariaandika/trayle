@@ -19,24 +19,8 @@ pub struct Keymap {
     pub size: u32,
 }
 
-#[derive(Debug, Clone, Copy)]
+#[derive(WlEnum, Debug, Clone, Copy)]
 pub enum KeymapFormat {
     NoKeymap,
     XkbV1
-}
-
-impl WlEnum for KeymapFormat {
-    #[inline]
-    fn from_u32(uint: u32) -> Option<Self> {
-        match uint {
-            0 => Some(Self::NoKeymap),
-            1 => Some(Self::XkbV1),
-            _ => None,
-        }
-    }
-
-    #[inline]
-    fn to_u32(self) -> u32 {
-        self as u32
-    }
 }

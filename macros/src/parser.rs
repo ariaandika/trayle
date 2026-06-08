@@ -80,6 +80,7 @@ impl Parser {
 impl Parser {
     next_tree!(next_ident(self) -> Ident);
     try_tree!(ident(self) -> Ident, "identifier");
+    try_tree!(lit(self) -> Literal, "literal");
 
     pub fn is_punct_of(&mut self, punct: char) -> Option<()> {
         self.peek().and_then(|e| match e {

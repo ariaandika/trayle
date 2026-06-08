@@ -76,7 +76,7 @@ mod prelude {
     pub use super::decode::Decoder;
     pub use super::encode::{Sized2, Writer};
 
-    pub use macros::{Interface, Message, OpCode};
+    pub use macros::{Interface, Message, OpCode, WlEnum};
 }
 
 macros::protocol! {
