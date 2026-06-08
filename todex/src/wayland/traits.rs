@@ -6,11 +6,9 @@ pub trait OpCode: Sized {
 
     fn to_op(self) -> u16;
 
+    #[inline]
     fn try_from_op(op: u16) -> Result<Self, WlError> {
-        match Self::from_op(op) {
-            Some(ok) => Ok(ok),
-            None => Err(WlError::UnknownOp),
-        }
+        Self::from_op(op).ok_or(WlError::UnknownOp)
     }
 }
 
@@ -30,9 +28,19 @@ pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
 impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 
 /// Wayland enum.
-pub trait WlEnum {
+pub trait WlEnum: Sized {
+    /// Create enum from integer.
+    ///
+    /// Returns `None` if the integer did not represent any entry.
+    fn from_u32(uint: u32) -> Option<Self>;
+
     /// Returns `u32` representation of the enum.
     fn to_u32(self) -> u32;
+
+    #[inline]
+    fn try_from_u32(uint: u32) -> Result<Self, WlError> {
+        Self::from_u32(uint).ok_or(WlError::UnknownEnumEntry)
+    }
 }
 
 // ===== implementations =====

@@ -104,6 +104,7 @@ impl<'a> Error<'a> {
             E::UnknownOp => MALFORMED,
             E::UnknownObject => SEMANTIC,
             E::UnknownBind => SEMANTIC,
+            E::UnknownEnumEntry => SEMANTIC,
             E::InvalidSize => MALFORMED,
             E::InvalidNewId => SEMANTIC,
             E::ZeroId => SEMANTIC,

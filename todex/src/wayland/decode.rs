@@ -1,4 +1,4 @@
-use crate::wayland::{Frame, NewId, ObjectId, WlError};
+use crate::wayland::{Frame, NewId, ObjectId, WlEnum, WlError};
 
 /// Decodable wayland message.
 pub trait Decode {
@@ -74,6 +74,12 @@ pub trait Read<'a>: Sized {
     fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError>;
 }
 
+impl<E: WlEnum> Read<'_> for E {
+    fn decode(reader: &mut Reader<'_>) -> Result<Self, WlError> {
+        reader.read().and_then(E::try_from_u32)
+    }
+}
+
 impl Read<'_> for u32 {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         reader.read_ne_bytes().map(u32::from_ne_bytes)
@@ -111,10 +117,7 @@ impl<'a> Read<'a> for &'a str {
         reader.read_buf = rest;
         // SAFETY: `len <= round_len` and `len` is non-zero
         let unrounded = unsafe { bytes.get_unchecked(..(len - 1) as usize) };
-        match str::from_utf8(unrounded) {
-            Ok(ok) => Ok(ok),
-            Err(_) => Err(WlError::NonUtf8),
-        }
+        str::from_utf8(unrounded).map_err(|_| WlError::NonUtf8)
     }
 }
 

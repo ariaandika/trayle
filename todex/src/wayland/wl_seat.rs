@@ -30,16 +30,11 @@ pub struct Capabilities {
     pub capabilities: Capability,
 }
 
-// ===== impls =====
-
-impl super::decode::Read<'_> for Capability {
-    #[inline]
-    fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {
-        Ok(Self::from_u32(reader.read()?))
-    }
-}
-
 impl WlEnum for Capability {
+    fn from_u32(uint: u32) -> Option<Self> {
+        Some(Self::from_u32(uint))
+    }
+
     fn to_u32(self) -> u32 {
         self.to_u32()
     }

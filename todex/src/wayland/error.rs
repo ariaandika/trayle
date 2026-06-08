@@ -6,6 +6,8 @@ pub enum WlError {
     UnknownObject,
     /// Unknown global when binding in `wl_registry::bind`.
     UnknownBind,
+    /// Unknown enum variant from given integer.
+    UnknownEnumEntry,
     /// Invalid payload size.
     InvalidSize,
     /// Invalid new object id, e.g: new id that is used by existing object.
@@ -28,6 +30,7 @@ impl WlError {
             Self::UnknownOp => "unknown op code",
             Self::UnknownObject => "unknown object id",
             Self::UnknownBind => "unknown global binding operation",
+            Self::UnknownEnumEntry => "unknown enum variant from given integer",
             Self::InvalidSize => "invalid payload size",
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",

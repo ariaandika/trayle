@@ -25,21 +25,18 @@ pub enum KeymapFormat {
     XkbV1
 }
 
-// ===== impls =====
-
 impl WlEnum for KeymapFormat {
+    #[inline]
+    fn from_u32(uint: u32) -> Option<Self> {
+        match uint {
+            0 => Some(Self::NoKeymap),
+            1 => Some(Self::XkbV1),
+            _ => None,
+        }
+    }
+
+    #[inline]
     fn to_u32(self) -> u32 {
         self as u32
-    }
-}
-
-impl super::decode::Read<'_> for KeymapFormat {
-    #[inline]
-    fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {
-        match reader.read::<u32>()? as u8 {
-            0 => Ok(Self::NoKeymap),
-            1 => Ok(Self::XkbV1),
-            _ => Err(WlError::UnknownObject),
-        }
     }
 }
