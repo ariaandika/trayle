@@ -212,8 +212,30 @@ fn truncate_len(len: usize) -> usize {
     len & MAXLEN
 }
 
-fn padding(i: usize) -> usize {
+fn array_padding(i: usize) -> usize {
+    (4 - (i & 3)) & 3
+}
+
+fn str_padding(i: usize) -> usize {
     4 - (i & 3)
+}
+
+impl Sized2 for &[u8] {
+    #[inline]
+    fn size(&self) -> u16 {
+        4 + roundup4!(truncate_len(self.len()) as u16)
+    }
+}
+
+impl private::Sealed for &[u8] {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        let len = truncate_len(self.len());
+        writer
+            .write(len as u32)
+            .write_raw(self.as_ptr(), len)
+            .write_raw(ZEROS.as_ptr(), array_padding(len))
+    }
 }
 
 impl Sized2 for &str {
@@ -240,7 +262,7 @@ impl private::Sealed for &str {
         writer
             .write(len as u32 + 1)
             .write_raw(self.as_ptr(), len)
-            .write_raw(ZEROS.as_ptr(), padding(len))
+            .write_raw(ZEROS.as_ptr(), str_padding(len))
     }
 }
 

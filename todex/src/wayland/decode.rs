@@ -116,6 +116,20 @@ impl Read<'_> for i32 {
     }
 }
 
+impl<'a> Read<'a> for &'a [u8] {
+    fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError> {
+        let len = u32::decode(reader)?;
+        let round_len = roundup4!(len as u16) as usize;
+        let (bytes, rest) = reader
+            .read_buf
+            .split_at_checked(round_len)
+            .ok_or(WlError::InvalidSize)?;
+        reader.read_buf = rest;
+        // SAFETY: `len <= round_len`
+        Ok(unsafe { bytes.get_unchecked(..len as usize) })
+    }
+}
+
 impl<'a> Read<'a> for &'a str {
     fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError> {
         let len = u32::decode(reader)?;
@@ -146,4 +160,3 @@ fn decode_str<'a>(len: u32, reader: &mut Reader<'a>) -> Result<&'a str, WlError>
     let unrounded = unsafe { bytes.get_unchecked(..(len - 1) as usize) };
     str::from_utf8(unrounded).map_err(|_| WlError::NonUtf8)
 }
-
