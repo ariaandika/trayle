@@ -39,14 +39,8 @@ impl super::decode::Read<'_> for Capability {
     }
 }
 
-impl super::encode::Write for Capability {
-    #[inline]
-    fn size(&self) -> u16 {
-        4
-    }
-
-    #[inline]
-    fn encode(self, writer: &mut super::encode::Writer) {
-        self.to_u32().encode(writer);
+impl WlEnum for Capability {
+    fn to_u32(self) -> u32 {
+        self.to_u32()
     }
 }

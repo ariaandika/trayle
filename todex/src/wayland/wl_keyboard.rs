@@ -27,6 +27,12 @@ pub enum KeymapFormat {
 
 // ===== impls =====
 
+impl WlEnum for KeymapFormat {
+    fn to_u32(self) -> u32 {
+        self as u32
+    }
+}
+
 impl super::decode::Read<'_> for KeymapFormat {
     #[inline]
     fn decode(reader: &mut super::decode::Reader<'_>) -> Result<Self, WlError> {
@@ -35,17 +41,5 @@ impl super::decode::Read<'_> for KeymapFormat {
             1 => Ok(Self::XkbV1),
             _ => Err(WlError::UnknownObject),
         }
-    }
-}
-
-impl super::encode::Write for KeymapFormat {
-    #[inline]
-    fn size(&self) -> u16 {
-        4
-    }
-
-    #[inline]
-    fn encode(self, writer: &mut super::encode::Writer) {
-        (self as u32).encode(writer);
     }
 }

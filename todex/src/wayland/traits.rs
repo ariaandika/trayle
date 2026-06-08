@@ -28,3 +28,16 @@ impl<T: AsInterface> AsInterface for NewId<T> {
 pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
 
 impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
+
+/// Wayland enum.
+pub trait WlEnum {
+    /// Returns `u32` representation of the enum.
+    fn to_u32(self) -> u32;
+}
+
+// ===== implementations =====
+
+impl<T: AsInterface> AsInterface for crate::wayland::Encodable<T> {
+    const INTERFACE: Interface = T::INTERFACE;
+}
+

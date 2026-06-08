@@ -8,8 +8,8 @@
 //!
 //! [`MessageBuf::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then
 //! it can be passed to [`Frame`] to decode the actual message. Application can send back a message,
-//! using [`Encode::encode_to`] to the buffer. Note that this operation is buffered, application
-//! requires to flush the message using `MessageBuf::sendmsg` mentioned previously.
+//! using [`Encode`] trait. Note that this operation is buffered, application requires to flush the
+//! message using `MessageBuf::sendmsg` mentioned previously.
 //!
 //! # Types
 //!
@@ -20,9 +20,9 @@
 //! [`Interface`] is a runtime value representing an interface. This can be used by high level APIs
 //! to store mutliple interfaces in a list without dynamic dispatch.
 //!
-//! [`Message`] associate object id to a message payload. Encoding required its interface object id.
-//! One cannot simply define object id field to a message payload. This struct wraps the payload and
-//! associate it with object id to form a complete encodable message.
+//! [`Encodable`] associate object id to a message payload. Encoding required its interface object
+//! id. One cannot simply define object id field to a message payload. This struct wraps the payload
+//! and associate it with object id to form a complete encodable message.
 //!
 //! # Error
 //!
@@ -51,12 +51,12 @@
 //! - Interface object contains constructor methods for its operations.
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
-pub use message::{Frame, Message};
+pub use message::Frame;
 pub use buffer::{MessageBuf, SmallBuf};
 pub use error::WlError;
 pub use decode::Decode;
-pub use encode::Encode;
-pub use traits::{OpCode, WlObject, AsInterface};
+pub use encode::{Encodable, Encode, EncodeMessage};
+pub use traits::{OpCode, WlEnum, WlObject, AsInterface};
 
 macro_rules! roundup4 {
     ($e:expr) => {
@@ -74,13 +74,10 @@ mod traits;
 pub mod buffer;
 
 mod prelude {
-    pub use super::object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
-    pub use super::message::Message;
-    pub use super::error::WlError;
-    pub use super::decode::{Decode, Decoder};
-    pub use super::encode::{Encode, Encoder, WaylandEnum};
-    pub use super::traits::{OpCode, AsInterface};
-    pub use super::Interface;
+    pub use super::{AsInterface, AsObjectId, Decode, Encode, FromObjectId, OpCode, WlEnum};
+    pub use super::{Encodable, Interface, NewId, ObjectId, WlError};
+    pub use super::decode::Decoder;
+    pub use super::encode::{Sized2, Writer};
 
     pub use macros::{Interface, Message, OpCode};
 }

@@ -172,8 +172,7 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut dec_1 = None;
     let mut dec_fd = TokenStream::new();
     let mut dec_read = TokenStream::new();
-    let mut enc_1 = None;
-    let mut enc_len = Literal::u16_suffixed(8).into_token_stream();
+    let mut enc_len = Literal::u16_suffixed(0).into_token_stream();
     let mut enc_fd = TokenStream::new();
     let mut enc_write = TokenStream::new();
     let mut ctor_args = TokenStream::new();
@@ -214,7 +213,6 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
 
         if len == 1 {
             dec_1 = Some(name.clone());
-            enc_1 = Some(name.clone());
         }
 
         name.to_tokens(&mut dec_read);
@@ -222,7 +220,7 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         if is_fd {
             generate!(let #&name = decoder.pop_fd()?;).into_tokens(&mut dec_fd);
             generate!(,).into_tokens(&mut dec_read);
-            generate!(encoder.push_fd(self.#&name);).into_tokens(&mut enc_fd);
+            generate!(self.#&name,).into_tokens(&mut enc_fd);
         } else {
             col.into_tokens(&mut dec_read);
             generate!(reader.read()?,).into_tokens(&mut dec_read);
@@ -251,15 +249,15 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         }
     };
 
-    let enc_impl = if len == 1 {
-        generate! { encoder.encode1(self.#enc_1); }
+    let enc_fds_impl = if enc_fd.is_empty() {
+        None
     } else {
-        generate! {
-            use super::encode::Write;
-            #enc_fd
-            let len = #enc_len;
-            unsafe { encoder.encode(len) } #enc_write;
-        }
+        Some(generate! {
+            #[inline]
+            fn fds(&self) -> impl IntoIterator<Item = i32> {
+                [#enc_fd]
+            }
+        })
     };
 
     let ctor = if ctor.is_empty() {
@@ -268,8 +266,9 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         let mname = Ident::new(&to_snake(&name.to_string()), name.span());
         Some(generate! {
             impl #&iface {
-                pub fn #mname #&lf (&self #ctor_args) -> Message<#&name #&lf> {
-                    Message::new(self, #&name { #ctor })
+                #[inline]
+                pub fn #mname #&lf (&self #ctor_args) -> Encodable<#&name #&lf> {
+                    Encodable::new(self, #&name { #ctor })
                 }
             }
         })
@@ -277,25 +276,19 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
 
     Ok(generate! {
         #ctor
-
         impl Decode for #&name #&plf {
             type Output<'a> = #&name #lf;
-
             #[inline]
             fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
                 #dec_impl
             }
         }
-
-        impl Encode for Message<#&name #&plf> {
+        impl Encode for #&name #&plf {
             const OPCODE: u16 = #opkind::#&name as u16;
-
-            #[inline]
-            fn encode(self, #coding_mut encoder: Encoder) {
-                #enc_impl
-            }
+            #enc_fds_impl
+            #[inline] fn size(&self) -> u16 { #enc_len }
+            #[inline] fn encode(self, writer: Writer) { writer #enc_write; }
         }
-
         impl AsInterface for #name #plf {
             const INTERFACE: Interface = Interface::#iface;
         }

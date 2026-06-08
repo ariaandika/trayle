@@ -3,7 +3,7 @@ use std::os::fd::{AsRawFd, OwnedFd};
 use crate::collections::slab::Slab;
 use crate::compositor::objects::{Object, Objects};
 use crate::wayland::wl_display::Error;
-use crate::wayland::{Encode, MessageBuf, ObjectId, SmallBuf, WlError, WlObject};
+use crate::wayland::{EncodeMessage, MessageBuf, ObjectId, SmallBuf, WlError, WlObject};
 
 // ===== ClientId =====
 
@@ -94,14 +94,14 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn send<E: Encode>(&mut self, message: E) {
-        message.encode_to(self.write_buf);
+    pub fn send<E: EncodeMessage>(&mut self, message: E) {
+        message.encode_message(self.write_buf);
     }
 
     /// Send `wl_display::error` event from [`WlError`].
     #[inline]
     pub fn send_global_error(&mut self, error: WlError) {
-        Error::from_wl_error(ObjectId::wl_display(), error).encode_to(self.write_buf);
+        Error::from_wl_error(ObjectId::wl_display(), error).encode_message(self.write_buf);
     }
 }
 

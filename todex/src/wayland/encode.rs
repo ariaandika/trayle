@@ -1,171 +1,246 @@
-use crate::wayland::{AsObjectId, MessageBuf, NewId, ObjectId};
+use crate::wayland::{AsObjectId, MessageBuf, NewId, ObjectId, WlEnum};
 
-/// Encodable wayland message.
-pub trait Encode: Sized + AsObjectId {
+// ===== Encode =====
+
+/// Encode wayland message.
+///
+/// Applications may accept [`EncodeMessage`] instead, wayland object have a constructor for its
+/// messages associated with object id which implement it.
+pub trait Encode: Sized {
+    /// The opcode of this message.
     const OPCODE: u16;
 
-    fn encode(self, encoder: Encoder);
+    /// Returns the size of the payload.
+    fn size(&self) -> u16;
 
+    /// Encode message payload.
+    fn encode(self, writer: Writer);
+
+    /// Returns an iterator of `fd`-s, if available.
+    fn fds(&self) -> impl IntoIterator<Item = i32> {
+        []
+    }
+
+    /// Encode wayland message with given object id.
     #[inline]
-    fn encode_to(self, write_buf: &mut MessageBuf) {
-        let id = self.object_id().to_u32();
-        let op = Self::OPCODE;
-        self.encode(Encoder { id, op, write_buf });
-    }
-}
-
-// ===== Encoder =====
-
-pub struct Encoder<'a> {
-    id: u32,
-    op: u16,
-    write_buf: &'a mut MessageBuf,
-}
-
-impl<'a> Encoder<'a> {
-    pub fn push_fd(&mut self, fd: i32) {
-        assert!(self.write_buf.push_fd(fd), "fd capacity overflow");
-    }
-
-    /// # Safety
-    ///
-    /// `len` must be the exact length of the required size.
-    ///
-    /// Caller must ensure `len` bytes are initialized.
-    pub unsafe fn encode(self, len: u16) -> Writer<'a> {
-        self.encode_inner(len)
-    }
-
-    /// Utility function to encode one argument.
-    pub fn encode1<E: Write>(self, value: E) {
-        let size = 8 + value.size();
-        value.encode(&mut self.encode_inner(size));
-    }
-
-    fn encode_inner(self, len: u16) -> Writer<'a> {
-        self.write_buf.reserve(len as usize);
-        let ptr = self.write_buf.spare_capacity_mut().as_mut_ptr();
+    fn encode_message(self, object_id: ObjectId, write_buf: &mut MessageBuf) {
+        for fd in self.fds() {
+            println!("{fd}");
+            assert!(write_buf.push_fd(fd));
+        }
+        let size = 8 + self.size() as usize;
+        write_buf.reserve(size);
         unsafe {
-            self.write_buf.advance_mut(len as usize);
-            ptr.cast::<u32>().write_unaligned(self.id);
-            ptr.add(4).cast::<u16>().write_unaligned(self.op);
-            ptr.add(6).cast::<u16>().write_unaligned(len);
-            Writer {
-                ptr: ptr.add(8).cast(),
-                _p: std::marker::PhantomData,
-            }
+            let ptr = write_buf.spare_capacity_mut().as_mut_ptr().cast::<u8>();
+            ptr.cast::<ObjectId>().write_unaligned(object_id);
+            ptr.add(4).cast::<u16>().write_unaligned(Self::OPCODE);
+            ptr.add(6).cast::<u16>().write_unaligned(size as u16);
+            self.encode(Writer(ptr.add(8)));
+            // SAFETY: `Write` implementation guarantee `size` data is initialized
+            write_buf.advance_mut(size);
         }
     }
 }
 
-// ===== Writer =====
-
-pub struct Writer<'a> {
-    ptr: *mut u8,
-    _p: std::marker::PhantomData<&'a mut MessageBuf>,
+/// Encode wayland message associated with object id.
+///
+/// Applications may accept this trait instead of [`Encode`].
+pub trait EncodeMessage: AsObjectId {
+    fn encode_message(self, write_buf: &mut MessageBuf);
 }
 
-impl<'a> Writer<'a> {
-    pub fn write<E: Write>(&mut self, value: E) -> &mut Self {
-        value.encode(self);
-        self
-    }
-
-    fn advance(&mut self, cnt: usize) {
-        self.ptr = unsafe { self.ptr.add(cnt) };
-    }
-
-    fn write_ne_bytes(&mut self, ne: [u8; 4]) {
-        unsafe { self.ptr.copy_from_nonoverlapping(ne.as_ptr(), 4) };
-        self.advance(4);
-    }
-}
-
-// ===== Writable =====
-
-pub trait WaylandEnum {
-    fn to_u32(self) -> u32;
-}
-
-pub trait Write {
-    fn size(&self) -> u16;
-
-    fn encode(self, writer: &mut Writer);
-}
-
-impl<E: WaylandEnum> Write for E {
+impl<E: Encode + AsObjectId> EncodeMessage for E {
     #[inline]
+    fn encode_message(self, write_buf: &mut MessageBuf) {
+        let id = self.object_id();
+        Encode::encode_message(self, id, write_buf);
+    }
+}
+
+// ===== Encodable =====
+
+/// Associate object id with a message payload.
+///
+/// Encoding a message, requires its interface object id, thus message payload alone cannot
+/// implement the encoding trait. This struct wraps the payload and its associated object id, and is
+/// the one implement the encoding trait.
+#[derive(Debug)]
+pub struct Encodable<T> {
+    pub object_id: ObjectId,
+    pub payload: T,
+}
+
+impl<T> Encodable<T> {
+    pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
+        Self {
+            object_id: object.object_id(),
+            payload,
+        }
+    }
+}
+
+impl<T> AsObjectId for Encodable<T> {
+    #[inline]
+    fn object_id(&self) -> ObjectId {
+        self.object_id
+    }
+}
+
+impl<T: Encode> Encode for Encodable<T> {
+    const OPCODE: u16 = T::OPCODE;
+
+    #[inline]
+    fn size(&self) -> u16 {
+        self.payload.size()
+    }
+
+    #[inline]
+    fn encode(self, writer: Writer) {
+        self.payload.encode(writer);
+    }
+
+    fn fds(&self) -> impl IntoIterator<Item = i32> {
+        T::fds(&self.payload)
+    }
+}
+
+// ===== PrimitiveWrite =====
+
+#[derive(Clone, Copy)]
+pub struct Writer(*mut u8);
+
+impl Writer {
+    fn write_raw(self, ptr: *const u8, len: usize) -> Self {
+        unsafe {
+            self.0.copy_from_nonoverlapping(ptr, len);
+            Self(self.0.add(len))
+        }
+    }
+
+    pub fn write<W: Write>(self, value: W) -> Writer {
+        value.write(self)
+    }
+}
+
+// ===== Write =====
+
+mod private {
+    pub trait Sealed {
+        fn write(self, writer: super::Writer) -> super::Writer;
+    }
+}
+
+pub trait Sized2: Sized {
+    fn size(&self) -> u16;
+}
+
+/// Writable type.
+pub trait Write: Sized2 + private::Sealed { }
+
+impl<E: WlEnum> Sized2 for E {
     fn size(&self) -> u16 {
         4
     }
+}
 
+impl<E: WlEnum> private::Sealed for E {
     #[inline]
-    fn encode(self, writer: &mut Writer) {
-        self.to_u32().encode(writer);
+    fn write(self, writer: Writer) -> Writer {
+        self.to_u32().write(writer)
     }
 }
 
-macro_rules! impl_int {
-    ($me:ty) => {
-        impl Write for $me {
+impl<W: Sized2 + private::Sealed> Write for W { }
+
+macro_rules! sized4 {
+    (impl $(<$g:ident> )? Sized2 for $me:ty) => {
+        impl$(<$g>)? Sized2 for $me {
             #[inline]
             fn size(&self) -> u16 { 4 }
+        }
+    };
+}
 
+macro_rules! impl_write_for_int {
+    ($me:ty) => {
+        sized4!(impl Sized2 for $me);
+        impl private::Sealed for $me {
             #[inline]
-            fn encode(self, writer: &mut Writer) {
-                writer.write_ne_bytes(self.to_ne_bytes());
+            fn write(self, writer: Writer) -> Writer {
+                writer.write_raw(self.to_ne_bytes().as_ptr(), 4)
             }
         }
     };
 }
 
-impl_int!(u32);
-impl_int!(i32);
-impl_int!(ObjectId);
+impl_write_for_int!(u32);
+impl_write_for_int!(i32);
+impl_write_for_int!(ObjectId);
 
-impl<T> Write for NewId<T> {
-    fn size(&self) -> u16 {
-        self.object_id().size()
-    }
+sized4!(impl Sized2 for Option<ObjectId>);
+sized4!(impl<T> Sized2 for NewId<T>);
 
-    fn encode(self, writer: &mut Writer) {
-        self.object_id().encode(writer);
+impl<T> private::Sealed for NewId<T> {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        self.object_id().write(writer)
     }
 }
 
-impl Write for &str {
+impl private::Sealed for Option<ObjectId> {
     #[inline]
-    fn size(&self) -> u16 {
-        4 + roundup4!(self.len() as u16 + 1)
-    }
-
-    fn encode(self, writer: &mut Writer) {
-        let len = self.len() as u32;
-        let len_nul = len + 1;
-        writer.write_ne_bytes(len_nul.to_ne_bytes());
-        unsafe {
-            let len = len as usize;
-            writer.ptr.copy_from_nonoverlapping(self.as_ptr(), len);
-            writer.ptr.add(len).write(0);
-            writer.advance(roundup4!(len_nul as u16) as usize);
-        }
+    fn write(self, writer: Writer) -> Writer {
+        self.map(ObjectId::to_u32).unwrap_or_default().write(writer)
     }
 }
 
-impl Write for Option<&str> {
+// ===== arbitrary length types =====
+
+const MAXLEN: usize = (u16::MAX >> 1) as usize;
+const ZEROS: [u8; 4] = [0; 4];
+
+fn truncate_len(len: usize) -> usize {
+    len & MAXLEN
+}
+
+fn padding(i: usize) -> usize {
+    4 - (i & 3)
+}
+
+impl Sized2 for &str {
     #[inline]
     fn size(&self) -> u16 {
-        4 + match self {
-            Some(s) => roundup4!(s.len() as u16 + 1),
+        4 + roundup4!(truncate_len(self.len()) as u16 + 1)
+    }
+}
+
+impl Sized2 for Option<&str> {
+    #[inline]
+    fn size(&self) -> u16 {
+        4 + match *self {
+            Some(s) => roundup4!(truncate_len(s.len()) as u16 + 1),
             None => 0,
         }
     }
+}
 
+impl private::Sealed for &str {
     #[inline]
-    fn encode(self, writer: &mut Writer) {
+    fn write(self, writer: Writer) -> Writer {
+        let len = truncate_len(self.len());
+        writer
+            .write(len as u32 + 1)
+            .write_raw(self.as_ptr(), len)
+            .write_raw(ZEROS.as_ptr(), padding(len))
+    }
+}
+
+impl private::Sealed for Option<&str> {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
         match self {
-            Some(s) => s.encode(writer),
-            None => writer.write_ne_bytes(const { 0u32.to_ne_bytes() }),
+            Some(s) => <_>::write(s, writer),
+            None => <_>::write(0, writer),
         }
     }
 }

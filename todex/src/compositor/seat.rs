@@ -2,7 +2,7 @@ use std::os::fd::AsRawFd;
 
 use crate::sys::errno::Errno;
 use crate::sys::memfd::Memfd;
-use crate::wayland::{Message, wl_keyboard};
+use crate::wayland::{Encodable, wl_keyboard};
 
 const POINTER: u32 = 1;
 const KEYBOARD: u32 = 1 << 1;
@@ -68,7 +68,7 @@ impl Seat {
     pub fn to_keymap_event(
         &self,
         wl_keyboard: &wl_keyboard::WlKeyboard,
-    ) -> Message<wl_keyboard::Keymap> {
+    ) -> Encodable<wl_keyboard::Keymap> {
         wl_keyboard.keymap(
             wl_keyboard::KeymapFormat::XkbV1,
             self.memfd.as_raw_fd(),
