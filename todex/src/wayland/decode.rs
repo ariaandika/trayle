@@ -92,6 +92,12 @@ impl Read<'_> for ObjectId {
     }
 }
 
+impl Read<'_> for Option<ObjectId> {
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        Ok(ObjectId::new(u32::from_ne_bytes(reader.read_ne_bytes()?)))
+    }
+}
+
 impl<T> Read<'_> for NewId<T> {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
         reader.read().map(NewId::new)
@@ -110,14 +116,28 @@ impl<'a> Read<'a> for &'a str {
         if len == 0 {
             return Err(WlError::Null);
         }
-        let round_len = roundup4!(len as u16) as usize;
-        let Some((bytes, rest)) = reader.read_buf.split_at_checked(round_len) else {
-            return Err(WlError::InvalidSize);
-        };
-        reader.read_buf = rest;
-        // SAFETY: `len <= round_len` and `len` is non-zero
-        let unrounded = unsafe { bytes.get_unchecked(..(len - 1) as usize) };
-        str::from_utf8(unrounded).map_err(|_| WlError::NonUtf8)
+        decode_str(len, reader)
     }
+}
+
+impl<'a> Read<'a> for Option<&'a str> {
+    fn decode(reader: &mut Reader<'a>) -> Result<Self, WlError> {
+        let len = u32::decode(reader)?;
+        if len == 0 {
+            return Ok(None);
+        }
+        decode_str(len, reader).map(Some)
+    }
+}
+
+fn decode_str<'a>(len: u32, reader: &mut Reader<'a>) -> Result<&'a str, WlError> {
+    let round_len = roundup4!(len as u16) as usize;
+    let Some((bytes, rest)) = reader.read_buf.split_at_checked(round_len) else {
+        return Err(WlError::InvalidSize);
+    };
+    reader.read_buf = rest;
+    // SAFETY: `len <= round_len` and `len` is non-zero
+    let unrounded = unsafe { bytes.get_unchecked(..(len - 1) as usize) };
+    str::from_utf8(unrounded).map_err(|_| WlError::NonUtf8)
 }
 
