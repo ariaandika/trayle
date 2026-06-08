@@ -168,7 +168,11 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         ));
     };
 
-    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
+    let mut body = if let Some(group) = parser.next_group_of(Delimiter::Brace) {
+        Parser::new(group.stream())
+    } else {
+        Parser::new(TokenStream::new())
+    };
     let mut dec_1 = None;
     let mut dec_fd = TokenStream::new();
     let mut dec_read = TokenStream::new();
@@ -239,13 +243,15 @@ fn impl_message(mut parser: Parser) -> Result<TokenStream, Error> {
         Some(generate!(mut))
     };
 
-    let dec_impl = if len == 1 {
-        generate! { Ok(#&name { #dec_1: decoder.read()? }) }
-    } else {
-        generate! {
-            #dec_fd
-            let mut reader = decoder.reader();
-            Ok(#&name { #dec_read })
+    let dec_impl = match len {
+        0 => generate! { Ok(#&name { }) },
+        1 => generate! { Ok(#&name { #dec_1: decoder.read()? }) },
+        _ => {
+            generate! {
+                #dec_fd
+                let mut reader = decoder.reader();
+                Ok(#&name { #dec_read })
+            }
         }
     };
 
