@@ -126,9 +126,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         })
     };
 
-    let ctor = if ctor.is_empty() {
-        None
-    } else {
+    let ctor = if len <= 6 {
         let mname = Ident::new(&to_snake(&name.to_string()), name.span());
         Some(generate! {
             impl #&iface {
@@ -138,6 +136,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 }
             }
         })
+    } else {
+        None
     };
 
     Ok(generate! {
