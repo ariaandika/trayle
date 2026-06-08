@@ -1,6 +1,4 @@
-use std::iter::once;
-
-use proc_macro::*;
+use proc_macro::{Group, Ident, Literal, Punct, TokenStream, TokenTree};
 
 macro_rules! generate {
     () => {proc_macro::TokenStream::new()};
@@ -55,57 +53,39 @@ macro_rules! gen_extends {
 }
 
 macro_rules! gen_token {
-    (::) => {[
-        proc_macro::Punct::new(':', Spacing::Joint),
-        proc_macro::Punct::new(':', Spacing::Joint),
+    (::) => {[Punct::new(':', Spacing::Joint), Punct::new(':', Spacing::Joint)]};
+    (==) => {[Punct::new('=', Spacing::Joint), Punct::new('=', Spacing::Joint)]};
+    (=>) => {[Punct::new('=', Spacing::Joint), Punct::new('>', Spacing::Joint)]};
+    (<=) => {[Punct::new('<', Spacing::Joint), Punct::new('=', Spacing::Joint)]};
+    (>=) => {[Punct::new('>', Spacing::Joint), Punct::new('=', Spacing::Joint)]};
+    (->) => {[Punct::new('-', Spacing::Joint), Punct::new('>', Spacing::Joint)]};
+    (_) => {Ident::new("_", Span::call_site())};
+    (=) => {Punct::new('=', Spacing::Alone)};
+    (<) => {Punct::new('<', Spacing::Alone)};
+    (>) => {Punct::new('>', Spacing::Alone)};
+    (!) => {Punct::new('!', Spacing::Alone)};
+    (~) => {Punct::new('~', Spacing::Alone)};
+    (+) => {Punct::new('+', Spacing::Alone)};
+    (-) => {Punct::new('-', Spacing::Alone)};
+    (*) => {Punct::new('*', Spacing::Alone)};
+    (/) => {Punct::new('/', Spacing::Alone)};
+    (%) => {Punct::new('%', Spacing::Alone)};
+    (^) => {Punct::new('^', Spacing::Alone)};
+    (&) => {Punct::new('&', Spacing::Alone)};
+    (|) => {Punct::new('|', Spacing::Alone)};
+    (@) => {Punct::new('@', Spacing::Alone)};
+    (.) => {Punct::new('.', Spacing::Alone)};
+    (,) => {Punct::new(',', Spacing::Alone)};
+    (;) => {Punct::new(';', Spacing::Alone)};
+    (:) => {Punct::new(':', Spacing::Alone)};
+    (#) => {Punct::new('#', Spacing::Alone)};
+    (?) => {Punct::new('?', Spacing::Alone)};
+    ($lf:lifetime) => {[
+        TokenTree::from(Punct::new('\'', Spacing::Joint)),
+        TokenTree::from(Ident::new(&stringify!($lf)[1..], Span::call_site())),
     ]};
-    (==) => {[
-        proc_macro::Punct::new('=', Spacing::Joint),
-        proc_macro::Punct::new('=', Spacing::Joint),
-    ]};
-    (=>) => {[
-        proc_macro::Punct::new('=', Spacing::Joint),
-        proc_macro::Punct::new('>', Spacing::Joint),
-    ]};
-    (<=) => {[
-        proc_macro::Punct::new('<', Spacing::Joint),
-        proc_macro::Punct::new('=', Spacing::Joint),
-    ]};
-    (>=) => {[
-        proc_macro::Punct::new('>', Spacing::Joint),
-        proc_macro::Punct::new('=', Spacing::Joint),
-    ]};
-    (->) => {[
-        proc_macro::Punct::new('-', Spacing::Joint),
-        proc_macro::Punct::new('>', Spacing::Joint),
-    ]};
-    (_) => {proc_macro::Ident::new("_", Span::call_site())};
-    (=) => {proc_macro::Punct::new('=', Spacing::Alone)};
-    (<) => {proc_macro::Punct::new('<', Spacing::Alone)};
-    (>) => {proc_macro::Punct::new('>', Spacing::Alone)};
-    (!) => {proc_macro::Punct::new('!', Spacing::Alone)};
-    (~) => {proc_macro::Punct::new('~', Spacing::Alone)};
-    (+) => {proc_macro::Punct::new('+', Spacing::Alone)};
-    (-) => {proc_macro::Punct::new('-', Spacing::Alone)};
-    (*) => {proc_macro::Punct::new('*', Spacing::Alone)};
-    (/) => {proc_macro::Punct::new('/', Spacing::Alone)};
-    (%) => {proc_macro::Punct::new('%', Spacing::Alone)};
-    (^) => {proc_macro::Punct::new('^', Spacing::Alone)};
-    (&) => {proc_macro::Punct::new('&', Spacing::Alone)};
-    (|) => {proc_macro::Punct::new('|', Spacing::Alone)};
-    (@) => {proc_macro::Punct::new('@', Spacing::Alone)};
-    (.) => {proc_macro::Punct::new('.', Spacing::Alone)};
-    (,) => {proc_macro::Punct::new(',', Spacing::Alone)};
-    (;) => {proc_macro::Punct::new(';', Spacing::Alone)};
-    (:) => {proc_macro::Punct::new(':', Spacing::Alone)};
-    (#) => {proc_macro::Punct::new('#', Spacing::Alone)};
-    (?) => {proc_macro::Punct::new('?', Spacing::Alone)};
-    ($lf:lifetime) => {(
-        proc_macro::Punct::new('\'', Spacing::Joint),
-        proc_macro::Ident::new(&stringify!($lf)[1..], Span::call_site()),
-    )};
-    ($l:literal) => {proc_macro::Literal::string($l)};
-    ($t:ident) => {proc_macro::Ident::new(stringify!($t), proc_macro::Span::call_site())};
+    ($l:literal) => {Literal::string($l)};
+    ($t:ident) => {Ident::new(stringify!($t), Span::call_site())};
     () => {};
 }
 
@@ -120,12 +100,6 @@ pub trait ToTokens: Sized {
     {
         self.clone().into_tokens(tokens);
     }
-
-    fn into_token_stream(self) -> TokenStream {
-        let mut tokens = TokenStream::new();
-        self.into_tokens(&mut tokens);
-        tokens
-    }
 }
 
 impl<T: ToTokens> ToTokens for Option<T> {
@@ -136,55 +110,24 @@ impl<T: ToTokens> ToTokens for Option<T> {
     }
 }
 
-impl ToTokens for Ident {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(once(self));
-    }
-}
-
-impl ToTokens for Punct {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(once(self));
-    }
-}
-
-impl ToTokens for [Punct; 2] {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(self);
-    }
-}
-
-impl ToTokens for (Punct, Ident) {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend([TokenTree::from(self.0), self.1.into()]);
-    }
-}
-
-impl ToTokens for Group {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(once(self));
-    }
-}
-
-impl ToTokens for Literal {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(once(self));
-    }
-}
-
-impl ToTokens for TokenTree {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        match self {
-            TokenTree::Group(g) => g.into_tokens(tokens),
-            TokenTree::Ident(i) => i.into_tokens(tokens),
-            TokenTree::Punct(p) => p.into_tokens(tokens),
-            TokenTree::Literal(l) => l.into_tokens(tokens),
+macro_rules! impl_single {
+    ($($me:ident),*) => {$(
+        impl ToTokens for $me {
+            fn into_tokens(self, tokens: &mut TokenStream) {
+                tokens.extend(Some(self));
+            }
         }
-    }
+    )*};
 }
+impl_single!(Ident, Punct, Group, Literal, TokenTree);
 
-impl ToTokens for TokenStream {
-    fn into_tokens(self, tokens: &mut TokenStream) {
-        tokens.extend(self);
-    }
+macro_rules! impl_iter {
+    ($( $(const $n:ident)? $me:ty ),*) => {$(
+        impl$(<const $n: usize>)? ToTokens for $me {
+            fn into_tokens(self, tokens: &mut TokenStream) {
+                tokens.extend(self);
+            }
+        }
+    )*};
 }
+impl_iter!(TokenStream, const N [Punct; N], const N [TokenTree; N]);

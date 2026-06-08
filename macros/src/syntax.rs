@@ -129,3 +129,12 @@ impl ToTokens for Attributes {
     }
 }
 
+impl IntoIterator for Attributes {
+    type Item = Parser;
+
+    type IntoIter = std::iter::Map<std::vec::IntoIter<Attribute>, fn(Attribute) -> Parser>;
+
+    fn into_iter(self) -> Self::IntoIter {
+        self.attrs.into_iter().map(|e| Parser::new(e.tokens))
+    }
+}
