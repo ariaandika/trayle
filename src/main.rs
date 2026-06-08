@@ -204,7 +204,9 @@ pub fn router(
         WlDisplay { Sync, GetRegistry }
         WlRegistry { Bind }
         WlCompositor {
-            CreateSurface
+            CreateSurface,
+            CreateRegion todo,
+            Release todo,
         }
         WlShm {
             CreatePool todo,
@@ -213,6 +215,8 @@ pub fn router(
         WlSeat {
             GetPointer todo,
             GetKeyboard,
+            GetTouch todo,
+            Release todo,
         }
         WlDataDeviceManager {
             CreateDataSource,

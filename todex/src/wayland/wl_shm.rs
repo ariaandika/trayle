@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_shm_pool::WlShmPool;
 
 #[derive(Interface, Debug)]
 pub struct WlShm {
@@ -14,9 +15,40 @@ pub enum RequestOp {
 #[derive(Message, Debug)]
 #[request(WlShm)]
 pub struct CreatePool {
-    /// TODO: <wl_shm_pool>
-    pub id: ObjectId,
+    pub id: NewId<WlShmPool>,
     #[fd]
     pub fd: i32,
     pub size: i32,
+}
+
+#[derive(Message, Debug)]
+#[request(WlShm)]
+pub struct Release;
+
+#[derive(OpCode, Debug, Clone, Copy)]
+pub enum EventOp {
+    Format,
+}
+
+#[derive(Message, Debug)]
+#[event(WlShm)]
+pub struct Format {
+    pub format: PixelFormat,
+}
+
+#[derive(WlEnum, Debug, Clone, Copy)]
+pub enum Error {
+    /// buffer format is not known
+    InvalidFormat,
+    /// invalid size or stride during pool or buffer creation
+    InvalidStride,
+    /// mmapping the file descriptor failed
+    InvalidFd,
+}
+
+#[derive(WlEnum, Debug, Clone, Copy)]
+#[repr(u32)]
+pub enum PixelFormat {
+    Argb8888 = 0,
+    Xrgb8888 = 1,
 }

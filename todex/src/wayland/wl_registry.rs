@@ -22,6 +22,7 @@ pub struct Bind<'a> {
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Global,
+    GlobalRemove,
 }
 
 #[derive(Message, Debug)]
@@ -30,6 +31,12 @@ pub struct Global<'a> {
     pub name: u32,
     pub interface: &'a str,
     pub version: u32,
+}
+
+#[derive(Message, Debug)]
+#[event(WlRegistry)]
+pub struct GlobalRemove {
+    pub name: u32,
 }
 
 // ===== impls =====

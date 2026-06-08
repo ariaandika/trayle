@@ -11,6 +11,8 @@ pub struct WlSeat {
 pub enum RequestOp {
     GetPointer,
     GetKeyboard,
+    GetTouch,
+    Release,
 }
 
 #[derive(Message, Debug)]
@@ -22,6 +24,7 @@ pub struct GetKeyboard {
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Capabilities,
+    Name,
 }
 
 #[derive(Message, Debug)]
@@ -38,4 +41,10 @@ impl WlEnum for Capability {
     fn to_u32(self) -> u32 {
         self.to_u32()
     }
+}
+
+#[derive(WlEnum, Debug, Clone, Copy)]
+pub enum Error {
+    /// get_pointer, get_keyboard or get_touch called on seat without the matching capability
+    MissingCapability,
 }

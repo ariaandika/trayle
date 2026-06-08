@@ -27,3 +27,20 @@ pub struct GetDataDevice {
     /// <wl_seat>
     pub seat: ObjectId,
 }
+
+#[derive(Message, Debug)]
+#[request(WlDataDeviceManager)]
+pub struct Release;
+
+/// TODO: bitfield
+#[derive(WlEnum, Debug, Clone, Copy)]
+pub enum DndAction {
+    /// no action
+    None,
+    /// copy action
+    Copy,
+    /// move action
+    Move,
+    /// ask action
+    Ask,
+}

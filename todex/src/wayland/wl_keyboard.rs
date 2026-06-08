@@ -6,8 +6,22 @@ pub struct WlKeyboard {
 }
 
 #[derive(OpCode, Debug, Clone, Copy)]
+pub enum RequestOp {
+    Release,
+}
+
+#[derive(Message, Debug)]
+#[request(WlKeyboard)]
+pub struct Release;
+
+#[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
     Keymap,
+    Enter,
+    Leave,
+    Key,
+    Modifiers,
+    RepeatInfo,
 }
 
 #[derive(Message, Debug)]
@@ -19,8 +33,61 @@ pub struct Keymap {
     pub size: u32,
 }
 
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
+pub struct Enter<'a> {
+    pub serial: u32,
+    /// <wl_surface>
+    pub surface: ObjectId,
+    pub keys: &'a [u8],
+}
+
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
+pub struct Leave {
+    pub serial: u32,
+    /// <wl_surface>
+    pub surface: ObjectId,
+}
+
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
+pub struct Key {
+    pub serial: u32,
+    pub time: u32,
+    pub key: u32,
+    pub state: KeyState,
+}
+
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
+pub struct Modifiers {
+    pub serial: u32,
+    pub mods_depressed: u32,
+    pub mods_latched: u32,
+    pub mods_locket: u32,
+    pub group: u32,
+}
+
+#[derive(Message, Debug)]
+#[event(WlKeyboard)]
+pub struct RepeatInfo {
+    pub rate: i32,
+    pub delay: i32,
+}
+
 #[derive(WlEnum, Debug, Clone, Copy)]
 pub enum KeymapFormat {
     NoKeymap,
     XkbV1
+}
+
+#[derive(WlEnum, Debug, Clone, Copy)]
+pub enum KeyState {
+    /// key is not pressed
+    Released,
+    /// key is pressed
+    Pressed,
+    /// key was repeated (since 10)
+    Repeated,
 }
