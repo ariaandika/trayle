@@ -37,6 +37,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut enc_write = TokenStream::new();
     let mut ctor_args = TokenStream::new();
     let mut ctor = TokenStream::new();
+    let mut encodable = 0;
     let mut len = 0;
 
     loop {
@@ -55,7 +56,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         } else {
             break;
         };
-        len += (!is_fd) as usize;
+        encodable += (!is_fd) as usize;
+        len += 1;
 
         let name = body.ident()?;
         let col = body.punct_of(':')?;
@@ -71,7 +73,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             ty.extend([tree]);
         }
 
-        if len == 1 {
+        if encodable == 1 {
             dec_1 = Some(name.clone());
         }
 
@@ -99,9 +101,13 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         Some(gen_token!(mut))
     };
 
-    let dec_impl = match len {
-        0 => generate! { Ok(#&name { }) },
-        1 => generate! { Ok(#&name { #dec_1: decoder.read()? }) },
+    let dec_impl = match (len, encodable) {
+        (0, _) => generate! { Ok(#&name { }) },
+        (1, 1) => generate! { Ok(#&name { #dec_1: decoder.read()? }) },
+        (1, 0) => generate! {
+            #dec_fd
+            Ok(#&name { #dec_read })
+        },
         _ => generate! {
             #dec_fd
             let mut reader = decoder.reader();
