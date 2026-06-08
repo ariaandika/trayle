@@ -1,16 +1,17 @@
-use crate::wayland::{MessageBuf, ObjectId, WlError};
+use crate::sys::buffer::Buffer;
+use crate::wayland::{ObjectId, WlError};
 
 // ===== Frame =====
 
 /// Encoded message.
 pub struct Frame<'a> {
     /// - guarantee to contains one valid length message
-    read_buf: &'a mut MessageBuf,
+    read_buf: &'a mut Buffer,
 }
 
 impl<'a> Frame<'a> {
     #[inline]
-    pub fn has_frame(read_buf: &MessageBuf) -> bool {
+    pub fn has_frame(read_buf: &Buffer) -> bool {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return false;
         };
@@ -19,7 +20,7 @@ impl<'a> Frame<'a> {
     }
 
     #[inline]
-    pub fn new(read_buf: &'a mut MessageBuf) -> Result<(ObjectId, u16, Self), WlError> {
+    pub fn new(read_buf: &'a mut Buffer) -> Result<(ObjectId, u16, Self), WlError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(WlError::InvalidSize);
         };

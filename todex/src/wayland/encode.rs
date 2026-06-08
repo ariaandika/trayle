@@ -1,4 +1,5 @@
-use crate::wayland::{AsObjectId, MessageBuf, NewId, ObjectId, WlEnum};
+use crate::sys::buffer::Buffer;
+use crate::wayland::{AsObjectId, NewId, ObjectId, WlEnum};
 
 // ===== Encode =====
 
@@ -23,7 +24,7 @@ pub trait Encode: Sized {
 
     /// Encode wayland message with given object id.
     #[inline]
-    fn encode_message(self, object_id: ObjectId, write_buf: &mut MessageBuf) {
+    fn encode_message(self, object_id: ObjectId, write_buf: &mut Buffer) {
         for fd in self.fds() {
             println!("{fd}");
             assert!(write_buf.push_fd(fd));
@@ -46,12 +47,12 @@ pub trait Encode: Sized {
 ///
 /// Applications may accept this trait instead of [`Encode`].
 pub trait EncodeMessage: AsObjectId {
-    fn encode_message(self, write_buf: &mut MessageBuf);
+    fn encode_message(self, write_buf: &mut Buffer);
 }
 
 impl<E: Encode + AsObjectId> EncodeMessage for E {
     #[inline]
-    fn encode_message(self, write_buf: &mut MessageBuf) {
+    fn encode_message(self, write_buf: &mut Buffer) {
         let id = self.object_id();
         Encode::encode_message(self, id, write_buf);
     }

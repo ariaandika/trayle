@@ -1,9 +1,10 @@
 use std::os::fd::{AsRawFd, OwnedFd};
 
+use crate::sys::buffer::{Buffer, SmallBuf};
 use crate::collections::slab::Slab;
 use crate::compositor::objects::{Object, Objects};
 use crate::wayland::wl_display::Error;
-use crate::wayland::{EncodeMessage, MessageBuf, ObjectId, SmallBuf, WlError, WlObject};
+use crate::wayland::{EncodeMessage, ObjectId, WlError, WlObject};
 
 // ===== ClientId =====
 
@@ -64,12 +65,12 @@ impl AsRawFd for Client {
 pub struct ClientMut<'a> {
     id: ClientId,
     state: &'a mut Client,
-    write_buf: &'a mut MessageBuf,
+    write_buf: &'a mut Buffer,
 }
 
 impl<'a> ClientMut<'a> {
     #[inline]
-    pub fn new(id: ClientId, state: &'a mut Client, write_buf: &'a mut MessageBuf) -> Self {
+    pub fn new(id: ClientId, state: &'a mut Client, write_buf: &'a mut Buffer) -> Self {
         Self { id, state, write_buf }
     }
 

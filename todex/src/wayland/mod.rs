@@ -52,7 +52,6 @@
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use message::Frame;
-pub use buffer::{MessageBuf, SmallBuf};
 pub use error::WlError;
 pub use decode::Decode;
 pub use encode::{Encodable, Encode, EncodeMessage};
@@ -70,8 +69,6 @@ mod message;
 mod decode;
 mod encode;
 mod traits;
-
-pub mod buffer;
 
 mod prelude {
     pub use super::{AsInterface, AsObjectId, Decode, Encode, FromObjectId, OpCode, WlEnum};

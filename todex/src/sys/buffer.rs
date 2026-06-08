@@ -17,7 +17,7 @@ const INITIAL_CAP: usize = TOTAL_INITIAL_SIZE - MAXFD_SIZE;
 
 // ===== Buffer =====
 
-pub struct MessageBuf {
+pub struct Buffer {
     ptr: NonNull<u8>,
     off: usize,
     len: usize,
@@ -26,13 +26,13 @@ pub struct MessageBuf {
     fd_off: usize,
 }
 
-impl Drop for MessageBuf {
+impl Drop for Buffer {
     fn drop(&mut self) {
         alloc::deallocate(self.base_ptr());
     }
 }
 
-impl MessageBuf {
+impl Buffer {
     #[inline]
     pub fn new() -> Self {
         let base_ptr = alloc::allocate(TOTAL_INITIAL_SIZE);
@@ -147,7 +147,7 @@ impl MessageBuf {
     }
 }
 
-impl MessageBuf {
+impl Buffer {
     #[inline]
     pub fn sendmsg<Fd: AsRawFd>(&mut self, socket: &Fd) -> Poll<Result<(), WriteError>> {
         sendmsg(self, socket.as_raw_fd())
@@ -159,21 +159,12 @@ impl MessageBuf {
     }
 }
 
-impl std::ops::Deref for MessageBuf {
+impl std::ops::Deref for Buffer {
     type Target = [u8];
 
     #[inline]
     fn deref(&self) -> &Self::Target {
         self.as_slice()
-    }
-}
-
-// ===== Frame =====
-
-impl MessageBuf {
-    #[inline]
-    pub fn has_frame(&self) -> bool {
-        super::Frame::has_frame(self)
     }
 }
 
@@ -217,7 +208,7 @@ const NEW_CMSG: CmsgBuf = unsafe {
 
 // ===== syscall =====
 
-fn sendmsg(buf: &mut MessageBuf, socket: i32) -> Poll<Result<(), WriteError>> {
+fn sendmsg(buf: &mut Buffer, socket: i32) -> Poll<Result<(), WriteError>> {
     debug_assert!(!buf.is_empty());
 
     let mut cmsg = NEW_CMSG;
@@ -280,7 +271,7 @@ fn sendmsg(buf: &mut MessageBuf, socket: i32) -> Poll<Result<(), WriteError>> {
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buf: &mut MessageBuf, socket: i32) -> Poll<Result<(), ReadError>> {
+fn recvmsg(buf: &mut Buffer, socket: i32) -> Poll<Result<(), ReadError>> {
     use ReadError as E;
     debug_assert!(buf.len < buf.cap);
 
@@ -395,7 +386,7 @@ impl Drop for SmallBuf {
 }
 
 impl SmallBuf {
-    pub fn copy_from(&mut self, read_buf: &MessageBuf, write_buf: &MessageBuf) {
+    pub fn copy_from(&mut self, read_buf: &Buffer, write_buf: &Buffer) {
         debug_assert!(self.ptr.is_none());
         debug_assert!(!(read_buf.is_empty() & write_buf.is_empty()));
 
@@ -434,7 +425,7 @@ impl SmallBuf {
     //     write_buf @ [u8; MAXFD_SIZE + write_len],
     // ]
     // ```
-    pub fn restore(&mut self, read_buf: &mut MessageBuf, write_buf: &mut MessageBuf) {
+    pub fn restore(&mut self, read_buf: &mut Buffer, write_buf: &mut Buffer) {
         debug_assert!(read_buf.is_empty() & write_buf.is_empty());
         debug_assert_eq!(
             read_buf.fd_len | read_buf.fd_off | write_buf.fd_len | write_buf.fd_off,

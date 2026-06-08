@@ -1,10 +1,10 @@
 use std::process::ExitCode;
 use std::task::Poll::*;
 
+use todex::sys::buffer::{self, Buffer};
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::wayland::{self, Decode, Frame, Interface, OpCode, WlError};
-use todex::wayland::buffer::{self, MessageBuf};
 use todex::compositor::clients::{ClientId, ClientMut, Clients};
 use todex::compositor::seat::Seat;
 use todex::rt::poller::Poller;
@@ -26,8 +26,8 @@ fn event_loop() -> Result<(), FatalError> {
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
 
-    let mut read_buf = MessageBuf::new();
-    let mut write_buf = MessageBuf::new();
+    let mut read_buf = Buffer::new();
+    let mut write_buf = Buffer::new();
 
     let mut clients = Clients::new();
     let mut compositor = Compositor { seat };
@@ -90,7 +90,7 @@ fn event_loop() -> Result<(), FatalError> {
             if interest.is_read() {
                 let mut client = ClientMut::new(id, client, &mut write_buf);
                 loop {
-                    if read_buf.has_frame() {
+                    if Frame::has_frame(&read_buf) {
                         router(&mut read_buf, &mut client, &mut compositor)
                             .inspect_err(|e| client.send_global_error(*e))?;
                     } else {
@@ -162,7 +162,7 @@ pub struct Compositor {
 }
 
 pub fn router(
-    read_buf: &mut MessageBuf,
+    read_buf: &mut Buffer,
     client: &mut ClientMut,
     compositor: &mut Compositor,
 ) -> Result<(), WlError> {
