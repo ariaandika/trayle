@@ -24,18 +24,18 @@ impl<'a> Frame<'a> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(WlError::InvalidSize);
         };
-        let Some(id) = ObjectId::new(u32::from_ne_bytes(*header[..4].as_array().unwrap())) else {
+        let Some(id) = ObjectId::new(u32::from_ne_bytes(*header.first_chunk().unwrap())) else {
             return Err(WlError::ZeroId);
         };
-        let op = u16::from_ne_bytes(*header[4..6].as_array().unwrap());
-        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap());
+        let hdr2 = u32::from_ne_bytes(*header.last_chunk().unwrap());
+        let len = hdr2 >> u16::BITS;
         if len < 8 {
             return Err(WlError::InvalidSize);
         }
         if read_buf.len() < len as usize {
             return Err(WlError::InvalidSize);
         }
-        Ok((id, op, Self { read_buf }))
+        Ok((id, hdr2 as u16, Self { read_buf }))
     }
 
     #[inline]

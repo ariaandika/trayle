@@ -32,11 +32,11 @@ pub trait Encode: Sized {
         let size = 8 + self.size() as usize;
         write_buf.reserve(size);
         unsafe {
-            let ptr = write_buf.spare_capacity_mut().as_mut_ptr().cast::<u8>();
-            ptr.cast::<ObjectId>().write_unaligned(object_id);
-            ptr.add(4).cast::<u16>().write_unaligned(Self::OPCODE);
-            ptr.add(6).cast::<u16>().write_unaligned(size as u16);
-            self.encode(Writer(ptr.add(8)));
+            let writer = Writer(write_buf.spare_capacity_mut().as_mut_ptr().cast::<u8>());
+            let hdr2 = (size as u32) << u16::BITS | Self::OPCODE as u32;
+
+            self.encode(writer.write(object_id).write(hdr2));
+
             // SAFETY: `Write` implementation guarantee `size` data is initialized
             write_buf.advance_mut(size);
         }
