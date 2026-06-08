@@ -1,5 +1,5 @@
 use crate::sys::buffer::Buffer;
-use crate::wayland::{AsObjectId, NewId, ObjectId, WlEnum};
+use crate::wayland::{AsObjectId, Fixed, NewId, ObjectId, WlEnum};
 
 // ===== Encode =====
 
@@ -179,6 +179,7 @@ impl_write_for_int!(i32);
 impl_write_for_int!(ObjectId);
 
 sized4!(impl Sized2 for Option<ObjectId>);
+sized4!(impl Sized2 for Fixed);
 sized4!(impl<T> Sized2 for NewId<T>);
 
 impl<T> private::Sealed for NewId<T> {
@@ -192,6 +193,13 @@ impl private::Sealed for Option<ObjectId> {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
         self.map(ObjectId::to_u32).unwrap_or_default().write(writer)
+    }
+}
+
+impl private::Sealed for Fixed {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        self.to_i32().write(writer)
     }
 }
 

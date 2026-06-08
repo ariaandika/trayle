@@ -51,6 +51,7 @@
 //! - Interface object contains constructor methods for its operations.
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
+pub use fixed::Fixed;
 pub use message::Frame;
 pub use error::WlError;
 pub use decode::Decode;
@@ -64,6 +65,7 @@ macro_rules! roundup4 {
 }
 
 mod object_id;
+mod fixed;
 mod error;
 mod message;
 mod decode;
@@ -72,7 +74,7 @@ mod traits;
 
 mod prelude {
     pub use super::{AsInterface, AsObjectId, Decode, Encode, FromObjectId, OpCode, WlEnum};
-    pub use super::{Encodable, Interface, NewId, ObjectId, WlError};
+    pub use super::{Encodable, Fixed, Interface, NewId, ObjectId, WlError};
     pub use super::decode::Decoder;
     pub use super::encode::{Sized2, Writer};
 
