@@ -30,21 +30,21 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             type Output = Self;
             #[inline]
             fn bitand(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero & self.#&zero)
+                Self(self.#&zero & rhs.#&zero)
             }
         }
         impl std::ops::BitOr for #&name {
             type Output = Self;
             #[inline]
             fn bitor(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero | self.#&zero)
+                Self(self.#&zero | rhs.#&zero)
             }
         }
         impl std::ops::BitXor for #&name {
             type Output = Self;
             #[inline]
             fn bitxor(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero ^ self.#&zero)
+                Self(self.#&zero ^ rhs.#&zero)
             }
         }
         impl WlEnum for #&name {
