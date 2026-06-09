@@ -32,15 +32,17 @@ pub struct GetDataDevice {
 #[request(WlDataDeviceManager)]
 pub struct Release;
 
-/// TODO: bitfield
-#[derive(WlEnum, Debug, Clone, Copy)]
-pub enum DndAction {
+#[derive(Debug, Clone, Copy)]
+pub struct DndAction(u32);
+
+bitfield! {
+    DndAction;
     /// no action
-    None,
+    None = 0,
     /// copy action
-    Copy,
+    Copy = 1,
     /// move action
-    Move,
+    Move = 2,
     /// ask action
-    Ask,
+    Ask = 4,
 }

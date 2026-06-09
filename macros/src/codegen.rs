@@ -58,6 +58,8 @@ macro_rules! gen_token {
     (=>) => {[Punct::new('=', Spacing::Joint), Punct::new('>', Spacing::Joint)]};
     (<=) => {[Punct::new('<', Spacing::Joint), Punct::new('=', Spacing::Joint)]};
     (>=) => {[Punct::new('>', Spacing::Joint), Punct::new('=', Spacing::Joint)]};
+    (>>) => {[Punct::new('>', Spacing::Joint), Punct::new('>', Spacing::Joint)]};
+    (<<) => {[Punct::new('<', Spacing::Joint), Punct::new('<', Spacing::Joint)]};
     (->) => {[Punct::new('-', Spacing::Joint), Punct::new('>', Spacing::Joint)]};
     (_) => {Ident::new("_", Span::call_site())};
     (=) => {Punct::new('=', Spacing::Alone)};

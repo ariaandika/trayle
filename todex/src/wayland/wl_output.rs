@@ -90,9 +90,13 @@ pub enum Transform {
     Flipped270,
 }
 
-// TODO: bitfield
-#[derive(WlEnum, Debug, Clone, Copy)]
-pub enum ModeFlag {
+#[derive(Debug, Clone, Copy)]
+pub struct ModeFlag(u32);
+
+bitfield! {
+    ModeFlag;
+    /// indicates this is the current mode
     Current = 0x1,
+    /// indicates this is the preferred mode
     Preferred = 0x2,
 }

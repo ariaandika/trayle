@@ -22,8 +22,9 @@ mod prelude {
 mod interface;
 mod opcode;
 mod message;
-mod protocol;
 mod wl_enum;
+mod bitfield;
+mod protocol;
 
 // ===== exports =====
 
@@ -83,6 +84,27 @@ pub fn wl_enum(tokens: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn protocol(tokens: TokenStream) -> TokenStream {
     protocol::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
+}
+
+/// Implement `WlEnum`, `Bit{And, Or, Xor}` and define constant for each entries.
+///
+/// Target struct must be a single field struct of `u32`.
+///
+/// Currently, the `WlEnum` implementation ignore unknown bits.
+///
+/// ```ignore
+/// bitfield! {
+///     DndAction;
+///
+///     None = 0,
+///     Copy = 1,
+///     Move = 2,
+///     Ask = 4,
+/// }
+/// ```
+#[proc_macro]
+pub fn bitfield(tokens: TokenStream) -> TokenStream {
+    bitfield::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
 fn to_camel(string: &str) -> String {
