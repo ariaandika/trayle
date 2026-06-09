@@ -3,36 +3,7 @@ use std::os::fd::AsRawFd;
 use crate::sys::errno::Errno;
 use crate::sys::memfd::Memfd;
 use crate::wayland::{Encodable, wl_keyboard};
-
-const POINTER: u32 = 1;
-const KEYBOARD: u32 = 1 << 1;
-// const TOUCH: u32 = 1 << 2;
-
-#[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
-pub struct Capability(u32);
-
-impl Capability {
-    pub const fn new() -> Self {
-        Self(0)
-    }
-
-    pub const fn from_u32(flags: u32) -> Self {
-        Self(flags)
-    }
-
-    pub const fn add_pointer(self) -> Self {
-        Self(self.0 | POINTER)
-    }
-
-    pub const fn add_keyboard(self) -> Self {
-        Self(self.0 | KEYBOARD)
-    }
-
-    pub const fn to_u32(self) -> u32 {
-        self.0
-    }
-}
+use crate::wayland::wl_seat::Capability;
 
 // ===== Seat =====
 
@@ -52,7 +23,7 @@ impl Seat {
             .map_err(|_| SeatError::MemfdWrite)?;
 
         Ok(Self {
-            capability: Capability::new().add_pointer().add_keyboard(),
+            capability: Capability::POINTER | Capability::KEYBOARD,
             memfd,
         })
     }

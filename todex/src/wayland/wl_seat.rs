@@ -1,4 +1,3 @@
-use crate::compositor::seat::Capability;
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
 
@@ -33,14 +32,14 @@ pub struct Capabilities {
     pub capabilities: Capability,
 }
 
-impl WlEnum for Capability {
-    fn from_u32(uint: u32) -> Option<Self> {
-        Some(Self::from_u32(uint))
-    }
+#[derive(Debug, Clone, Copy)]
+pub struct Capability(u32);
 
-    fn to_u32(self) -> u32 {
-        self.to_u32()
-    }
+bitfield! {
+    Capability;
+    Pointer = 1,
+    Keyboard = 2,
+    Touch = 4,
 }
 
 #[derive(WlEnum, Debug, Clone, Copy)]
