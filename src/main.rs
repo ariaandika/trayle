@@ -140,7 +140,7 @@ impl Compositor {
         _: R,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let op = R::OPCODE;
+        let op = R::OPCODE.to_op();
         let iface = R::INTERFACE;
         client.log_error(format_args!("`{iface}::{op}` is not yet implemented"));
         WlError::todo()

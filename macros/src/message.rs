@@ -152,7 +152,9 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         }
 
         impl Encode for #&name #&plf {
-            const OPCODE: u16 = #opkind::#&name as u16;
+            type OpCode = #&opkind;
+
+            const OPCODE: Self::OpCode = #opkind::#&name;
 
             #[inline]
             fn size(&self) -> u16 {
