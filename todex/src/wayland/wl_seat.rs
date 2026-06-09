@@ -1,5 +1,7 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
+use crate::wayland::wl_pointer::WlPointer;
+use crate::wayland::wl_touch::WlTouch;
 
 #[derive(Interface, Debug)]
 pub struct WlSeat {
@@ -16,9 +18,25 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(WlSeat)]
+pub struct GetPointer {
+    pub pointer: NewId<WlPointer>,
+}
+
+#[derive(Message, Debug)]
+#[request(WlSeat)]
 pub struct GetKeyboard {
     pub keyboard: NewId<WlKeyboard>,
 }
+
+#[derive(Message, Debug)]
+#[request(WlSeat)]
+pub struct GetTouch {
+    pub touch: NewId<WlTouch>,
+}
+
+#[derive(Message, Debug)]
+#[request(WlSeat)]
+pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum EventOp {
