@@ -34,7 +34,7 @@ pub fn interface(tokens: TokenStream) -> TokenStream {
     interface::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
-/// Implement `OpCode`.
+/// Implement `OpCode` and `Display`.
 #[proc_macro_derive(OpCode)]
 pub fn op_code(tokens: TokenStream) -> TokenStream {
     opcode::process(Parser::new(tokens)).unwrap_or_else(<_>::into)

@@ -43,21 +43,18 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut len = 0;
 
     loop {
-        let is_fd = if body.is_punct_of('#').is_some() {
-            let attrs = body.parse::<Attributes>()?;
-            let _ = body.next_ident_of("pub");
-
-            attrs.attrs.into_iter().any(|e|{
-                match e.tokens.into_iter().next() {
-                    Some(TokenTree::Ident(id)) => id.to_string().as_str() == "fd",
-                    _ => false,
-                }
-            })
-        } else if body.next_ident_of("pub").is_some() {
-            false
-        } else {
+        let attrs = body.parse::<Attributes>()?;
+        let Some(_) = body.next_ident_of("pub") else {
             break;
         };
+
+        let is_fd = attrs.attrs.into_iter().any(|e|{
+            match e.tokens.into_iter().next() {
+                Some(TokenTree::Ident(id)) => id.to_string().as_str() == "fd",
+                _ => false,
+            }
+        });
+
         encodable += (!is_fd) as usize;
         len += 1;
 

@@ -1,10 +1,5 @@
 use crate::prelude::*;
 
-fn err_empty_enum() -> Error {
-    // Perhaps allowed for enum that needs to exists for trait implementation ?
-    Error::new("empty enum is not supported".into(), Span::call_site())
-}
-
 pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.parse::<Attributes>()?;
     let _ = parser.ident_of("pub")?;
@@ -14,13 +9,13 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
 
     let zero = Literal::u8_unsuffixed(0);
-    let mut display = TokenStream::new();
+    let mut names_arm = TokenStream::new();
     let mut last_variant = body.next_ident().ok_or_else(err_empty_enum)?;
     let mut i = 1;
 
     loop {
         let wl_entry = Literal::string(&to_snake(&last_variant.to_string()));
-        display.extend(generate!(Self::#&last_variant => #wl_entry.fmt(f),));
+        names_arm.extend(generate!(Self::#&last_variant => #wl_entry,));
 
         body.next_punct_of(',');
         let Some(next_ident) = body.next_ident() else {
@@ -44,6 +39,15 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     };
 
     Ok(generate! {
+        impl #&name {
+            /// Returns the wayland name.
+            #[inline]
+            pub const fn name(&self) -> &'static str {
+                match self {
+                    #names_arm
+                }
+            }
+        }
         impl OpCode for #&name {
             #[inline]
             fn from_op(op: u16) -> Option<Self> {
@@ -55,13 +59,15 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 self as u16
             }
         }
-
         impl std::fmt::Display for #name {
+            #[inline]
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                match self {
-                    #display
-                }
+                self.name().fmt(f)
             }
         }
     })
+}
+
+fn err_empty_enum() -> Error {
+    Error::new("empty enum is not supported".into(), Span::call_site())
 }
