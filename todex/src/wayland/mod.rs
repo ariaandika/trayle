@@ -52,11 +52,12 @@
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use fixed::Fixed;
-pub use message::Frame;
 pub use error::WlError;
+pub use traits::{AsInterface, AsOpCode, OpCode, WlEnum, WlObject};
+pub use message::Frame;
+
 pub use decode::Decode;
 pub use encode::{Encodable, Encode, EncodeMessage};
-pub use traits::{OpCode, WlEnum, WlObject, AsInterface};
 
 macro_rules! roundup4 {
     ($e:expr) => {
@@ -67,16 +68,17 @@ macro_rules! roundup4 {
 mod object_id;
 mod fixed;
 mod error;
+mod traits;
 mod message;
 mod decode;
 mod encode;
-mod traits;
 
 mod prelude {
-    pub use super::{AsInterface, AsObjectId, Decode, Encode, FromObjectId, OpCode, WlEnum};
-    pub use super::{Encodable, Fixed, Interface, NewId, ObjectId, WlError};
+    pub use super::{AsObjectId, FromObjectId};
+    pub use super::{AsInterface, AsOpCode, Decode, Encode, OpCode, WlEnum};
+    pub use super::{Fixed, Interface, NewId, ObjectId, WlError};
     pub use super::decode::Decoder;
-    pub use super::encode::{Sized2, Writer};
+    pub use super::encode::{Encodable, Sized2, Writer};
 
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
 }

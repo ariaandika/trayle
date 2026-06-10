@@ -1,20 +1,10 @@
 use crate::wayland::{AsObjectId, FromObjectId, Interface, NewId, WlError};
 
-/// Request/event opcode.
-pub trait OpCode: Sized {
-    fn from_op(op: u16) -> Option<Self>;
+// ===== interface =====
 
-    fn to_op(self) -> u16;
-
-    #[inline]
-    fn try_from_op(op: u16) -> Result<Self, WlError> {
-        Self::from_op(op).ok_or(WlError::UnknownOp)
-    }
-}
-
-/// Type that is belong to an interface
+/// Type that is associated with an interface.
 pub trait AsInterface {
-    /// The interface this object belongs to.
+    /// The interface value.
     const INTERFACE: Interface;
 }
 
@@ -22,30 +12,63 @@ impl<T: AsInterface> AsInterface for NewId<T> {
     const INTERFACE: Interface = T::INTERFACE;
 }
 
+// ===== opcode =====
+
+/// Request/event opcode.
+///
+/// This type is the exhaustive list of the valid opcodes.
+pub trait OpCode: Sized {
+    /// Creates this type from raw opcode.
+    ///
+    /// Returns `None` if raw value is invalid for this type.
+    fn from_op(op: u16) -> Option<Self>;
+
+    /// Converts to raw opcode.
+    fn to_op(self) -> u16;
+
+    /// Creates this type from raw opcode.
+    ///
+    /// Returns `Err` if raw value is invalid for this type.
+    #[inline]
+    fn try_from_op(op: u16) -> Result<Self, WlError> {
+        Self::from_op(op).ok_or(WlError::UnknownOp)
+    }
+}
+
+/// Type that is associated with an opcode.
+pub trait AsOpCode {
+    /// The opcode type.
+    type OpCode: OpCode;
+
+    /// The opcode value.
+    const OPCODE: Self::OpCode;
+}
+
+// ===== object =====
+
 /// Type that represent a wayland object.
 pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
 
 impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 
-/// Wayland enum.
+// ===== enum =====
+
+/// Type that represent a wayland enum.
 pub trait WlEnum: Sized {
     /// Create enum from integer.
     ///
-    /// Returns `None` if the integer did not represent any entry.
+    /// Returns `None` if the integer did not represent valid entry.
     fn from_u32(uint: u32) -> Option<Self>;
 
     /// Returns `u32` representation of the enum.
     fn to_u32(self) -> u32;
 
+    /// Create enum from integer.
+    ///
+    /// Returns `Err` if the integer did not represent valid entry.
     #[inline]
     fn try_from_u32(uint: u32) -> Result<Self, WlError> {
         Self::from_u32(uint).ok_or(WlError::UnknownEnumEntry)
     }
-}
-
-// ===== implementations =====
-
-impl<T: AsInterface> AsInterface for crate::wayland::Encodable<T> {
-    const INTERFACE: Interface = T::INTERFACE;
 }
 

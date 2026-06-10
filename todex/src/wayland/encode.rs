@@ -1,5 +1,6 @@
 use crate::sys::buffer::Buffer;
-use crate::wayland::{AsObjectId, Fixed, NewId, ObjectId, OpCode, WlEnum};
+use crate::wayland::{AsInterface, AsObjectId, AsOpCode, OpCode, WlEnum};
+use crate::wayland::{Fixed, Interface, NewId, ObjectId};
 
 // ===== Encode =====
 
@@ -7,12 +8,7 @@ use crate::wayland::{AsObjectId, Fixed, NewId, ObjectId, OpCode, WlEnum};
 ///
 /// Applications may accept [`EncodeMessage`] instead, wayland object have a constructor for its
 /// messages associated with object id which implement it.
-pub trait Encode: Sized {
-    type OpCode: OpCode;
-
-    /// The opcode of this message.
-    const OPCODE: Self::OpCode;
-
+pub trait Encode: Sized + AsOpCode {
     /// Returns the size of the payload.
     fn size(&self) -> u16;
 
@@ -21,7 +17,7 @@ pub trait Encode: Sized {
 
     /// Returns an iterator of `fd`-s, if available.
     fn fds(&self) -> impl IntoIterator<Item = i32> {
-        []
+        None
     }
 
     /// Encode wayland message with given object id.
@@ -88,11 +84,17 @@ impl<T> AsObjectId for Encodable<T> {
     }
 }
 
-impl<T: Encode> Encode for Encodable<T> {
+impl<T: AsInterface> AsInterface for Encodable<T> {
+    const INTERFACE: Interface = T::INTERFACE;
+}
+
+impl<T: AsOpCode> AsOpCode for Encodable<T> {
     type OpCode = T::OpCode;
 
     const OPCODE: Self::OpCode = T::OPCODE;
+}
 
+impl<T: Encode> Encode for Encodable<T> {
     #[inline]
     fn size(&self) -> u16 {
         self.payload.size()

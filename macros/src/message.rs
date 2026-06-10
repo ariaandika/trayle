@@ -142,6 +142,17 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
     Ok(generate! {
         #ctor
+
+        impl AsInterface for #&name #&plf {
+            const INTERFACE: Interface = Interface::#iface;
+        }
+
+        impl AsOpCode for #&name #&plf {
+            type OpCode = #&opkind;
+
+            const OPCODE: Self::OpCode = #opkind::#&name;
+        }
+
         impl Decode for #&name #&plf {
             type Output<'a> = #&name #lf;
 
@@ -151,11 +162,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
         }
 
-        impl Encode for #&name #&plf {
-            type OpCode = #&opkind;
-
-            const OPCODE: Self::OpCode = #opkind::#&name;
-
+        impl Encode for #&name #plf {
             #[inline]
             fn size(&self) -> u16 {
                 #enc_len
@@ -167,10 +174,6 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
 
             #enc_fds_impl
-        }
-
-        impl AsInterface for #name #plf {
-            const INTERFACE: Interface = Interface::#iface;
         }
     })
 }

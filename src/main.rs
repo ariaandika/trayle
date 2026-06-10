@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 
 use todex::sys::buffer::Buffer;
-use todex::wayland::{self, AsInterface, Decode, Encode, Frame, Interface, OpCode, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError};
 use todex::compositor::clients::ClientMut;
 use todex::compositor::seat::Seat;
 use todex::log;
@@ -135,7 +135,7 @@ impl Compositor {
         WlError::todo()
     }
 
-    fn todo<R: Encode + AsInterface>(
+    fn todo<R: AsOpCode + AsInterface>(
         &mut self,
         _: R,
         client: &mut ClientMut,
