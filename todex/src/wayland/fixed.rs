@@ -1,4 +1,4 @@
-#[derive(Debug, Clone, Copy)]
+#[derive(Clone, Copy)]
 #[repr(transparent)]
 pub struct Fixed(i32);
 
@@ -21,5 +21,17 @@ impl Fixed {
     #[inline]
     pub fn to_f32(self) -> f32 {
         self.0 as f32 / 256.0
+    }
+}
+
+impl std::fmt::Debug for Fixed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_f32().fmt(f)
+    }
+}
+
+impl std::fmt::Display for Fixed {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.to_f32().fmt(f)
     }
 }
