@@ -2,20 +2,27 @@
 //!
 //! # Usage
 //!
-//! This API use [`MessageBuf`] as memory management. `MessageBuf` is a bytes buffer that can also
-//! stores fds. Application can establish unix socket externally, then use [`MessageBuf::sendmsg`]
-//! or [`MessageBuf::recvmsg`] to send and receive messages respectively.
+//! This API use [`Buffer`] as memory management. It is a bytes buffer that can also stores fds.
+//! Application can establish unix socket externally, then use [`Buffer::sendmsg`] or
+//! [`Buffer::recvmsg`] to send and receive messages respectively.
 //!
-//! [`MessageBuf::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then
-//! it can be passed to [`Frame`] to decode the actual message. Application can send back a message,
-//! using [`Encode`] trait. Note that this operation is buffered, application requires to flush the
-//! message using `MessageBuf::sendmsg` mentioned previously.
+//! [`Frame::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then the
+//! buffer can be passed to [`Frame`] to decode the actual message. Application can send back a
+//! message, using [`Encode`] trait. Note that this operation is buffered, application requires to
+//! flush the message using method mentioned previously.
+//!
+//! [`Buffer`]: crate::sys::buffer::Buffer
+//! [`Buffer::sendmsg`]: crate::sys::buffer::Buffer::sendmsg
+//! [`Buffer::recvmsg`]: crate::sys::buffer::Buffer::recvmsg
 //!
 //! # Types
 //!
 //! [`ObjectId`] represents wayland object id. `ObjectId` cannot be zero. [`NewId`] is a wrapper for
-//! `ObjectId` with generic parameter to represent created object. Other primitive types can be
-//! represented by its respective rust primitive types.
+//! `ObjectId` with generic parameter to represent created object.
+//!
+//! [`Fixed`] represents wayland fixed primitive. Can be created from `f32`.
+//!
+//! Other primitive types can be represented by its respective rust primitive types.
 //!
 //! [`Interface`] is a runtime value representing an interface. This can be used by high level APIs
 //! to store mutliple interfaces in a list without dynamic dispatch.
@@ -24,31 +31,47 @@
 //! id. One cannot simply define object id field to a message payload. This struct wraps the payload
 //! and associate it with object id to form a complete encodable message.
 //!
+//! # Enum
+//!
+//! Wayland enum represented as regular enum. Bitfield enum represented as struct wrapper of `u32`.
+//!
 //! # Error
 //!
 //! All fallible operations returns `Result` with [`WlError`] as the error variant.
 //!
 //! # Traits
 //!
-//! This module also provide traits that can be used by high level APIs:
+//! This module also provide traits that can be used by high level APIs.
 //!
 //! - [`FromObjectId`]: Constructs type with given object id.
+//! - [`AsOpCode`]: Type that is associated with an opcode.
 //! - [`AsObjectId`]: Type that is associated with an object id.
+//! - [`AsInterface`]: Type that is associated with an interface.
 //! - [`OpCode`]: Request/event opcode
-//! - [`AsInterface`]: Type that is belong to an interface.
 //! - [`WlObject`]: Type that represent a wayland object.
 //!
-//! # Interfaces
+//! These traits are not meant to be implemented by application.
+//!
+//! # Interface
 //!
 //! Interface definitions are provided in the module with the same name of the interface. All
 //! respective types implements all traits mentioned previously.
 //!
-//! Every interface module follows a convention.
+//! Every interface module follows a convention, with some exception for `wl_display`.
 //!
 //! - Object definitions is the UpperCamelCase of the interface name.
 //! - `RequestOp` and `EventOp` representing requests and events of the interface.
 //! - Operation definition are regular struct.
 //! - Interface object contains constructor methods for its operations.
+//!
+//! For example with `wl_registry`:
+//! - Interface object: `wl_registry::WlRegistry`
+//! - Request opcodes: `wl_registry::RequestOp`
+//! - Event opcodes: `wl_registry::EventOp`
+//! - `wl_registry::bind` request: `wl_registry::Bind`
+//! - `wl_registry::global` event: `wl_registry::Global`
+//! - `wl_registry::bind` constructor: `wl_registry::WlRegistry::bind`
+//! - `wl_registry::global` constructor: `wl_registry::WlRegistry::global`
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use fixed::Fixed;
