@@ -47,7 +47,7 @@ pub fn message(tokens: TokenStream) -> TokenStream {
     message::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
-/// Implement `WlEnum`.
+/// Implement `WlEnum` and `Display`.
 #[proc_macro_derive(WlEnum)]
 pub fn wl_enum(tokens: TokenStream) -> TokenStream {
     wl_enum::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
@@ -86,7 +86,7 @@ pub fn protocol(tokens: TokenStream) -> TokenStream {
     protocol::process(Parser::new(tokens)).unwrap_or_else(<_>::into)
 }
 
-/// Implement `WlEnum`, `Bit{And, Or, Xor}` and define constant for each entries.
+/// Implement `WlEnum`, `Display`, `Bit{And, Or, Xor}` and define constant for each entries.
 ///
 /// Target struct must be a single field struct of `u32`.
 ///

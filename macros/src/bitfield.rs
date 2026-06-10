@@ -5,7 +5,10 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.punct_of(';')?;
 
     let zero = Literal::u32_unsuffixed(0);
+    let lt = Literal::character('<');
+    let gt = Literal::character('>');
     let mut consts = TokenStream::new();
+    let mut display = TokenStream::new();
 
     loop {
         let attrs = parser.parse::<Attributes>()?;
@@ -16,12 +19,22 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         let value = parser.lit()?;
         let _ = parser.next_punct_of(',');
 
-        let sn_entry = to_snake(&entry.to_string());
-        let const_entry = Ident::new(&sn_entry.to_uppercase(), Span::call_site());
+        let wl_entry = to_snake(&entry.to_string());
+        let const_entry = Ident::new(&wl_entry.to_uppercase(), Span::call_site());
 
         consts.extend(generate! {
             #attrs
             pub const #const_entry: Self = Self(#&value);
+        });
+
+        let wl_entry = Literal::string(&wl_entry);
+        let sepr = Literal::character('|');
+        display.extend(generate! {
+            if self.#&zero & #&value == #&value {
+                sepr.fmt(f)?;
+                sepr = #sepr;
+                #wl_entry.fmt(f)?;
+            }
         });
     }
 
@@ -54,11 +67,23 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
             #[inline]
             fn to_u32(self) -> u32 {
-                self.#zero
+                self.#&zero
             }
         }
-        impl #name {
+        impl #&name {
             #consts
+        }
+        impl std::fmt::Display for #&name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                if self.#&zero == #&zero {
+                    "<none>".fmt(f)?;
+                } else {
+                    let mut sepr = #lt;
+                    #display
+                    #gt.fmt(f)?;
+                }
+                Ok(())
+            }
         }
     })
 }
