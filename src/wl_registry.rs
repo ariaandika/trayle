@@ -15,7 +15,7 @@ impl RequestHandler<Bind<'_>> for Compositor {
         if bind.id_version > *version {
             return Err(WlError::UnknownBind);
         }
-        client.objects_mut().insert_with(bind.id, *iface, 0)?;
+        client.objects.insert_parts(bind.id, *iface, 0)?;
 
         // some interface has side-effect after binding
         if let Interface::WlSeat = iface {

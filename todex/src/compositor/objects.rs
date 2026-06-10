@@ -65,7 +65,15 @@ impl Objects {
 
     /// Insert new object.
     #[inline]
-    pub fn insert<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
+    pub fn insert<O: WlObject>(&mut self, object: &O) -> Result<(), WlError> {
+        self.insert_with(object, 0)
+    }
+
+    /// Insert new object with a value.
+    ///
+    /// The value can be retrieved in the [`Object`] struct.
+    #[inline]
+    pub fn insert_with<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
         self.insert_inner(
             object.object_id(),
             Some(Object {
@@ -79,7 +87,7 @@ impl Objects {
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
     #[inline]
-    pub fn insert_with(&mut self, object_id: ObjectId, interface: Interface, value: usize) -> Result<(), WlError> {
+    pub fn insert_parts(&mut self, object_id: ObjectId, interface: Interface, value: usize) -> Result<(), WlError> {
         self.insert_inner(object_id, Some(Object { interface, value }))
     }
 

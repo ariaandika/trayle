@@ -2,16 +2,18 @@ use std::process::ExitCode;
 
 use todex::sys::buffer::Buffer;
 use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError};
-use todex::compositor::clients::ClientMut;
 use todex::compositor::seat::Seat;
 use todex::log;
 
+use client::ClientMut;
+
+mod client;
 mod rt;
 
 mod prelude {
     pub(crate) use todex::wayland::{self, Interface, WlError};
-    pub(crate) use todex::compositor::clients::ClientMut;
 
+    pub(crate) use crate::client::ClientMut;
     pub(crate) use crate::{Compositor, RequestHandler};
 }
 
@@ -35,11 +37,11 @@ static GLOBALS: [(&str, u32, Interface); 5] = [
     ("xdg_wm_base", 7, Interface::XdgWmBase),
 ];
 
-pub struct Compositor {
+struct Compositor {
     seat: Seat,
 }
 
-pub fn router(
+fn router(
     read_buf: &mut Buffer,
     client: &mut ClientMut,
     compositor: &mut Compositor,
@@ -50,7 +52,7 @@ pub fn router(
     let interface = if id.is_display() {
         Interface::WlDisplay
     } else {
-        match client.get_object(id) {
+        match client.objects.get_mut(id) {
             Some(object) => object.interface(),
             None => return Err(WlError::UnknownObject),
         }
@@ -59,24 +61,16 @@ pub fn router(
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $call:ident),* $(, $(.. $fb:ident)? $(,)? )? }) => {
             match <_>::try_from_op(op)? {
-                $(
-                    $iface::RequestOp::$req => handle_me!(@CALL $iface $req $call),
-                )*
-                $(
-                    $(
-                        op => compositor.$fb(interface, op, client),
-                    )?
-                )?
+                $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $call),)*
+                $($(op => compositor.$fb(interface, op, client),)?)?
             }
         };
         (@CALL $iface:ident $req:ident $call:ident) => {
-            compositor.$call($iface::$req::decode_with(frame)?, client)
+            compositor.$call(log_me($iface::$req::decode_with(frame)?, client), client)
         };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
-                $(
-                    Interface::$iface => handle_me!(@OP $iface {$($tt)*}),
-                )*
+                $(Interface::$iface => handle_me!(@OP $iface {$($tt)*}),)*
                 iface => compositor.todo_interface(iface, op, client),
             }
         };
@@ -120,6 +114,11 @@ pub fn router(
     }
 }
 
+fn log_me<R: AsInterface + AsOpCode>(req: R, client: &mut ClientMut) -> R {
+    log::debug!("client#{} <- {}::{}", client.id, R::INTERFACE_NAME, R::OPNAME);
+    req
+}
+
 trait RequestHandler<Request>: Sized {
     fn handle(&mut self, request: Request, client: &mut ClientMut) -> Result<(), WlError>;
 }
@@ -131,7 +130,7 @@ impl Compositor {
         op: Op,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        client.log_error(format_args!("`{interface}::{op}` is not yet implemented"));
+        log::error!("client#{} -> {interface}::{op}", client.id);
         WlError::todo()
     }
 
@@ -140,15 +139,14 @@ impl Compositor {
         _: R,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let (op, iface) = (R::OPNAME, R::INTERFACE);
-        client.log_error(format_args!("`{iface}::{op}` is not yet implemented"));
+        log::error!("client#{} -> {}::{}", client.id, R::OPNAME, R::INTERFACE);
         WlError::todo()
     }
 }
 
 // ===== Errors =====
 
-pub struct FatalError;
+struct FatalError;
 
 impl<E: std::fmt::Display> From<E> for FatalError {
     fn from(value: E) -> Self {

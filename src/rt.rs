@@ -3,13 +3,13 @@ use todex::sys::buffer::{self, Buffer};
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::wayland::{Frame, WlError};
-use todex::compositor::clients::{ClientId, ClientMut, Clients};
 use todex::compositor::seat::Seat;
 use todex::rt::poller::Poller;
 use todex::log;
 
 use crate::FatalError;
 use crate::{router, Compositor};
+use crate::client::{ClientMut, Clients};
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -53,7 +53,7 @@ pub fn event_loop() -> Result<(), FatalError> {
                 match result {
                     Ok(fd) => {
                         let (id, client) = clients.insert(fd);
-                        poll.add(id.to_u64(), client);
+                        poll.add(id, client);
                         log::debug!(target: format_args!("client#{id}"), "connected");
                     }
                     Err(err) => {
@@ -68,14 +68,14 @@ pub fn event_loop() -> Result<(), FatalError> {
         debug_assert!(read_buf.is_empty());
         debug_assert!(write_buf.is_empty());
 
-        let id = ClientId::from_u64(key);
+        let id = key;
 
         let Some(client) = clients.get_mut(id) else {
             log::warn!(target: "polling", "unknown client id from event key: {id}");
             continue;
         };
 
-        client.buffer_mut().restore(&mut read_buf, &mut write_buf);
+        client.buffer.restore(&mut read_buf, &mut write_buf);
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
@@ -102,11 +102,11 @@ pub fn event_loop() -> Result<(), FatalError> {
                 match (is_pending, interest.is_write()) {
                     (true, false) => {
                         // first time write pending, add write interest
-                        poll.modify(id.to_u64(), true, client);
+                        poll.modify(id, true, client);
                     }
                     (false, true) => {
                         // previous write pending complete, remove write interest
-                        poll.modify(id.to_u64(), false, client);
+                        poll.modify(id, false, client);
                     }
                     _ => {}
                 }
@@ -125,7 +125,7 @@ pub fn event_loop() -> Result<(), FatalError> {
                 );
                 // the sad pending bytes cannot stay in shared buffer because it will be used for other
                 // socket, it will be stored in on demand allocation
-                client.buffer_mut().copy_from(&read_buf, &write_buf);
+                client.buffer.copy_from(&read_buf, &write_buf);
             }
         } else {
             if !write_buf.is_empty() {
