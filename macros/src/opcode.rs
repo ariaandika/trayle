@@ -10,14 +10,18 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("enum")?;
     let name = parser.ident()?;
-    let wl_name = Literal::string(&to_snake(&name.to_string()));
+
     let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
 
     let zero = Literal::u8_unsuffixed(0);
+    let mut display = TokenStream::new();
     let mut last_variant = body.next_ident().ok_or_else(err_empty_enum)?;
     let mut i = 1;
 
     loop {
+        let wl_entry = Literal::string(&to_snake(&last_variant.to_string()));
+        display.extend(generate!(Self::#&last_variant => #wl_entry.fmt(f),));
+
         body.next_punct_of(',');
         let Some(next_ident) = body.next_ident() else {
             break;
@@ -40,9 +44,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     };
 
     Ok(generate! {
-        impl OpCode for #name {
-            const OPNAME: &str = #wl_name;
-
+        impl OpCode for #&name {
             #[inline]
             fn from_op(op: u16) -> Option<Self> {
                 #from_op
@@ -51,6 +53,14 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             #[inline]
             fn to_op(self) -> u16 {
                 self as u16
+            }
+        }
+
+        impl std::fmt::Display for #name {
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                match self {
+                    #display
+                }
             }
         }
     })

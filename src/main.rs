@@ -125,13 +125,13 @@ trait RequestHandler<Request>: Sized {
 }
 
 impl Compositor {
-    fn todo_interface<Op: std::fmt::Debug>(
+    fn todo_interface<Op: std::fmt::Display>(
         &mut self,
         interface: Interface,
         op: Op,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        client.log_error(format_args!("`{interface}::{op:?}` is not yet implemented"));
+        client.log_error(format_args!("`{interface}::{op}` is not yet implemented"));
         WlError::todo()
     }
 
@@ -140,7 +140,7 @@ impl Compositor {
         _: R,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let (op, iface) = (R::OpCode::OPNAME, R::INTERFACE);
+        let (op, iface) = (R::OPNAME, R::INTERFACE);
         client.log_error(format_args!("`{iface}::{op}` is not yet implemented"));
         WlError::todo()
     }

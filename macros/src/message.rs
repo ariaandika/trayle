@@ -26,6 +26,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         ));
     };
     let wl_iface_name = Literal::string(&to_snake(&iface.to_string()));
+    let wl_name = Literal::string(&to_snake(&name.to_string()));
 
     let body = parser.next_group_of(Delimiter::Brace).map(|e|e.stream()).unwrap_or_default();
     let mut body = Parser::new(body);
@@ -154,6 +155,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             type OpCode = #&opkind;
 
             const OPCODE: Self::OpCode = #opkind::#&name;
+
+            const OPNAME: &'static str = #wl_name;
         }
 
         impl Decode for #&name #&plf {

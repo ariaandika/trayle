@@ -94,6 +94,8 @@ impl<T: AsOpCode> AsOpCode for Encodable<T> {
     type OpCode = T::OpCode;
 
     const OPCODE: Self::OpCode = T::OPCODE;
+
+    const OPNAME: &str = T::OPNAME;
 }
 
 impl<T: Encode> Encode for Encodable<T> {

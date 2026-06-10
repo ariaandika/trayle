@@ -23,9 +23,6 @@ impl<T: AsInterface> AsInterface for NewId<T> {
 ///
 /// This type is the exhaustive list of the valid opcodes.
 pub trait OpCode: Sized {
-    /// Wayland name of this opcode.
-    const OPNAME: &str;
-
     /// Creates this type from raw opcode.
     ///
     /// Returns `None` if raw value is invalid for this type.
@@ -50,6 +47,9 @@ pub trait AsOpCode {
 
     /// The opcode value.
     const OPCODE: Self::OpCode;
+
+    /// The opcode wayland name.
+    const OPNAME: &str;
 }
 
 // ===== object =====
