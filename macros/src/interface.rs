@@ -5,6 +5,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("struct")?;
     let name = parser.ident()?;
+    let wl_name = Literal::string(&to_snake(&name.to_string()));
 
     Ok(generate! {
         impl FromObjectId for #&name {
@@ -23,6 +24,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
         impl AsInterface for #&name {
             const INTERFACE: Interface = Interface::#name;
+
+            const INTERFACE_NAME: &str = #wl_name;
         }
     })
 }

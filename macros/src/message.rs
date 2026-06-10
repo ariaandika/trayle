@@ -25,6 +25,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             name.span()
         ));
     };
+    let wl_iface_name = Literal::string(&to_snake(&iface.to_string()));
 
     let body = parser.next_group_of(Delimiter::Brace).map(|e|e.stream()).unwrap_or_default();
     let mut body = Parser::new(body);
@@ -145,6 +146,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
         impl AsInterface for #&name #&plf {
             const INTERFACE: Interface = Interface::#iface;
+
+            const INTERFACE_NAME: &'static str = #wl_iface_name;
         }
 
         impl AsOpCode for #&name #&plf {

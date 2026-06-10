@@ -7,6 +7,8 @@ pub struct WlDisplay;
 
 impl AsInterface for WlDisplay {
     const INTERFACE: Interface = Interface::WlDisplay;
+
+    const INTERFACE_NAME: &str = "wl_display";
 }
 
 #[derive(OpCode, Debug, Clone, Copy)]

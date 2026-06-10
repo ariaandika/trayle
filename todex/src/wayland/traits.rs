@@ -6,10 +6,15 @@ use crate::wayland::{AsObjectId, FromObjectId, Interface, NewId, WlError};
 pub trait AsInterface {
     /// The interface value.
     const INTERFACE: Interface;
+
+    /// Wayland name of this interface.
+    const INTERFACE_NAME: &str;
 }
 
 impl<T: AsInterface> AsInterface for NewId<T> {
     const INTERFACE: Interface = T::INTERFACE;
+
+    const INTERFACE_NAME: &str = T::INTERFACE_NAME;
 }
 
 // ===== opcode =====
@@ -18,6 +23,9 @@ impl<T: AsInterface> AsInterface for NewId<T> {
 ///
 /// This type is the exhaustive list of the valid opcodes.
 pub trait OpCode: Sized {
+    /// Wayland name of this opcode.
+    const OPNAME: &str;
+
     /// Creates this type from raw opcode.
     ///
     /// Returns `None` if raw value is invalid for this type.
