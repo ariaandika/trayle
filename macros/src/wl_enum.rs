@@ -10,7 +10,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut match_arm = TokenStream::new();
     let mut i = 0u32;
 
-    while let Some(variant) = body.next_ident() {
+    loop {
+        let _ = body.parse::<Attributes>()?;
+        let Some(variant) = body.next_ident() else {
+            break;
+        };
         let lit = if body.next_punct_of('=').is_some() {
             body.lit()?
         } else {
