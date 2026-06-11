@@ -164,7 +164,10 @@ impl From<buffer::WriteError> for HandleError {
 
 impl From<WlError> for HandleError {
     fn from(err: WlError) -> Self {
-        log::error!("failed to handle request: {err}");
+        // "not yet implemented" is printed immediately
+        if !matches!(err, WlError::NotYetImplemented) {
+            log::error!("failed to handle request: {err}");
+        }
         Self
     }
 }

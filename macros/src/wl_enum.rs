@@ -61,5 +61,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 self.name().fmt(f)
             }
         }
+        impl display::Display2 for #&name {
+            #[inline]
+            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                std::fmt::Display::fmt(self, f)
+            }
+        }
     })
 }

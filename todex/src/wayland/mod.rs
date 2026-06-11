@@ -96,12 +96,15 @@ mod message;
 mod decode;
 mod encode;
 
+pub mod display;
+
 mod prelude {
     pub use super::{AsObjectId, FromObjectId};
     pub use super::{AsInterface, AsOpCode, Decode, Encode, OpCode, WlEnum};
     pub use super::{Fixed, Interface, NewId, ObjectId, WlError};
     pub use super::decode::Decoder;
     pub use super::encode::{Encodable, Sized2, Writer};
+    pub use super::display;
 
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
 }

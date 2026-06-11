@@ -1,7 +1,7 @@
 use std::process::ExitCode;
 
 use todex::sys::buffer::Buffer;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError, display};
 use todex::compositor::seat::Seat;
 use todex::log;
 
@@ -114,8 +114,14 @@ fn router(
     }
 }
 
-fn log_me<R: AsInterface + AsOpCode>(req: R, client: &mut ClientMut) -> R {
-    log::debug!("client#{} <- {}::{}", client.id, R::INTERFACE_NAME, R::OPNAME);
+fn log_me<R: AsInterface + AsOpCode + display::AsDisplay>(req: R, client: &mut ClientMut) -> R {
+    log::debug!(
+        "client#{} <- {}::{}({})",
+        client.id,
+        R::INTERFACE_NAME,
+        R::OPNAME,
+        req.display()
+    );
     req
 }
 
@@ -130,8 +136,11 @@ impl Compositor {
         op: Op,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        log::error!("client#{} -> {interface}::{op}", client.id);
-        WlError::todo()
+        log::error!(
+            "client#{} {interface}::{op} is not yet implemented",
+            client.id
+        );
+        Err(WlError::NotYetImplemented)
     }
 
     fn todo<R: AsOpCode + AsInterface>(
@@ -139,8 +148,13 @@ impl Compositor {
         _: R,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        log::error!("client#{} -> {}::{}", client.id, R::OPNAME, R::INTERFACE);
-        WlError::todo()
+        log::error!(
+            "client#{} {}::{} is not yet implemented",
+            client.id,
+            R::OPNAME,
+            R::INTERFACE
+        );
+        Err(WlError::NotYetImplemented)
     }
 }
 

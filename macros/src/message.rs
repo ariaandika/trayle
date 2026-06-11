@@ -39,6 +39,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut enc_write = TokenStream::new();
     let mut ctor_args = TokenStream::new();
     let mut ctor = TokenStream::new();
+    let mut display = TokenStream::new();
     let mut encodable = 0;
     let mut len = 0;
 
@@ -78,16 +79,22 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
         dec_read.extend([name.clone()]);
 
+        if len != 1 {
+            let comma = Literal::character(',');
+            display.extend(generate!(std::fmt::Display::fmt(&#comma, f)?;));
+        }
+
         if is_fd {
             dec_fd.extend(generate!(let #&name = decoder.pop_fd()?;));
             dec_read.extend(Some(gen_token!(,)));
             enc_fd.extend(generate!(self.#&name,));
+            display.extend(generate!(std::fmt::Display::fmt(&"<fd>", f)?;));
         } else {
             dec_read.extend(Some(col));
             dec_read.extend(generate!(reader.read()?,));
-
             enc_len.extend(generate!(+ self.#&name.size()));
             enc_write.extend(generate!(.write(self.#&name)));
+            display.extend(generate!(crate::wayland::display::fmt_me(&self.#&name, f)?;));
         }
 
         ctor_args.extend(generate!(, #&name: #ty));
@@ -165,7 +172,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
         }
 
-        impl Encode for #&name #plf {
+        impl Encode for #&name #&plf {
             #[inline]
             fn size(&self) -> u16 {
                 #enc_len
@@ -177,6 +184,16 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
 
             #enc_fds_impl
+        }
+
+        impl display::AsDisplay for #&name #&plf {
+            #[inline]
+            fn display(&self) -> impl std::fmt::Display {
+                std::fmt::from_fn(|f|{
+                    #display
+                    Ok(())
+                })
+            }
         }
     })
 }

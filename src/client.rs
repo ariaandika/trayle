@@ -5,7 +5,7 @@ use todex::sys::buffer::{Buffer, SmallBuf};
 use todex::collections::slab::Slab;
 use todex::compositor::objects::Objects;
 use todex::wayland::wl_display::Error;
-use todex::wayland::{AsInterface, AsOpCode, EncodeMessage, ObjectId, WlError};
+use todex::wayland::{AsInterface, AsOpCode, EncodeMessage, ObjectId, WlError, display};
 
 // ===== Client =====
 
@@ -37,8 +37,17 @@ impl<'a> ClientMut<'a> {
     }
 
     #[inline]
-    pub fn send<E: EncodeMessage + AsInterface + AsOpCode>(&mut self, message: E) {
-        log::debug!("client#{} -> {}::{}", self.id, E::INTERFACE_NAME, E::OPNAME);
+    pub fn send<E: EncodeMessage + AsInterface + AsOpCode + display::AsDisplay>(
+        &mut self,
+        message: E,
+    ) {
+        log::debug!(
+            "client#{} -> {}::{}({})",
+            self.id,
+            E::INTERFACE_NAME,
+            E::OPNAME,
+            message.display()
+        );
         message.encode_message(self.write_buf);
     }
 
