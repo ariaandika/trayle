@@ -23,6 +23,10 @@ mod wl_compositor;
 mod wl_seat;
 mod wl_data_source;
 mod wl_data_device_manager;
+mod wl_surface;
+mod xdg_shell;
+
+// TODO: epoll never returns after wl_keyboard::keymap event
 
 fn main() -> ExitCode {
     let _guard = log::init();
@@ -95,7 +99,7 @@ fn router(
             Release todo,
         }
         WlSeat {
-            GetPointer todo,
+            GetPointer handle,
             GetKeyboard handle,
             // GetTouch todo,
             // Release todo,
@@ -110,6 +114,28 @@ fn router(
             CreateDataSource handle,
             GetDataDevice handle,
             Release todo,
+        }
+        WlSurface {
+            Commit handle,
+            .. todo_interface,
+        }
+        XdgWmBase {
+            Destroy handle,
+            CreatePositioner handle,
+            GetXdgSurface handle,
+            Pong handle,
+        }
+        XdgSurface {
+            Destroy handle,
+            GetToplevel handle,
+            GetPopup handle,
+            SetWindowGeometry handle,
+            AckConfigure handle,
+        }
+        XdgToplevel {
+            SetTitle handle,
+            SetAppId handle,
+            .. todo_interface,
         }
     }
 }

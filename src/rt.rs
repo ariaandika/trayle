@@ -37,7 +37,7 @@ pub fn event_loop() -> Result<(), FatalError> {
 
     loop {
         let Some((key, interest)) = poll.next_event() else {
-            log::trace!(target: "polling", "blocking");
+            log::debug!(target: "polling", "blocking");
             log::flush();
             poll.wait(None);
             continue;

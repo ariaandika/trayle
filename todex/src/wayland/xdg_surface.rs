@@ -23,13 +23,13 @@ pub struct Destroy;
 #[derive(Message, Debug)]
 #[request(XdgSurface)]
 pub struct GetToplevel {
-    pub id: NewId<XdgToplevel>,
+    pub toplevel: NewId<XdgToplevel>,
 }
 
 #[derive(Message, Debug)]
 #[request(XdgSurface)]
 pub struct GetPopup {
-    pub id: NewId<XdgPopup>,
+    pub popup: NewId<XdgPopup>,
     /// <xdg_surface>
     pub parent: Option<ObjectId>,
     /// <xdg_positioner>

@@ -16,7 +16,9 @@ impl RequestHandler<GetDataDevice> for Compositor {
         let Interface::WlSeat = object.interface() else {
             return Err(WlError::UnknownObject);
         };
-        client.objects.insert(&req.data_device)
+        client.objects.insert(&req.data_device)?;
+        self.seat.set_data_device(client.id);
+        Ok(())
     }
 }
 
