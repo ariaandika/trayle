@@ -52,13 +52,13 @@ pub struct ShowWindowMenu {
     pub y: i32,
 }
 
-// #[derive(Message, Debug)]
-// #[request(XdgToplevel)]
-// pub struct Move {
-//     /// <wl_seat>
-//     pub seat: ObjectId,
-//     pub serial: u32,
-// }
+#[derive(Message, Debug)]
+#[request(XdgToplevel)]
+pub struct Move {
+    /// <wl_seat>
+    pub seat: ObjectId,
+    pub serial: u32,
+}
 
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]

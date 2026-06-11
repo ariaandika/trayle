@@ -140,3 +140,10 @@ fn to_snake(string: &str) -> String {
     }
     output
 }
+
+static KEYWORDS: [&str; 40] = [
+    "as", "async", "await", "become", "break", "const", "continue", "crate", "dyn", "else", "enum",
+    "extern", "false", "fn", "for", "gen", "if", "impl", "in", "let", "loop", "match", "mod", "move",
+    "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true", "type",
+    "union", "unsafe", "use", "where", "while",
+];

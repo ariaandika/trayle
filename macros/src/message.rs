@@ -132,8 +132,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         })
     };
 
-    let ctor = if len <= 6 {
-        let mname = Ident::new(&to_snake(&name.to_string()), name.span());
+    let ctor = if len <= 6
+        && let mname = to_snake(&name.to_string())
+        && !super::KEYWORDS.contains(&mname.as_str())
+    {
+        let mname = Ident::new(&mname, name.span());
         Some(generate! {
             impl #&iface {
                 #[inline]
