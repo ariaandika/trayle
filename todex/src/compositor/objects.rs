@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{Interface, ObjectId, WlObject, WlError};
+use crate::wayland::{Interface, NewId, ObjectId, WlError, WlObject};
 
 // ===== Object =====
 
@@ -61,6 +61,14 @@ impl Objects {
         let new_cap = alloc::calc_exp(self.cap);
         self.ptr = alloc::reallocate(self.ptr, new_cap);
         self.cap = new_cap;
+    }
+
+    /// Create and insert new object from [`NewId`].
+    #[inline]
+    pub fn create<O: WlObject>(&mut self, new_id: NewId<O>) -> Result<O, WlError> {
+        let object = new_id.create();
+        self.insert_with(&object, 0)?;
+        Ok(object)
     }
 
     /// Insert new object.

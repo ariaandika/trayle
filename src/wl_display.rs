@@ -15,8 +15,7 @@ impl RequestHandler<Sync> for Compositor {
 
 impl RequestHandler<GetRegistry> for Compositor {
     fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
-        let registry = request.registry.create();
-        client.objects.insert(&registry)?;
+        let registry = client.objects.create(request.registry)?;
 
         for ((iface, version, _), i) in GLOBALS.iter().zip(0..) {
             client.send(registry.global(i, iface, *version));
