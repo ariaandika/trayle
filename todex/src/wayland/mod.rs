@@ -137,11 +137,11 @@ macros::protocol! {
     pub mod wl_subcompositor;
     pub mod wl_subsurface;
     #[todo] pub mod wl_fixes;
-    #[todo] pub mod xdg_wm_base;
-    #[todo] pub mod xdg_positioner;
-    #[todo] pub mod xdg_surface;
-    #[todo] pub mod xdg_toplevel;
-    #[todo] pub mod xdg_popup;
+    pub mod xdg_wm_base;
+    pub mod xdg_positioner;
+    pub mod xdg_surface;
+    pub mod xdg_toplevel;
+    pub mod xdg_popup;
     #[todo] pub mod zwp_linux_dmabuf_v1;
     #[todo] pub mod zwp_linux_buffer_params_v1;
     #[todo] pub mod zwp_linux_dmabuf_feedback_v1;
