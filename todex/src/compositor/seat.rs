@@ -12,6 +12,7 @@ const SIZE: u32 = STATIC_XKB.len() as u32;
 
 pub struct Seat {
     capability: Capability,
+    data_device: Option<u64>,
     memfd: Memfd,
 }
 
@@ -24,6 +25,7 @@ impl Seat {
 
         Ok(Self {
             capability: Capability::POINTER | Capability::KEYBOARD,
+            data_device: None,
             memfd,
         })
     }
@@ -34,6 +36,24 @@ impl Seat {
 
     pub const fn keymap_size(&self) -> u32 {
         SIZE
+    }
+
+    /// Returns the client id that holds the data device.
+    #[inline]
+    pub fn data_device(&self) -> Option<u64> {
+        self.data_device
+    }
+
+    /// Set client id that holds the data device.
+    #[inline]
+    pub fn set_data_device(&mut self, client_id: u64) {
+        self.data_device = Some(client_id);
+    }
+
+    /// Clear client id that holds the data device.
+    #[inline]
+    pub fn clear_data_device(&mut self) {
+        self.data_device = None;
     }
 
     pub fn to_keymap_event(
