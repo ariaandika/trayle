@@ -80,7 +80,7 @@ impl GetRegistry {
 
 impl DeleteId {
     #[inline]
-    pub fn new<O: AsObjectId>(object: &O) -> Self {
+    pub fn new<O: AsObjectId>(object: O) -> Self {
         Self { id: object.object_id() }
     }
 }

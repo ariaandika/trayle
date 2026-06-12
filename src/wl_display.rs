@@ -1,4 +1,4 @@
-use todex::wayland::wl_display::{DeleteId, GetRegistry, Sync};
+use todex::wayland::wl_display::{GetRegistry, Sync};
 
 use crate::GLOBALS;
 use crate::prelude::*;
@@ -8,7 +8,7 @@ impl RequestHandler<Sync> for Compositor {
         let callback = sync.callback.create();
         client.objects.use_one(&callback)?;
         client.send(callback.done(69));
-        client.send(DeleteId::new(&callback));
+        client.delete_id(callback);
         Ok(())
     }
 }

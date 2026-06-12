@@ -4,8 +4,10 @@ use todex::log;
 use todex::sys::buffer::{Buffer, SmallBuf};
 use todex::collections::slab::Slab;
 use todex::compositor::objects::Objects;
-use todex::wayland::wl_display::Error;
-use todex::wayland::{AsInterface, AsOpCode, EncodeMessage, ObjectId, WlError, display};
+use todex::wayland::display;
+use todex::wayland::wl_display::{DeleteId, Error};
+use todex::wayland::{AsInterface, AsObjectId, AsOpCode, EncodeMessage};
+use todex::wayland::{ObjectId, WlError};
 
 // ===== Client =====
 
@@ -36,6 +38,12 @@ impl<'a> ClientMut<'a> {
         Self { id, state, write_buf }
     }
 
+    /// Send a message.
+    ///
+    /// Usually, object has a constructor for its message. The constructor returns the message
+    /// wrapped in [`Encodable`] to associate it with object id.
+    ///
+    /// [`Encodable`]: todex::wayland::Encodable
     #[inline]
     pub fn send<E: EncodeMessage + AsInterface + AsOpCode + display::AsDisplay>(
         &mut self,
@@ -49,6 +57,12 @@ impl<'a> ClientMut<'a> {
             message.display()
         );
         message.encode_message(self.write_buf);
+    }
+
+    /// Send [`DeleteId`] event.
+    #[inline]
+    pub fn delete_id<O: AsObjectId>(&mut self, object: O) {
+        self.send(DeleteId { id: object.object_id() });
     }
 
     /// Send `wl_display::error` event from [`WlError`].
