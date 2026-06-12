@@ -107,18 +107,15 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         Some(gen_token!(mut))
     };
 
-    let dec_impl = match (len, encodable) {
-        (0, _) => generate! { Ok(#&name { }) },
-        (1, 1) => generate! { Ok(#&name { #dec_1: decoder.read()? }) },
-        (1, 0) => generate! {
-            #dec_fd
-            Ok(#&name { #dec_read })
-        },
-        _ => generate! {
-            #dec_fd
-            let mut reader = decoder.reader();
-            Ok(#&name { #dec_read })
-        }
+    let reader = match (len, encodable) {
+        (0, _) => generate!(let _ = decoder.reader();),
+        (1, 1) => generate!(),
+        _ => generate!(let mut reader = decoder.reader();),
+    };
+    let ret = match (len, encodable) {
+        (0, _) => generate!({}),
+        (1, 1) => generate!({ #dec_1: decoder.read()? }),
+        _ => generate!({ #dec_read }),
     };
 
     let enc_fds_impl = if enc_fd.is_empty() {
@@ -151,7 +148,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
     Ok(generate! {
         #ctor
-
+ 
         impl AsInterface for #&name #&plf {
             const INTERFACE: Interface = Interface::#iface;
 
@@ -171,7 +168,9 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
             #[inline]
             fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
-                #dec_impl
+                #dec_fd
+                #reader
+                Ok(#&name #ret)
             }
         }
 
