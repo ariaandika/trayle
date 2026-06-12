@@ -66,15 +66,13 @@ impl Seat {
         self.data_device = None;
     }
 
+    #[inline]
     pub fn to_keymap_event(
         &self,
+        format: wl_keyboard::KeymapFormat,
         wl_keyboard: &wl_keyboard::WlKeyboard,
     ) -> Encodable<wl_keyboard::Keymap> {
-        wl_keyboard.keymap(
-            wl_keyboard::KeymapFormat::XkbV1,
-            self.memfd.as_raw_fd(),
-            self.keymap_size(),
-        )
+        wl_keyboard.keymap(format, self.memfd.as_raw_fd(), self.keymap_size())
     }
 }
 

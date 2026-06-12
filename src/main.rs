@@ -1,3 +1,6 @@
+// this is binary crate, compatibility is not a problem
+#![allow(refining_impl_trait)]
+
 use std::process::ExitCode;
 
 use todex::sys::buffer::Buffer;
@@ -26,7 +29,9 @@ mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
 
-// BUG: epoll never returns after wl_keyboard::keymap event
+// TODO: destructor trait
+// TODO: global object trait, for version checking
+// TODO: returning interface specific error
 
 fn main() -> ExitCode {
     let _guard = log::init();
@@ -77,6 +82,7 @@ fn router(
 
     // one can use goto definition in the method call
     handle_me! {
+        // ===== core =====
         WlDisplay {
             Sync handle,
             GetRegistry handle
@@ -84,22 +90,25 @@ fn router(
         WlRegistry {
             Bind handle
         }
+        // ===== compositor =====
         WlCompositor {
             CreateSurface handle,
             CreateRegion todo,
             Release todo,
         }
+        // ===== shm =====
         WlShm {
             CreatePool todo,
             Release todo,
         }
+        // ===== seat =====
         WlSeat {
             GetPointer handle,
             GetKeyboard handle,
-            // GetTouch todo,
-            // Release todo,
-            .. todo_interface,
+            GetTouch handle,
+            Release handle,
         }
+        // ===== data =====
         WlDataSource {
             Offer handle,
             Destroy todo,
@@ -108,12 +117,14 @@ fn router(
         WlDataDeviceManager {
             CreateDataSource handle,
             GetDataDevice handle,
-            Release todo,
+            Release handle,
         }
+        // ===== surface =====
         WlSurface {
             Commit handle,
             .. todo_interface,
         }
+        // ===== xdg shell =====
         XdgWmBase {
             Destroy handle,
             CreatePositioner handle,
