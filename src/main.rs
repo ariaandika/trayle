@@ -9,6 +9,7 @@ use std::process::ExitCode;
 
 // ===== state =====
 
+mod seat;
 mod client;
 mod rt;
 

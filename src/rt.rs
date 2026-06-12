@@ -3,9 +3,9 @@ use todex::sys::buffer::{self, Buffer};
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::wayland::{Frame, WlError};
-use todex::compositor::seat::Seat;
 use todex::rt::poller::Poller;
 
+use crate::seat::Seat;
 use crate::client::{ClientMut, Clients};
 use crate::log;
 use crate::error::FatalError;

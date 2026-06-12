@@ -1,14 +1,13 @@
 use std::os::fd::AsRawFd;
 
-use crate::sys::errno::Errno;
-use crate::sys::memfd::Memfd;
-use crate::wayland::{Encodable, wl_keyboard};
-use crate::wayland::wl_seat::Capability;
+use todex::sys::errno::Errno;
+use todex::sys::memfd::Memfd;
+use todex::wayland::{Encodable, wl_keyboard};
+use todex::wayland::wl_seat::Capability;
 
 // ===== Seat =====
 
-static STATIC_XKB: &str = include_str!("../static-xkb");
-const SIZE: u32 = STATIC_XKB.len() as u32;
+static STATIC_XKB: &str = include_str!("./static-xkb");
 
 pub struct Seat {
     name: Box<str>,
@@ -18,7 +17,6 @@ pub struct Seat {
 }
 
 impl Seat {
-    #[inline]
     pub fn new() -> Result<Self, SeatError> {
         let memfd = Memfd::new().map_err(|_| SeatError::MemfdCreate)?;
         memfd
@@ -33,40 +31,28 @@ impl Seat {
         })
     }
 
-    #[inline]
     pub fn name(&self) -> &str {
         &self.name
     }
 
-    #[inline]
     pub fn capability(&self) -> Capability {
         self.capability
     }
 
-    #[inline]
     pub const fn keymap_size(&self) -> u32 {
-        SIZE
-    }
-
-    /// Returns the client id that holds the data device.
-    #[inline]
-    pub fn data_device(&self) -> Option<u64> {
-        self.data_device
+        STATIC_XKB.len() as u32
     }
 
     /// Set client id that holds the data device.
-    #[inline]
     pub fn set_data_device(&mut self, client_id: u64) {
         self.data_device = Some(client_id);
     }
 
     /// Clear client id that holds the data device.
-    #[inline]
     pub fn clear_data_device(&mut self) {
         self.data_device = None;
     }
 
-    #[inline]
     pub fn to_keymap_event(
         &self,
         format: wl_keyboard::KeymapFormat,

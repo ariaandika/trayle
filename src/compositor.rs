@@ -1,7 +1,7 @@
 use todex::sys::buffer::Buffer;
 use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError};
-use todex::compositor::seat::Seat;
 
+use crate::seat::Seat;
 use crate::client::ClientMut;
 use crate::log;
 
