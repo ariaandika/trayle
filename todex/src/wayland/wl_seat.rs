@@ -50,6 +50,12 @@ pub struct Capabilities {
     pub capabilities: Capability,
 }
 
+#[derive(Message, Debug)]
+#[event(WlSeat)]
+pub struct Name<'a> {
+    pub name: &'a str,
+}
+
 #[derive(Debug, Clone, Copy)]
 pub struct Capability(u32);
 

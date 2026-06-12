@@ -11,12 +11,14 @@ static STATIC_XKB: &str = include_str!("../static-xkb");
 const SIZE: u32 = STATIC_XKB.len() as u32;
 
 pub struct Seat {
+    name: Box<str>,
     capability: Capability,
     data_device: Option<u64>,
     memfd: Memfd,
 }
 
 impl Seat {
+    #[inline]
     pub fn new() -> Result<Self, SeatError> {
         let memfd = Memfd::new().map_err(|_| SeatError::MemfdCreate)?;
         memfd
@@ -24,16 +26,24 @@ impl Seat {
             .map_err(|_| SeatError::MemfdWrite)?;
 
         Ok(Self {
+            name: String::from("seat0").into_boxed_str(),
             capability: Capability::POINTER | Capability::KEYBOARD,
             data_device: None,
             memfd,
         })
     }
 
+    #[inline]
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    #[inline]
     pub fn capability(&self) -> Capability {
         self.capability
     }
 
+    #[inline]
     pub const fn keymap_size(&self) -> u32 {
         SIZE
     }

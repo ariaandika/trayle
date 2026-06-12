@@ -22,6 +22,7 @@ impl RequestHandler<Bind<'_>> for Compositor {
         match iface {
             Interface::WlSeat => {
                 let seat = bind.create::<WlSeat>();
+                client.send(seat.name(self.seat.name()));
                 client.send(seat.capabilities(self.seat.capability()));
             }
             Interface::WlShm => {
