@@ -1,4 +1,6 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_seat::WlSeat;
+use crate::wayland::xdg_positioner::XdgPositioner;
 
 #[derive(Interface, Debug)]
 pub struct XdgPopup {
@@ -15,16 +17,14 @@ pub enum RequestOp {
 #[derive(Message, Debug)]
 #[request(XdgPopup)]
 pub struct Grab {
-    /// <wl_seat>
-    pub seat: ObjectId,
+    pub seat: Object<WlSeat>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
 #[request(XdgPopup)]
 pub struct Reposition {
-    /// <xdg_positioner>
-    pub positioner: ObjectId,
+    pub positioner: Object<XdgPositioner>,
     pub token: u32,
 }
 

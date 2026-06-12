@@ -1,4 +1,6 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_output::WlOutput;
+use crate::wayland::wl_seat::WlSeat;
 
 #[derive(Interface, Debug)]
 pub struct XdgToplevel {
@@ -26,8 +28,7 @@ pub enum RequestOp {
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct SetParent {
-    /// <xdg_toplevel>
-    pub parent: Option<ObjectId>,
+    pub parent: Option<Object<XdgToplevel>>,
 }
 
 #[derive(Message, Debug)]
@@ -45,8 +46,7 @@ pub struct SetAppId<'a> {
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct ShowWindowMenu {
-    /// <wl_seat>
-    pub seat: ObjectId,
+    pub seat: Object<WlSeat>,
     pub serial: u32,
     pub x: i32,
     pub y: i32,
@@ -55,16 +55,14 @@ pub struct ShowWindowMenu {
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct Move {
-    /// <wl_seat>
-    pub seat: ObjectId,
+    pub seat: Object<WlSeat>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct Resize {
-    /// <wl_seat>
-    pub seat: ObjectId,
+    pub seat: Object<WlSeat>,
     pub serial: u32,
     pub edges: ResizeEdge,
 }
@@ -72,7 +70,6 @@ pub struct Resize {
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct SetMaxSize {
-    /// <wl_seat>
     pub width: i32,
     pub height: i32,
 }
@@ -80,7 +77,6 @@ pub struct SetMaxSize {
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct SetMinSize {
-    /// <wl_seat>
     pub width: i32,
     pub height: i32,
 }
@@ -96,8 +92,7 @@ pub struct UnsetMaximized;
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
 pub struct SetFullscreen {
-    /// <wl_output>
-    pub output: Option<ObjectId>,
+    pub output: Option<Object<WlOutput>>,
 }
 
 #[derive(Message, Debug)]

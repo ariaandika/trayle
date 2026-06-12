@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
 pub struct WlPointer {
@@ -15,8 +16,7 @@ pub enum RequestOp {
 #[request(WlPointer)]
 pub struct SetCursor {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
     pub hotspot_x: i32,
     pub hotspot_y: i32,
 }
@@ -44,8 +44,7 @@ pub enum EventOp {
 #[event(WlPointer)]
 pub struct Enter {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
     pub surface_x: Fixed,
     pub surface_y: Fixed,
 }
@@ -54,8 +53,7 @@ pub struct Enter {
 #[event(WlPointer)]
 pub struct Leave {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]

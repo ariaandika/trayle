@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
 pub struct WlKeyboard {
@@ -37,8 +38,7 @@ pub struct Keymap {
 #[event(WlKeyboard)]
 pub struct Enter<'a> {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
     pub keys: &'a [u8],
 }
 
@@ -46,8 +46,7 @@ pub struct Enter<'a> {
 #[event(WlKeyboard)]
 pub struct Leave {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]

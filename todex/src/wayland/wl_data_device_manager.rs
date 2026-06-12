@@ -25,7 +25,6 @@ pub struct CreateDataSource {
 #[request(WlDataDeviceManager)]
 pub struct GetDataDevice {
     pub data_device: NewId<WlDataDevice>,
-    /// <wl_seat>
     pub seat: Object<WlSeat>,
 }
 

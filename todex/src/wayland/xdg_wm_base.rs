@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_surface::WlSurface;
 use crate::wayland::xdg_positioner::XdgPositioner;
 use crate::wayland::xdg_surface::XdgSurface;
 
@@ -29,8 +30,7 @@ pub struct CreatePositioner {
 #[request(XdgWmBase)]
 pub struct GetXdgSurface {
     pub xdg_surface: NewId<XdgSurface>,
-    /// <wl_surface>
-    pub wl_surface: ObjectId,
+    pub wl_surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]

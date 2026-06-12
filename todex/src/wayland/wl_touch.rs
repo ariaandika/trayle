@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
 pub struct WlTouch {
@@ -30,8 +31,7 @@ pub enum EventOp {
 pub struct Down {
     pub serial: u32,
     pub time: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
     pub id: i32,
     pub x: Fixed,
     pub y: Fixed,

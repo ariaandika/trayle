@@ -1,4 +1,5 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
 pub struct WlSubsurface {
@@ -29,15 +30,13 @@ pub struct SetPosition {
 #[derive(Message, Debug)]
 #[request(WlSubsurface)]
 pub struct PlaceAbove {
-    /// <wl_surface>
-    pub sibling: ObjectId,
+    pub sibling: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
 #[request(WlSubsurface)]
 pub struct PlaceBelow {
-    /// <wl_surface>
-    pub sibling: ObjectId,
+    pub sibling: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]

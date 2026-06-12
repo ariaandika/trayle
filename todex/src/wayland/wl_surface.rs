@@ -1,6 +1,8 @@
 use crate::wayland::prelude::*;
+use crate::wayland::wl_buffer::WlBuffer;
 use crate::wayland::wl_callback::WlCallback;
-use crate::wayland::wl_output::Transform;
+use crate::wayland::wl_output::{Transform, WlOutput};
+use crate::wayland::wl_region::WlRegion;
 
 #[derive(Debug, Interface)]
 pub struct WlSurface {
@@ -30,8 +32,7 @@ pub struct Destroy;
 #[derive(Message, Debug)]
 #[request(WlSurface)]
 pub struct Attach {
-    /// <wl_buffer>
-    pub buffer: Option<ObjectId>,
+    pub buffer: Option<Object<WlBuffer>>,
     pub x: i32,
     pub y: i32,
 }
@@ -54,15 +55,13 @@ pub struct Frame {
 #[derive(Message, Debug)]
 #[request(WlSurface)]
 pub struct SetOpaqueRegion {
-    /// <wl_region>
-    pub region: Option<ObjectId>,
+    pub region: Option<Object<WlRegion>>,
 }
 
 #[derive(Message, Debug)]
 #[request(WlSurface)]
 pub struct SetInputRegion {
-    /// <wl_region>
-    pub region: Option<ObjectId>,
+    pub region: Option<Object<WlRegion>>,
 }
 
 #[derive(Message, Debug)]
@@ -106,15 +105,13 @@ pub struct GetRelease {
 #[derive(Message, Debug)]
 #[event(WlSurface)]
 pub struct Enter {
-    /// <wl_output>
-    pub output: ObjectId,
+    pub output: Object<WlOutput>,
 }
 
 #[derive(Message, Debug)]
 #[event(WlSurface)]
 pub struct Leave {
-    /// <wl_output>
-    pub output: ObjectId,
+    pub output: Object<WlOutput>,
 }
 
 #[derive(Message, Debug)]

@@ -1,5 +1,6 @@
 use crate::wayland::prelude::*;
 use crate::wayland::xdg_popup::XdgPopup;
+use crate::wayland::xdg_positioner::XdgPositioner;
 use crate::wayland::xdg_toplevel::XdgToplevel;
 
 #[derive(Interface, Debug)]
@@ -30,10 +31,8 @@ pub struct GetToplevel {
 #[request(XdgSurface)]
 pub struct GetPopup {
     pub popup: NewId<XdgPopup>,
-    /// <xdg_surface>
-    pub parent: Option<ObjectId>,
-    /// <xdg_positioner>
-    pub positioner: ObjectId,
+    pub parent: Option<Object<XdgSurface>>,
+    pub positioner: Object<XdgPositioner>,
 }
 
 #[derive(Message, Debug)]

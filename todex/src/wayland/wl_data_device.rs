@@ -1,5 +1,7 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_data_offer::WlDataOffer;
+use crate::wayland::wl_data_source::WlDataSource;
+use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Debug, Interface)]
 pub struct WlDataDevice {
@@ -16,20 +18,16 @@ pub enum RequestOp {
 #[derive(Message, Debug)]
 #[request(WlDataDevice)]
 pub struct StartDrag {
-    /// <wl_data_source>
-    pub source: Option<ObjectId>,
-    /// <wl_surface>
-    pub origin: ObjectId,
-    /// <wl_surface>
-    pub icon: Option<ObjectId>,
+    pub source: Option<Object<WlDataSource>>,
+    pub origin: Object<WlSurface>,
+    pub icon: Option<Object<WlSurface>>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
 #[request(WlDataDevice)]
 pub struct SetSelection {
-    /// <wl_data_source>
-    pub source: Option<ObjectId>,
+    pub source: Option<Object<WlDataSource>>,
     pub serial: u32,
 }
 
@@ -57,12 +55,10 @@ pub struct DataOffer {
 #[event(WlDataDevice)]
 pub struct Enter {
     pub serial: u32,
-    /// <wl_surface>
-    pub surface: ObjectId,
+    pub surface: Object<WlSurface>,
     pub x: Fixed,
     pub y: Fixed,
-    /// <wl_data_offer>
-    pub id: Option<ObjectId>,
+    pub id: Option<Object<WlDataOffer>>,
 }
 
 #[derive(Message, Debug)]
@@ -84,8 +80,7 @@ pub struct Drop;
 #[derive(Message, Debug)]
 #[event(WlDataDevice)]
 pub struct Selection {
-    /// <wl_data_offer>
-    pub id: Option<ObjectId>,
+    pub id: Option<Object<WlDataOffer>>,
 }
 
 #[derive(WlEnum, Debug, Clone, Copy)]
