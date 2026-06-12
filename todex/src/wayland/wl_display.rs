@@ -6,9 +6,10 @@ use crate::wayland::wl_registry::WlRegistry;
 pub struct WlDisplay;
 
 impl AsInterface for WlDisplay {
-    const INTERFACE: Interface = Interface::WlDisplay;
-
-    const INTERFACE_NAME: &str = "wl_display";
+    #[inline]
+    fn interface(&self) -> Interface {
+        Interface::WlDisplay
+    }
 }
 
 #[derive(OpCode, Debug, Clone, Copy)]

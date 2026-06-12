@@ -1,7 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{AsObjectId, Interface, NewId, Object, ObjectId, WlError, WlObject};
+use crate::wayland::{AsInterface, AsObjectId, Interface, NewId, Object, ObjectId, WlError, WlObject};
 
 const INITIAL_CAP: usize = 32;
 
@@ -61,7 +61,7 @@ impl Objects {
     /// The value can be retrieved in the [`Object`] struct.
     #[inline]
     pub fn insert_with<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
-        self.insert_inner(object.object_id(), Some((O::INTERFACE, value)))
+        self.insert_inner(object.object_id(), Some((object.interface(), value)))
     }
 
     /// Insert new object from parts.
@@ -156,7 +156,7 @@ impl<I: WlObject> ObjectIndex for Object<I> {
             return None;
         }
         let object = unsafe { objects.ptr.add(idx).as_ref() }.as_ref()?;
-        if object.0 == I::INTERFACE {
+        if object.0 == self.interface() {
             Some(object.1)
         } else {
             None

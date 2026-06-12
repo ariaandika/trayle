@@ -52,7 +52,7 @@ impl<'a> ClientMut<'a> {
         log::debug!(
             "client#{} -> {}::{}({})",
             self.id,
-            E::INTERFACE_NAME,
+            message.interface(),
             E::OPNAME,
             message.display()
         );

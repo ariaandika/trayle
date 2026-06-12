@@ -150,7 +150,7 @@ fn log_me<R: AsInterface + AsOpCode + display::AsDisplay>(req: R, client: &mut C
     log::debug!(
         "client#{} <- {}::{}({})",
         client.id,
-        R::INTERFACE_NAME,
+        req.interface(),
         R::OPNAME,
         req.display()
     );
@@ -177,14 +177,14 @@ impl Compositor {
 
     fn todo<R: AsOpCode + AsInterface>(
         &mut self,
-        _: R,
+        req: R,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
         log::error!(
             "client#{} {}::{} is not yet implemented",
             client.id,
             R::OPNAME,
-            R::INTERFACE
+            req.interface(),
         );
         Err(WlError::NotYetImplemented)
     }

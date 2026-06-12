@@ -4,7 +4,8 @@ use crate::prelude::*;
 
 impl RequestHandler<CreateDataSource> for Compositor {
     fn handle(&mut self, req: CreateDataSource, client: &mut ClientMut) -> Result<(), WlError> {
-        client.objects.insert(&req.data_source)
+        let _ = client.objects.create(req.data_source)?;
+        Ok(())
     }
 }
 
@@ -13,7 +14,7 @@ impl RequestHandler<GetDataDevice> for Compositor {
         if client.objects.get_mut(req.seat).is_none() {
             return Err(WlError::UnknownObject);
         }
-        client.objects.insert(&req.data_device)?;
+        let _ = client.objects.create(req.data_device)?;
         self.seat.set_data_device(client.id);
         Ok(())
     }

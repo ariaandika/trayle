@@ -7,7 +7,8 @@ use crate::prelude::*;
 
 impl RequestHandler<GetPointer> for Compositor {
     fn handle(&mut self, req: GetPointer, client: &mut ClientMut) -> Result<(), WlError> {
-        client.objects.insert(&req.pointer)
+        let _ = client.objects.create(req.pointer)?;
+        Ok(())
     }
 }
 
@@ -23,7 +24,8 @@ impl RequestHandler<GetKeyboard> for Compositor {
 
 impl RequestHandler<GetTouch> for Compositor {
     fn handle(&mut self, req: GetTouch, client: &mut ClientMut) -> Result<(), WlError> {
-        client.objects.insert(&req.touch)
+        let _ = client.objects.create(req.touch)?;
+        Ok(())
     }
 }
 

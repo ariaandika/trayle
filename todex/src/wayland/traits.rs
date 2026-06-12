@@ -1,20 +1,11 @@
-use crate::wayland::{AsObjectId, FromObjectId, Interface, NewId, WlError};
+use crate::wayland::{AsObjectId, FromObjectId, Interface, WlError};
 
 // ===== interface =====
 
 /// Type that is associated with an interface.
 pub trait AsInterface {
-    /// The interface value.
-    const INTERFACE: Interface;
-
-    /// Wayland name of this interface.
-    const INTERFACE_NAME: &str;
-}
-
-impl<T: AsInterface> AsInterface for NewId<T> {
-    const INTERFACE: Interface = T::INTERFACE;
-
-    const INTERFACE_NAME: &str = T::INTERFACE_NAME;
+    /// Returns the interface that this type associated with.
+    fn interface(&self) -> Interface;
 }
 
 // ===== opcode =====
@@ -79,4 +70,3 @@ pub trait WlEnum: Sized {
         Self::from_u32(uint).ok_or(WlError::UnknownEnumEntry)
     }
 }
-

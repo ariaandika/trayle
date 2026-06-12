@@ -85,9 +85,10 @@ impl<T> AsObjectId for Encodable<T> {
 }
 
 impl<T: AsInterface> AsInterface for Encodable<T> {
-    const INTERFACE: Interface = T::INTERFACE;
-
-    const INTERFACE_NAME: &str = T::INTERFACE_NAME;
+    #[inline]
+    fn interface(&self) -> Interface {
+        self.payload.interface()
+    }
 }
 
 impl<T: AsOpCode> AsOpCode for Encodable<T> {

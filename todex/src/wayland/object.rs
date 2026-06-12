@@ -28,18 +28,8 @@ impl Object<Any> {
         Self {
             object: Any {
                 object_id: object.object_id(),
-                interface: O::INTERFACE,
+                interface: object.interface(),
             },
-        }
-    }
-
-    pub fn try_into<T: WlObject>(self) -> Option<Object<T>> {
-        if self.object.interface == T::INTERFACE {
-            Some(Object {
-                object: T::from_object_id(self.object.object_id),
-            })
-        } else {
-            None
         }
     }
 }
@@ -66,6 +56,12 @@ impl AsObjectId for Any {
     }
 }
 
+impl AsInterface for Any {
+    fn interface(&self) -> Interface {
+        self.interface
+    }
+}
+
 // ===== impl Object =====
 
 impl<T: FromObjectId> FromObjectId for Object<T> {
@@ -83,9 +79,10 @@ impl<T: AsObjectId> AsObjectId for Object<T> {
 }
 
 impl<T: AsInterface> AsInterface for Object<T> {
-    const INTERFACE: Interface = T::INTERFACE;
-
-    const INTERFACE_NAME: &str = T::INTERFACE_NAME;
+    #[inline]
+    fn interface(&self) -> Interface {
+        self.object.interface()
+    }
 }
 
 impl<T: std::fmt::Debug> std::fmt::Debug for Object<T> {

@@ -18,7 +18,7 @@ macro_rules! insert {
     ($req:ty,$field:ident) => {
         impl RequestHandler<$req> for Compositor {
             fn handle(&mut self, req: $req, client: &mut ClientMut) -> Result<(), WlError> {
-                client.objects.insert(&req.$field)?;
+                let _ = client.objects.create(req.$field)?;
                 Ok(())
             }
         }
