@@ -5,11 +5,11 @@ use todex::sys::sigfd::Sigfd;
 use todex::wayland::{Frame, WlError};
 use todex::compositor::seat::Seat;
 use todex::rt::poller::Poller;
-use todex::log;
 
-use crate::FatalError;
-use crate::{router, Compositor};
 use crate::client::{ClientMut, Clients};
+use crate::log;
+use crate::error::FatalError;
+use crate::compositor::{router, Compositor};
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 
@@ -26,7 +26,7 @@ pub fn event_loop() -> Result<(), FatalError> {
     let mut write_buf = Buffer::new();
 
     let mut clients = Clients::new();
-    let mut compositor = Compositor { seat };
+    let mut compositor = Compositor::new(seat);
 
     let mut poll = Poller::new()?;
 

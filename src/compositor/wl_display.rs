@@ -1,7 +1,7 @@
 use todex::wayland::wl_display::{GetRegistry, Sync};
 
-use crate::GLOBALS;
-use crate::prelude::*;
+use crate::compositor::GLOBALS;
+use crate::compositor::prelude::*;
 
 impl RequestHandler<Sync> for Compositor {
     fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {

@@ -1,8 +1,8 @@
-use crate::prelude::*;
-
 use wayland::xdg_wm_base::{self, CreatePositioner, GetXdgSurface, Pong};
 use wayland::xdg_surface;
 use wayland::xdg_toplevel;
+
+use crate::compositor::prelude::*;
 
 macro_rules! ignore {
     ($req:ty) => {

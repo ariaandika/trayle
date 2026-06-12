@@ -1,6 +1,6 @@
 use wayland::wl_data_device_manager::{CreateDataSource, GetDataDevice, Release};
 
-use crate::prelude::*;
+use crate::compositor::prelude::*;
 
 impl RequestHandler<CreateDataSource> for Compositor {
     fn handle(&mut self, req: CreateDataSource, client: &mut ClientMut) -> Result<(), WlError> {

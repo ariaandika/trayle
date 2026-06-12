@@ -1,6 +1,5 @@
 use std::os::fd::{AsRawFd, OwnedFd};
 
-use todex::log;
 use todex::sys::buffer::{Buffer, SmallBuf};
 use todex::collections::slab::Slab;
 use todex::compositor::objects::Objects;
@@ -8,6 +7,8 @@ use todex::wayland::display;
 use todex::wayland::wl_display::{DeleteId, Error};
 use todex::wayland::{AsInterface, AsObjectId, AsOpCode, EncodeMessage};
 use todex::wayland::{ObjectId, WlError};
+
+use crate::log;
 
 // ===== Client =====
 
@@ -33,9 +34,12 @@ pub struct ClientMut<'a> {
 }
 
 impl<'a> ClientMut<'a> {
-    #[inline]
     pub const fn new(id: u64, state: &'a mut Client, write_buf: &'a mut Buffer) -> Self {
-        Self { id, state, write_buf }
+        Self {
+            id,
+            state,
+            write_buf,
+        }
     }
 
     /// Send a message.
@@ -44,29 +48,19 @@ impl<'a> ClientMut<'a> {
     /// wrapped in [`Encodable`] to associate it with object id.
     ///
     /// [`Encodable`]: todex::wayland::Encodable
-    #[inline]
     pub fn send<E: EncodeMessage + AsInterface + AsOpCode + display::AsDisplay>(
         &mut self,
         message: E,
     ) {
-        log::debug!(
-            "client#{} -> {}::{}({})",
-            self.id,
-            message.interface(),
-            E::OPNAME,
-            message.display()
-        );
-        message.encode_message(self.write_buf);
+        log::send_message(message, self).encode_message(self.write_buf);
     }
 
     /// Send [`DeleteId`] event.
-    #[inline]
     pub fn delete_id<O: AsObjectId>(&mut self, object: O) {
         self.send(DeleteId { id: object.object_id() });
     }
 
     /// Send `wl_display::error` event from [`WlError`].
-    #[inline]
     pub fn send_global_error(&mut self, error: WlError) {
         Error::from_wl_error(ObjectId::wl_display(), error).encode_message(self.write_buf);
     }

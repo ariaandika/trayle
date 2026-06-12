@@ -1,7 +1,7 @@
 use wayland::wl_keyboard::KeymapFormat;
 use wayland::wl_seat::{self, GetKeyboard, GetPointer, GetTouch};
 
-use crate::prelude::*;
+use crate::compositor::prelude::*;
 
 // TODO: blocker: interface error, checks for seat capability
 

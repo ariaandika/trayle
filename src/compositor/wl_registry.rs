@@ -2,8 +2,8 @@ use wayland::wl_registry::Bind;
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::{PixelFormat, WlShm};
 
-use crate::GLOBALS;
-use crate::prelude::*;
+use crate::compositor::GLOBALS;
+use crate::compositor::prelude::*;
 
 impl RequestHandler<Bind<'_>> for Compositor {
     fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
