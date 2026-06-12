@@ -1,28 +1,7 @@
 use std::ptr::NonNull;
 
 use crate::alloc;
-use crate::wayland::{Interface, NewId, ObjectId, WlError, WlObject};
-
-// ===== Object =====
-
-pub struct Object {
-    interface: Interface,
-    value: usize,
-}
-
-impl Object {
-    #[inline]
-    pub fn interface(&self) -> Interface {
-        self.interface
-    }
-
-    #[inline]
-    pub fn value(&self) -> usize {
-        self.value
-    }
-}
-
-// ===== Objects =====
+use crate::wayland::{AsObjectId, Interface, NewId, Object, ObjectId, WlError, WlObject};
 
 const INITIAL_CAP: usize = 32;
 
@@ -33,7 +12,7 @@ const INITIAL_CAP: usize = 32;
 /// Client can only append one index after the last used object slot. An attempt to insert past it
 /// will result in an error.
 pub struct Objects {
-    ptr: NonNull<Option<Object>>,
+    ptr: NonNull<Option<(Interface, usize)>>,
     len: usize,
     cap: usize,
 }
@@ -82,13 +61,7 @@ impl Objects {
     /// The value can be retrieved in the [`Object`] struct.
     #[inline]
     pub fn insert_with<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), WlError> {
-        self.insert_inner(
-            object.object_id(),
-            Some(Object {
-                interface: O::INTERFACE,
-                value,
-            }),
-        )
+        self.insert_inner(object.object_id(), Some((O::INTERFACE, value)))
     }
 
     /// Insert new object from parts.
@@ -96,7 +69,7 @@ impl Objects {
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
     #[inline]
     pub fn insert_parts(&mut self, object_id: ObjectId, interface: Interface, value: usize) -> Result<(), WlError> {
-        self.insert_inner(object_id, Some(Object { interface, value }))
+        self.insert_inner(object_id, Some((interface, value)))
     }
 
     /// This has the same effect of inserting the id and immediately remove it.
@@ -105,13 +78,14 @@ impl Objects {
         self.insert_inner(object.object_id(), None)
     }
 
-    fn insert_inner(&mut self, id: ObjectId, object: Option<Object>) -> Result<(), WlError> {
+    fn insert_inner(&mut self, id: ObjectId, object: Option<(Interface, usize)>) -> Result<(), WlError> {
         if self.len == self.cap {
             self.grow();
         }
 
-        debug_assert!(!id.is_display());
-        let idx = (id.to_u32() - 2) as usize;
+        let Some(idx) = id.to_u32().checked_sub(2).map(|e|e as usize) else {
+            return Err(WlError::InvalidNewId);
+        };
 
         // appending can only be one index after the last used id
         //
@@ -135,15 +109,57 @@ impl Objects {
         Ok(())
     }
 
+    /// Performs an object lookup.
+    ///
+    /// The index can be an [`ObjectId`], and returns the object [`Interface`]. If object id is `1`,
+    /// returns [`Interface::WlDisplay`].
+    ///
+    /// Otherwise, [`Object`] can be used, and returns the associated object value. It also validate
+    /// whether the interface is equal. Returns `None` if object id is `1`.
+    ///
+    /// Object value usually is an index referencing other resource. Object value are provided in
+    /// object insertion.
+    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Option<I::Output> {
+        ObjectIndex::get_object_mut(idx, self)
+    }
+}
+
+pub trait ObjectIndex {
+    type Output;
+
+    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output>;
+}
+
+impl ObjectIndex for ObjectId {
+    type Output = Interface;
+
     #[inline]
-    pub fn get_mut(&mut self, id: ObjectId) -> Option<&mut Object> {
-        debug_assert!(!id.is_display());
-        let idx = (id.to_u32() - 2) as usize;
-        if idx < self.len {
-            unsafe { self.ptr.add(idx).as_mut().as_mut() }
+    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output> {
+        let Some(idx) = self.to_u32().checked_sub(2) else {
+            return Some(Interface::WlDisplay)
+        };
+        if (idx as usize) < objects.len {
+            unsafe { objects.ptr.add(idx as usize).as_mut() }.map(|e| e.0)
         } else {
             None
         }
     }
 }
 
+impl<I: WlObject> ObjectIndex for Object<I> {
+    type Output = usize;
+
+    #[inline]
+    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output> {
+        let idx = self.object_id().to_u32().checked_sub(2)? as usize;
+        if idx >= objects.len {
+            return None;
+        }
+        let object = unsafe { objects.ptr.add(idx).as_ref() }.as_ref()?;
+        if object.0 == I::INTERFACE {
+            Some(object.1)
+        } else {
+            None
+        }
+    }
+}

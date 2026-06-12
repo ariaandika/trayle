@@ -1,6 +1,7 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_data_device::WlDataDevice;
 use crate::wayland::wl_data_source::WlDataSource;
+use crate::wayland::wl_seat::WlSeat;
 
 #[derive(Interface, Debug)]
 pub struct WlDataDeviceManager {
@@ -25,7 +26,7 @@ pub struct CreateDataSource {
 pub struct GetDataDevice {
     pub data_device: NewId<WlDataDevice>,
     /// <wl_seat>
-    pub seat: ObjectId,
+    pub seat: Object<WlSeat>,
 }
 
 #[derive(Message, Debug)]

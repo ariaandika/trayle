@@ -27,6 +27,8 @@
 //! [`Interface`] is a runtime value representing an interface. This can be used by high level APIs
 //! to store mutliple interfaces in a list without dynamic dispatch.
 //!
+//! [`Object`] represent wayland object. It can be type safe or runtime value.
+//!
 //! [`Encodable`] associate object id to a message payload. Encoding required its interface object
 //! id. One cannot simply define object id field to a message payload. This struct wraps the payload
 //! and associate it with object id to form a complete encodable message.
@@ -75,6 +77,7 @@
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use fixed::Fixed;
+pub use object::{Object, Any};
 pub use error::WlError;
 pub use traits::{AsInterface, AsOpCode, OpCode, WlEnum, WlObject};
 pub use message::Frame;
@@ -90,6 +93,7 @@ macro_rules! roundup4 {
 
 mod object_id;
 mod fixed;
+mod object;
 mod error;
 mod traits;
 mod message;
@@ -101,7 +105,7 @@ pub mod display;
 mod prelude {
     pub use super::{AsObjectId, FromObjectId};
     pub use super::{AsInterface, AsOpCode, Decode, Encode, OpCode, WlEnum};
-    pub use super::{Fixed, Interface, NewId, ObjectId, WlError};
+    pub use super::{Fixed, Interface, NewId, Object, ObjectId, WlError};
     pub use super::decode::Decoder;
     pub use super::encode::{Encodable, Sized2, Writer};
     pub use super::display;

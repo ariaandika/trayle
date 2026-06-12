@@ -26,7 +26,7 @@ mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
 
-// TODO: epoll never returns after wl_keyboard::keymap event
+// BUG: epoll never returns after wl_keyboard::keymap event
 
 fn main() -> ExitCode {
     let _guard = log::init();
@@ -53,13 +53,8 @@ fn router(
     use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf)?;
-    let interface = if id.is_display() {
-        Interface::WlDisplay
-    } else {
-        match client.objects.get_mut(id) {
-            Some(object) => object.interface(),
-            None => return Err(WlError::UnknownObject),
-        }
+    let Some(interface) = client.objects.get_mut(id) else {
+        return Err(WlError::UnknownObject);
     };
 
     macro_rules! handle_me {

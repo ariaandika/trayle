@@ -1,4 +1,4 @@
-use crate::wayland::{Fixed, Frame, NewId, ObjectId, WlEnum, WlError};
+use crate::wayland::{Fixed, Frame, FromObjectId, NewId, Object, ObjectId, WlEnum, WlError};
 
 /// Decodable wayland message.
 pub trait Decode {
@@ -88,19 +88,35 @@ impl Read<'_> for u32 {
 
 impl Read<'_> for ObjectId {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        ObjectId::new(u32::from_ne_bytes(reader.read_ne_bytes()?)).ok_or(WlError::ZeroId)
+        reader
+            .read_ne_bytes()
+            .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(WlError::ZeroId))
     }
 }
 
 impl Read<'_> for Option<ObjectId> {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        Ok(ObjectId::new(u32::from_ne_bytes(reader.read_ne_bytes()?)))
+        reader
+            .read_ne_bytes()
+            .map(|id| ObjectId::new(u32::from_ne_bytes(id)))
+    }
+}
+
+impl<T: FromObjectId> Read<'_> for Object<T> {
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        ObjectId::decode(reader).map(|id| Object::new(T::from_object_id(id)))
+    }
+}
+
+impl<T: FromObjectId> Read<'_> for Option<Object<T>> {
+    fn decode(reader: &mut Reader) -> Result<Self, WlError> {
+        <Option<_>>::decode(reader).map(|e| e.map(|id| Object::new(T::from_object_id(id))))
     }
 }
 
 impl Read<'_> for Fixed {
     fn decode(reader: &mut Reader) -> Result<Self, WlError> {
-        Ok(Fixed::from_i32(reader.read()?))
+        reader.read().map(Fixed::from_i32)
     }
 }
 

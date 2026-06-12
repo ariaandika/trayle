@@ -1,4 +1,4 @@
-use crate::wayland::{Encodable, Fixed, NewId, ObjectId};
+use crate::wayland::{AsObjectId, Encodable, Fixed, NewId, Object, ObjectId};
 
 #[inline]
 pub fn fmt_me<D: Display2>(value: &D, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -38,6 +38,33 @@ delegate!(ObjectId);
 delegate!(NewId<T>);
 delegate!(Fixed);
 
+impl Display2 for Option<ObjectId> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Some(ok) => ok.fmt(f),
+            None => "<none>".fmt(f),
+        }
+    }
+}
+
+impl<T: AsObjectId> Display2 for Object<T> {
+    #[inline]
+    fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        self.object_id().fmt(f)
+    }
+}
+
+impl<T: AsObjectId> Display2 for Option<Object<T>> {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            Some(ok) => ok.object_id().fmt(f),
+            None => "<none>".fmt(f),
+        }
+    }
+}
+
 impl Display2 for &str {
     #[inline]
     fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -49,16 +76,6 @@ impl Display2 for &[u8] {
     #[inline]
     fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
         "<array>".fmt(f)
-    }
-}
-
-impl Display2 for Option<ObjectId> {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Some(ok) => ok.fmt(f),
-            None => "<none>".fmt(f),
-        }
     }
 }
 

@@ -10,10 +10,7 @@ impl RequestHandler<CreateDataSource> for Compositor {
 
 impl RequestHandler<GetDataDevice> for Compositor {
     fn handle(&mut self, req: GetDataDevice, client: &mut ClientMut) -> Result<(), WlError> {
-        let Some(object) = client.objects.get_mut(req.seat) else {
-            return Err(WlError::UnknownObject);
-        };
-        let Interface::WlSeat = object.interface() else {
+        let Some(_) = client.objects.get_mut(req.seat) else {
             return Err(WlError::UnknownObject);
         };
         client.objects.insert(&req.data_device)?;
