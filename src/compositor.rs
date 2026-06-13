@@ -40,19 +40,32 @@ impl Compositor {
     pub fn new(seat: Seat) -> Self {
         Self { seat }
     }
+
+    pub fn has_frame(&self, read_buf: &Buffer) -> bool {
+        Frame::has_frame(read_buf)
+    }
+
+    pub fn route(&mut self, read_buf: &mut Buffer, client: &mut ClientMut) -> Result<(), ()> {
+        match route(self, read_buf, client) {
+            Ok(_) => Ok(()),
+            Err(err) => {
+                log::error!("failed to handle request: {err}");
+                // client.send(err);
+                Err(())
+            },
+        }
+    }
 }
 
-pub fn router(
+fn route(
+    compositor: &mut Compositor,
     read_buf: &mut Buffer,
     client: &mut ClientMut,
-    compositor: &mut Compositor,
 ) -> Result<(), WlError> {
     use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf)?;
-    let Some(interface) = client.objects.get_mut(id) else {
-        return Err(WlError::UnknownObject);
-    };
+    let interface = client.objects.get_mut(id)?;
 
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $call:ident),* $(, $(.. $fb:ident)? $(,)? )? }) => {
@@ -62,7 +75,10 @@ pub fn router(
             }
         };
         (@CALL $iface:ident $req:ident $call:ident) => {
-            compositor.$call(log::recv_message($iface::$req::decode_with(frame)?, client), client)
+            compositor.$call(
+                log::recv_message($iface::$req::decode_with(frame)?, client),
+                client,
+            )
         };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {

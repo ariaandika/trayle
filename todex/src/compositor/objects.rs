@@ -119,30 +119,37 @@ impl Objects {
     ///
     /// Object value usually is an index referencing other resource. Object value are provided in
     /// object insertion.
-    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Option<I::Output> {
+    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Result<I::Output, WlError> {
         ObjectIndex::get_object_mut(idx, self)
+    }
+
+    fn entry(&self, id: ObjectId) -> Result<&(Interface, usize), WlError> {
+        let Some(idx) = id.to_u32().checked_sub(2) else {
+            return Ok(&(Interface::WlDisplay, 0))
+        };
+        if (idx as usize) < self.len {
+            match unsafe { self.ptr.add(idx as usize).as_mut() } {
+                Some(ok) => Ok(ok),
+                None => Err(WlError::UnknownObject),
+            }
+        } else {
+            Err(WlError::UnknownObject)
+        }
     }
 }
 
 pub trait ObjectIndex {
     type Output;
 
-    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output>;
+    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, WlError>;
 }
 
 impl ObjectIndex for ObjectId {
     type Output = Interface;
 
     #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output> {
-        let Some(idx) = self.to_u32().checked_sub(2) else {
-            return Some(Interface::WlDisplay)
-        };
-        if (idx as usize) < objects.len {
-            unsafe { objects.ptr.add(idx as usize).as_mut() }.map(|e| e.0)
-        } else {
-            None
-        }
+    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, WlError> {
+        objects.entry(self).map(|e| e.0)
     }
 }
 
@@ -150,16 +157,12 @@ impl<I: WlObject> ObjectIndex for Object<I> {
     type Output = usize;
 
     #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Option<Self::Output> {
-        let idx = self.object_id().to_u32().checked_sub(2)? as usize;
-        if idx >= objects.len {
-            return None;
-        }
-        let object = unsafe { objects.ptr.add(idx).as_ref() }.as_ref()?;
+    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, WlError> {
+        let object = objects.entry(self.object_id())?;
         if object.0 == self.interface() {
-            Some(object.1)
+            Ok(object.1)
         } else {
-            None
+            Err(WlError::InvalidObject)
         }
     }
 }

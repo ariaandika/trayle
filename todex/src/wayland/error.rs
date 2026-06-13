@@ -1,3 +1,4 @@
+
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
     /// Unknown op code.
@@ -8,6 +9,8 @@ pub enum WlError {
     UnknownBind,
     /// Unknown enum variant from given integer.
     UnknownEnumEntry,
+    /// Missmatched interface for given object id.
+    InvalidObject,
     /// Invalid payload size.
     InvalidSize,
     /// Invalid new object id, e.g: new id that is used by existing object.
@@ -31,6 +34,7 @@ impl WlError {
             Self::UnknownObject => "unknown object id",
             Self::UnknownBind => "unknown global binding operation",
             Self::UnknownEnumEntry => "unknown enum variant from given integer",
+            Self::InvalidObject => "missmatched interface for given object id",
             Self::InvalidSize => "invalid payload size",
             Self::InvalidNewId => "invalid client new object id",
             Self::ZeroId => "invalid object id of `0`",
@@ -39,10 +43,6 @@ impl WlError {
             Self::MissingFd => "no fd in ancillary data",
             Self::NotYetImplemented => "not yet implemented",
         }
-    }
-
-    pub const fn todo<T>() -> Result<T, WlError> {
-        Err(WlError::NotYetImplemented)
     }
 }
 

@@ -11,9 +11,7 @@ impl RequestHandler<CreateDataSource> for Compositor {
 
 impl RequestHandler<GetDataDevice> for Compositor {
     fn handle(&mut self, req: GetDataDevice, client: &mut ClientMut) -> Result<(), WlError> {
-        if client.objects.get_mut(req.seat).is_none() {
-            return Err(WlError::UnknownObject);
-        }
+        let _ = client.objects.get_mut(req.seat)?;
         let _ = client.objects.create(req.data_device)?;
         self.seat.set_data_device(client.id);
         Ok(())

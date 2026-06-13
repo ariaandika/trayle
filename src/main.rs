@@ -5,22 +5,16 @@
 // TODO: global object trait, for version checking
 // TODO: returning interface specific error
 
-use std::process::ExitCode;
-
-// ===== state =====
-
 mod seat;
 mod client;
-mod rt;
-
-// ===== logic =====
 
 mod compositor;
 
-// ===== util =====
-
 mod log;
 mod error;
+mod rt;
+
+use std::process::ExitCode;
 
 fn main() -> ExitCode {
     let _guard = log::init();

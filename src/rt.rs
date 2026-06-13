@@ -2,31 +2,30 @@ use std::task::Poll::*;
 use todex::sys::buffer::{self, Buffer};
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
-use todex::wayland::{Frame, WlError};
 use todex::rt::poller::Poller;
 
 use crate::seat::Seat;
 use crate::client::{ClientMut, Clients};
 use crate::log;
 use crate::error::FatalError;
-use crate::compositor::{router, Compositor};
+use crate::compositor::Compositor;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
+const STATIC_KEY: u64 = i64::MIN as u64;
 
-const STATIC_KEY_MASK: u64 = i64::MIN as u64;
-const LISTENER_KEY: u64 = STATIC_KEY_MASK | 1;
-const SIGFD_KEY: u64 = STATIC_KEY_MASK | 2;
+const LISTENER_KEY: u64 = STATIC_KEY;
+const SIGFD_KEY: u64 = STATIC_KEY | 1;
 
 pub fn event_loop() -> Result<(), FatalError> {
-    let seat = Seat::new()?;
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
 
     let mut read_buf = Buffer::new();
     let mut write_buf = Buffer::new();
 
-    let mut clients = Clients::new();
+    let seat = Seat::new()?;
     let mut compositor = Compositor::new(seat);
+    let mut clients = Clients::new();
 
     let mut poll = Poller::new()?;
 
@@ -43,24 +42,27 @@ pub fn event_loop() -> Result<(), FatalError> {
             continue;
         };
 
-        if key == SIGFD_KEY {
-            log::info!("{} signal received", sigfd.read());
-            break;
-        }
-
-        if key == LISTENER_KEY {
-            while let Ready(result) = listener.poll_accept() {
-                match result {
-                    Ok(fd) => {
-                        let (id, client) = clients.insert(fd);
-                        poll.add(id, client);
-                        log::debug!(target: format_args!("client#{id}"), "connected");
-                    }
-                    Err(err) => {
-                        log::error!(target: "listener", "{err}");
-                        break;
-                    }
+        if key & STATIC_KEY == STATIC_KEY {
+            match key {
+                SIGFD_KEY => {
+                    log::info!("{} signal received", sigfd.read());
+                    break;
                 }
+                LISTENER_KEY => {
+                    while let Ready(result) = listener.poll_accept() {
+                        match result {
+                            Ok(fd) => {
+                                let (id, sock) = clients.insert(fd);
+                                poll.add(id, sock);
+                                log::debug!(target: format_args!("client#{id}"), "connected");
+                            },
+                            Err(err) => {
+                                log::error!(target: "listener", "{err}")
+                            },
+                        }
+                    }
+                },
+                _ => {},
             }
             continue;
         }
@@ -86,9 +88,8 @@ pub fn event_loop() -> Result<(), FatalError> {
             if interest.is_read() {
                 let mut client = ClientMut::new(id, client, &mut write_buf);
                 loop {
-                    if Frame::has_frame(&read_buf) {
-                        router(&mut read_buf, &mut client, &mut compositor)
-                            .inspect_err(|e| client.send_global_error(*e))?;
+                    if compositor.has_frame(&read_buf) {
+                        compositor.route(&mut read_buf, &mut client)?;
                     } else {
                         if read_buf.recvmsg(&client)?.is_pending() {
                             break;
@@ -141,7 +142,6 @@ pub fn event_loop() -> Result<(), FatalError> {
     }
 
     Ok(())
-
 }
 
 struct HandleError;
@@ -162,12 +162,8 @@ impl From<buffer::WriteError> for HandleError {
     }
 }
 
-impl From<WlError> for HandleError {
-    fn from(err: WlError) -> Self {
-        // "not yet implemented" is printed immediately
-        if !matches!(err, WlError::NotYetImplemented) {
-            log::error!("failed to handle request: {err}");
-        }
+impl From<()> for HandleError {
+    fn from(_: ()) -> Self {
         Self
     }
 }

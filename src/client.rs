@@ -4,9 +4,8 @@ use todex::sys::buffer::{Buffer, SmallBuf};
 use todex::collections::slab::Slab;
 use todex::compositor::objects::Objects;
 use todex::wayland::display;
-use todex::wayland::wl_display::{DeleteId, Error};
+use todex::wayland::wl_display::DeleteId;
 use todex::wayland::{AsInterface, AsObjectId, AsOpCode, EncodeMessage};
-use todex::wayland::{ObjectId, WlError};
 
 use crate::log;
 
@@ -58,11 +57,6 @@ impl<'a> ClientMut<'a> {
     /// Send [`DeleteId`] event.
     pub fn delete_id<O: AsObjectId>(&mut self, object: O) {
         self.send(DeleteId { id: object.object_id() });
-    }
-
-    /// Send `wl_display::error` event from [`WlError`].
-    pub fn send_global_error(&mut self, error: WlError) {
-        Error::from_wl_error(ObjectId::wl_display(), error).encode_message(self.write_buf);
     }
 }
 
