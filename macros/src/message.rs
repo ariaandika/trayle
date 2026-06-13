@@ -167,7 +167,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             type Output<'a> = #&name #lf;
 
             #[inline]
-            fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, WlError> {
+            fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, DecodeError> {
                 #dec_fd
                 #reader
                 Ok(#&name #ret)

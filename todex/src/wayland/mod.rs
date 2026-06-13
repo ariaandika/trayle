@@ -82,7 +82,7 @@ pub use error::WlError;
 pub use traits::{AsInterface, AsOpCode, OpCode, WlEnum, WlObject};
 pub use message::{Frame, MessageError};
 
-pub use decode::Decode;
+pub use decode::{Decode, DecodeError};
 pub use encode::{Encodable, Encode, EncodeMessage};
 
 macro_rules! roundup4 {
@@ -106,7 +106,7 @@ mod prelude {
     pub use super::{AsObjectId, FromObjectId};
     pub use super::{AsInterface, AsOpCode, Decode, Encode, OpCode, WlEnum};
     pub use super::{Fixed, Interface, NewId, Object, ObjectId, WlError};
-    pub use super::decode::Decoder;
+    pub use super::decode::{Decoder, DecodeError};
     pub use super::encode::{Encodable, Sized2, Writer};
     pub use super::display;
 
