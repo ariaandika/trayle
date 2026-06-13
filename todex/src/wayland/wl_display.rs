@@ -57,7 +57,6 @@ pub enum WlDisplayError {
     /// method doesn't exist on the specified interface or malformed request
     InvalidMethod,
     /// server is out of memory
-    #[allow(unused)]
     NoMemory,
     /// implementation error in compositor
     Implementation,
@@ -87,28 +86,9 @@ impl DeleteId {
 }
 
 impl<'a> Error<'a> {
-    /// Create `wl_display::error` event.
     #[inline]
     pub const fn new(object_id: ObjectId, code: u32, message: &'a str) -> Self {
         Self { object_id, code, message }
-    }
-
-    /// Create `wl_display::error` event from [`WlError`].
-    #[inline]
-    pub fn from_wl_error(id: ObjectId, error: WlError) -> Error<'static> {
-        use WlError as E;
-
-        // in the future if there is id specific error.
-        let _ = id;
-        let (object_id, code) = match error {
-            E::NotYetImplemented => (ObjectId::wl_display(), WlDisplayError::Implementation),
-            _ => todo!(),
-        };
-        Error {
-            object_id,
-            code: code as u32,
-            message: error.message(),
-        }
     }
 }
 

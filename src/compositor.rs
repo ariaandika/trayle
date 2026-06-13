@@ -52,7 +52,7 @@ impl Compositor {
             Ok(()) => Ok(()),
             Err(err) => {
                 log::malformed_message(err, client);
-                client.send(GlobalError::from_wl_error(ObjectId::wl_display(), err));
+                client.send(GlobalError::new(ObjectId::wl_display(), err.code(), err.message()));
                 Err(())
             }
         }
@@ -157,7 +157,7 @@ fn route(
 
     if let Err(err) = result {
         log::handler_error(interface, op, err, client);
-        client.send(GlobalError::from_wl_error(id, err));
+        client.send(GlobalError::new(id, err.code(), err.message()));
     }
 
     Ok(())
