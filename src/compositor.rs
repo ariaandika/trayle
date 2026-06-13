@@ -14,8 +14,6 @@ mod prelude {
 }
 
 mod wl_display;
-mod wl_registry;
-mod wl_compositor;
 mod wl_seat;
 mod wl_data_source;
 mod wl_data_device_manager;
