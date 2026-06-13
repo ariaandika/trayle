@@ -80,7 +80,7 @@ pub use fixed::Fixed;
 pub use object::{Object, Any};
 pub use error::WlError;
 pub use traits::{AsInterface, AsOpCode, OpCode, WlEnum, WlObject};
-pub use message::Frame;
+pub use message::{Frame, MessageError};
 
 pub use decode::Decode;
 pub use encode::{Encodable, Encode, EncodeMessage};

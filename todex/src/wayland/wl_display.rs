@@ -116,6 +116,7 @@ impl<'a> Error<'a> {
             E::NonUtf8 => SEMANTIC,
             E::MissingFd => MALFORMED,
             E::NotYetImplemented => (ObjectId::wl_display(), WlDisplayError::Implementation),
+            _ => todo!(),
         };
         Error {
             object_id,

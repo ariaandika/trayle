@@ -1,7 +1,7 @@
 use crate::sys::buffer::Buffer;
-use crate::wayland::{ObjectId, WlError};
+use crate::wayland::ObjectId;
 
-// ===== Frame =====
+use MessageError as E;
 
 /// Encoded message.
 pub struct Frame<'a> {
@@ -20,20 +20,20 @@ impl<'a> Frame<'a> {
     }
 
     #[inline]
-    pub fn new(read_buf: &'a mut Buffer) -> Result<(ObjectId, u16, Self), WlError> {
+    pub fn new(read_buf: &'a mut Buffer) -> Result<(ObjectId, u16, Self), MessageError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
-            return Err(WlError::InvalidSize);
+            return Err(E::InsufficientSize);
         };
         let Some(id) = ObjectId::new(u32::from_ne_bytes(*header.first_chunk().unwrap())) else {
-            return Err(WlError::ZeroId);
+            return Err(E::ZeroId);
         };
         let hdr2 = u32::from_ne_bytes(*header.last_chunk().unwrap());
         let len = hdr2 >> u16::BITS;
         if len < 8 {
-            return Err(WlError::InvalidSize);
+            return Err(E::InsufficientSize);
         }
         if read_buf.len() < len as usize {
-            return Err(WlError::InvalidSize);
+            return Err(E::InsufficientSize);
         }
         Ok((id, hdr2 as u16, Self { read_buf }))
     }
@@ -52,6 +52,28 @@ impl<'a> Frame<'a> {
             // SAFETY: invariant
             self.read_buf.advance_unchecked(len);
             std::slice::from_raw_parts(ptr.add(8), len - 8)
+        }
+    }
+}
+
+// ===== MessageError =====
+
+#[derive(Debug, Clone, Copy)]
+pub enum MessageError {
+    /// Insufficient message size.
+    InsufficientSize,
+    /// Excessive message size.
+    ExcessiveSize,
+    /// Invalid object id of `0`.
+    ZeroId,
+}
+
+impl MessageError {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::InsufficientSize => "insufficient message size",
+            Self::ExcessiveSize => "excessize message size",
+            Self::ZeroId => "invalid object id of `0`",
         }
     }
 }
