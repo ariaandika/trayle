@@ -1,4 +1,4 @@
-use crate::wayland::{DecodeError, MessageError};
+use crate::wayland::{DecodeError, MessageError, ObjectError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
@@ -30,6 +30,8 @@ pub enum WlError {
     Message(MessageError),
     /// Decode error.
     Decode(DecodeError),
+    /// Object error.
+    Object(ObjectError),
 }
 
 impl WlError {
@@ -50,6 +52,7 @@ impl WlError {
             Self::NotYetImplemented => "not yet implemented",
             Self::Message(e) => e.message(),
             Self::Decode(e) => e.message(),
+            Self::Object(e) => e.message(),
         }
     }
 }
@@ -73,5 +76,12 @@ impl From<DecodeError> for WlError {
     #[inline]
     fn from(v: DecodeError) -> Self {
         Self::Decode(v)
+    }
+}
+
+impl From<ObjectError> for WlError {
+    #[inline]
+    fn from(v: ObjectError) -> Self {
+        Self::Object(v)
     }
 }

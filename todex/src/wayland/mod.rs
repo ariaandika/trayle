@@ -77,7 +77,7 @@
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use fixed::Fixed;
-pub use object::{Object, Any};
+pub use object::{Object, Any, ObjectError};
 pub use error::WlError;
 pub use traits::{AsInterface, AsOpCode, OpCode, WlEnum, WlObject};
 pub use message::{Frame, MessageError};
