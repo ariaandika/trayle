@@ -1,5 +1,5 @@
 use todex::sys::buffer::Buffer;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, OpCode, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, WlError};
 use todex::wayland::{Frame, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
 
@@ -71,7 +71,7 @@ fn route(
 
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $call:ident),* $(, $(.. $fb:ident)? $(,)? )? }) => {
-            match <_>::try_from_op(op)? {
+            match <_>::from_op(op).ok_or(DecodeError::UnknownOpCode)? {
                 $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $call),)*
                 $($(op => compositor.$fb(interface, op, client),)?)?
             }

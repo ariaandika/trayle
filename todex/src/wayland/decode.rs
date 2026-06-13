@@ -62,6 +62,8 @@ pub enum DecodeError {
     NonUtf8,
     /// Unknown enum entry.
     UnknownEnumEntry,
+    /// Unknown op code.
+    UnknownOpCode,
     /// Missing fd.
     MissingFd,
 }
@@ -74,6 +76,7 @@ impl DecodeError {
             Self::Null => "invalid null value",
             Self::NonUtf8 => "non utf-8 string",
             Self::UnknownEnumEntry => "unknown enum entry",
+            Self::UnknownOpCode => "unknown op code",
             Self::MissingFd => "missing fd",
         }
     }

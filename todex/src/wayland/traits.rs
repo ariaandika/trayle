@@ -1,4 +1,4 @@
-use crate::wayland::{AsObjectId, FromObjectId, Interface, WlError};
+use crate::wayland::{AsObjectId, FromObjectId, Interface};
 
 // ===== interface =====
 
@@ -21,14 +21,6 @@ pub trait OpCode: Sized {
 
     /// Converts to raw opcode.
     fn to_op(self) -> u16;
-
-    /// Creates this type from raw opcode.
-    ///
-    /// Returns `Err` if raw value is invalid for this type.
-    #[inline]
-    fn try_from_op(op: u16) -> Result<Self, WlError> {
-        Self::from_op(op).ok_or(WlError::UnknownOp)
-    }
 }
 
 /// Type that is associated with an opcode.
@@ -61,12 +53,4 @@ pub trait WlEnum: Sized {
 
     /// Returns `u32` representation of the enum.
     fn to_u32(self) -> u32;
-
-    /// Create enum from integer.
-    ///
-    /// Returns `Err` if the integer did not represent valid entry.
-    #[inline]
-    fn try_from_u32(uint: u32) -> Result<Self, WlError> {
-        Self::from_u32(uint).ok_or(WlError::UnknownEnumEntry)
-    }
 }
