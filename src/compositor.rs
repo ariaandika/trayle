@@ -1,5 +1,7 @@
 use todex::sys::buffer::Buffer;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, Frame, Interface, OpCode, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, OpCode, WlError};
+use todex::wayland::{Frame, Interface, ObjectId};
+use todex::wayland::wl_display::Error as GlobalError;
 
 use crate::seat::Seat;
 use crate::client::ClientMut;
@@ -47,12 +49,12 @@ impl Compositor {
 
     pub fn route(&mut self, read_buf: &mut Buffer, client: &mut ClientMut) -> Result<(), ()> {
         match route(self, read_buf, client) {
-            Ok(_) => Ok(()),
+            Ok(()) => Ok(()),
             Err(err) => {
-                log::error!("failed to handle request: {err}");
-                // client.send(err);
+                log::malformed_message(err, client);
+                client.send(GlobalError::from_wl_error(ObjectId::wl_display(), err));
                 Err(())
-            },
+            }
         }
     }
 }
@@ -89,7 +91,7 @@ fn route(
     }
 
     // one can use goto definition in the method call
-    handle_me! {
+    let result = handle_me! {
         // ===== core =====
         WlDisplay {
             Sync handle,
@@ -151,7 +153,14 @@ fn route(
             SetAppId handle,
             .. todo_interface,
         }
+    };
+
+    if let Err(err) = result {
+        log::handler_error(interface, op, err, client);
+        client.send(GlobalError::from_wl_error(id, err));
     }
+
+    Ok(())
 }
 
 impl Compositor {
