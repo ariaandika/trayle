@@ -98,23 +98,9 @@ impl<'a> Error<'a> {
     pub fn from_wl_error(id: ObjectId, error: WlError) -> Error<'static> {
         use WlError as E;
 
-        const MALFORMED: (ObjectId, WlDisplayError) = (ObjectId::wl_display(), WlDisplayError::InvalidMethod);
-        const SEMANTIC: (ObjectId, WlDisplayError) = (ObjectId::wl_display(), WlDisplayError::InvalidObject);
-
         // in the future if there is id specific error.
         let _ = id;
         let (object_id, code) = match error {
-            E::UnknownOp => MALFORMED,
-            E::UnknownObject => SEMANTIC,
-            E::UnknownBind => SEMANTIC,
-            E::UnknownEnumEntry => SEMANTIC,
-            E::InvalidObject => SEMANTIC,
-            E::InvalidSize => MALFORMED,
-            E::InvalidNewId => SEMANTIC,
-            E::ZeroId => SEMANTIC,
-            E::Null => SEMANTIC,
-            E::NonUtf8 => SEMANTIC,
-            E::MissingFd => MALFORMED,
             E::NotYetImplemented => (ObjectId::wl_display(), WlDisplayError::Implementation),
             _ => todo!(),
         };

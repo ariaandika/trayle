@@ -50,3 +50,25 @@ impl<'a> Bind<'a> {
         O::from_object_id(self.id)
     }
 }
+
+// ===== BindError =====
+
+#[derive(Debug, Clone, Copy)]
+pub enum BindError {
+    /// Unknown bind name.
+    UnknownName,
+    /// Missmatch bind name.
+    MissmatchName,
+    /// Unsupported bind version.
+    UnsupportedVersion,
+}
+
+impl BindError {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::UnknownName => "unknown bind name",
+            Self::MissmatchName => "missmatch bind name",
+            Self::UnsupportedVersion => "unsupported bind version"
+        }
+    }
+}

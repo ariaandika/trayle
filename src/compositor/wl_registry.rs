@@ -1,4 +1,4 @@
-use wayland::wl_registry::Bind;
+use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::{PixelFormat, WlShm};
 
@@ -8,13 +8,13 @@ use crate::compositor::prelude::*;
 impl RequestHandler<Bind<'_>> for Compositor {
     fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
         let Some((bind_name, version, iface)) = GLOBALS.get(bind.name as usize) else {
-            return Err(WlError::UnknownBind);
+            return Err(BindError::UnknownName.into());
         };
         if bind.id_name != *bind_name {
-            return Err(WlError::UnknownBind);
+            return Err(BindError::MissmatchName.into());
         }
         if bind.id_version > *version {
-            return Err(WlError::UnknownBind);
+            return Err(BindError::UnsupportedVersion.into());
         }
         client.objects.insert_parts(bind.id, *iface, 0)?;
 
