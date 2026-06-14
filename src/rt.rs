@@ -1,9 +1,10 @@
 use std::task::Poll::*;
-use todex::sys::buffer::{self, Buffer};
+use todex::sys::buffer;
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::rt::poller::Poller;
 
+use crate::buffer::BufferPool;
 use crate::seat::Seat;
 use crate::client::{ClientMut, Clients};
 use crate::log;
@@ -20,12 +21,10 @@ pub fn event_loop() -> Result<(), FatalError> {
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
 
-    let mut read_buf = Buffer::new();
-    let mut write_buf = Buffer::new();
-
     let seat = Seat::new()?;
     let mut compositor = Compositor::new(seat);
     let mut clients = Clients::new();
+    let mut buffer = BufferPool::new();
 
     let mut poll = Poller::new()?;
 
@@ -67,17 +66,18 @@ pub fn event_loop() -> Result<(), FatalError> {
             continue;
         }
 
-        debug_assert!(read_buf.is_empty());
-        debug_assert!(write_buf.is_empty());
+        debug_assert!(buffer.is_empty());
 
         let id = key;
+
+        buffer.restore_pending(id as usize);
 
         let Some(client) = clients.get_mut(id) else {
             log::warn!(target: "polling", "unknown client id from event key: {id}");
             continue;
         };
 
-        client.buffer.restore(&mut read_buf, &mut write_buf);
+        client.buffer.restore(&mut buffer.read_buf, &mut buffer.write_buf);
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
@@ -86,20 +86,20 @@ pub fn event_loop() -> Result<(), FatalError> {
             }
 
             if interest.is_read() {
-                let mut client = ClientMut::new(id, client, &mut write_buf);
+                let mut client = ClientMut::new(id, client, &mut buffer.write_buf);
                 loop {
-                    if compositor.has_frame(&read_buf) {
-                        compositor.route(&mut read_buf, &mut client)?;
+                    if compositor.has_frame(&buffer.read_buf) {
+                        compositor.route(&mut buffer.read_buf, &mut client)?;
                     } else {
-                        if read_buf.recvmsg(&client)?.is_pending() {
+                        if buffer.read_buf.recvmsg(&client)?.is_pending() {
                             break;
                         }
                     }
                 }
             }
 
-            if !write_buf.is_empty() {
-                let is_pending = write_buf.sendmsg(client)?.is_pending();
+            if !buffer.write_buf.is_empty() {
+                let is_pending = buffer.write_buf.sendmsg(client)?.is_pending();
                 match (is_pending, interest.is_write()) {
                     (true, false) => {
                         // first time write pending, add write interest
@@ -117,28 +117,27 @@ pub fn event_loop() -> Result<(), FatalError> {
         })();
 
         if result.is_ok() {
-            if !read_buf.is_empty() || !write_buf.is_empty() {
+            // the sad pending bytes cannot stay in shared buffer because it will be used for other
+            // socket, it will be stored in dedicated storage
+            if buffer.store_pending(id as usize) {
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message read: {}, write: {}",
-                    read_buf.len(),
-                    write_buf.len()
+                    buffer.read_buf.len(),
+                    buffer.write_buf.len()
                 );
-                // the sad pending bytes cannot stay in shared buffer because it will be used for other
-                // socket, it will be stored in on demand allocation
-                client.buffer.copy_from(&read_buf, &write_buf);
             }
         } else {
-            if !write_buf.is_empty() {
-                let _ = write_buf.sendmsg(client);
+            // compositor usually write error before disconnecting
+            if !buffer.write_buf.is_empty() {
+                let _ = buffer.write_buf.sendmsg(client);
             }
             poll.delete(client);
             clients.remove(id);
             log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
 
-        read_buf.clear();
-        write_buf.clear();
+        buffer.clear();
     }
 
     Ok(())

@@ -5,6 +5,7 @@
 // TODO: global object trait, for version checking
 // TODO: returning interface specific error
 
+mod buffer;
 mod seat;
 mod client;
 
@@ -12,6 +13,7 @@ mod compositor;
 
 mod log;
 mod error;
+
 mod rt;
 
 use std::process::ExitCode;
