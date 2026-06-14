@@ -148,6 +148,18 @@ impl Buffer {
 }
 
 impl Buffer {
+    /// Create [`iovec`] from this buffer.
+    ///
+    /// Note that the lifetime is not bound. This is intended to be used in a scope.
+    ///
+    /// [`iovec`]: libc::iovec
+    pub(crate) fn iovec(&self) -> libc::iovec {
+        libc::iovec {
+            iov_base: self.ptr.as_ptr().cast(),
+            iov_len: self.len,
+        }
+    }
+
     #[inline]
     pub fn sendmsg<Fd: AsRawFd>(&mut self, socket: &Fd) -> Poll<Result<(), WriteError>> {
         sendmsg(self, socket.as_raw_fd())
