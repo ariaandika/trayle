@@ -70,7 +70,8 @@ pub fn event_loop() -> Result<(), FatalError> {
 
         let id = key;
 
-        buffer.restore_pending(id as usize);
+        // TODO: add flag for pending buffer
+        // buffer.restore_pending(id as usize);
 
         let Some(client) = clients.get_mut(id) else {
             log::warn!(target: "polling", "unknown client id from event key: {id}");
@@ -119,12 +120,10 @@ pub fn event_loop() -> Result<(), FatalError> {
         if result.is_ok() {
             // the sad pending bytes cannot stay in shared buffer because it will be used for other
             // socket, it will be stored in dedicated storage
-            if buffer.store_pending(id as usize) {
+            if let Some((read, write)) = buffer.store_pending(id as usize) {
                 log::warn!(
                     target: format_args!("client#{id}"),
-                    "partial message read: {}, write: {}",
-                    buffer.read_buf.len(),
-                    buffer.write_buf.len()
+                    "partial message, read: {read}, write: {write}",
                 );
             }
         } else {
