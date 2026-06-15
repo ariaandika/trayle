@@ -1,4 +1,5 @@
-use crate::sys::buffer::Buffer;
+use crate::sys::bytes::Bytes;
+use crate::sys::cmsg::Cmsg;
 use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Object, OpCode, WlEnum};
 use crate::wayland::{Fixed, Interface, NewId, ObjectId};
 
@@ -22,9 +23,9 @@ pub trait Encode: Sized + AsOpCode {
 
     /// Encode wayland message with given object id.
     #[inline]
-    fn encode_message(self, object_id: ObjectId, write_buf: &mut Buffer) {
+    fn encode_message(self, object_id: ObjectId, write_buf: &mut Bytes, write_fd: &mut Cmsg) {
         for fd in self.fds() {
-            assert!(write_buf.push_fd(fd));
+            assert!(write_fd.write_fd(fd));
         }
         let size = 8 + self.size() as usize;
         write_buf.reserve(size);
@@ -44,14 +45,14 @@ pub trait Encode: Sized + AsOpCode {
 ///
 /// Applications may accept this trait instead of [`Encode`].
 pub trait EncodeMessage: AsObjectId {
-    fn encode_message(self, write_buf: &mut Buffer);
+    fn encode_message(self, write_buf: &mut Bytes, write_fd: &mut Cmsg);
 }
 
 impl<E: Encode + AsObjectId> EncodeMessage for E {
     #[inline]
-    fn encode_message(self, write_buf: &mut Buffer) {
+    fn encode_message(self, write_buf: &mut Bytes, write_fd: &mut Cmsg) {
         let id = self.object_id();
-        Encode::encode_message(self, id, write_buf);
+        Encode::encode_message(self, id, write_buf, write_fd);
     }
 }
 

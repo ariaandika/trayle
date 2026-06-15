@@ -2,9 +2,9 @@
 //!
 //! # Usage
 //!
-//! This API use [`Buffer`] as memory management. It is a bytes buffer that can also stores fds.
-//! Application can establish unix socket externally, then use [`Buffer::sendmsg`] or
-//! [`Buffer::recvmsg`] to send and receive messages respectively.
+//! This API use [`Buffer`] and [`Cmsg`] as memory management. It is a bytes buffer and fds storage.
+//! Application can establish unix socket externally, then use [`Cmsg::sendmsg`] and
+//! [`Cmsg::recvmsg`] to send and receive messages respectively.
 //!
 //! [`Frame::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then the
 //! buffer can be passed to [`Frame`] to decode the actual message. Application can send back a
@@ -12,8 +12,9 @@
 //! flush the message using method mentioned previously.
 //!
 //! [`Buffer`]: crate::sys::buffer::Buffer
-//! [`Buffer::sendmsg`]: crate::sys::buffer::Buffer::sendmsg
-//! [`Buffer::recvmsg`]: crate::sys::buffer::Buffer::recvmsg
+//! [`Cmsg`]: crate::sys::cmsg::Cmsg
+//! [`Cmsg::sendmsg`]: crate::sys::cmsg::Cmsg::sendmsg
+//! [`Cmsg::recvmsg`]: crate::sys::cmsg::Cmsg::recvmsg
 //!
 //! # Types
 //!

@@ -3,7 +3,7 @@ use std::os::fd::AsRawFd;
 use std::ptr;
 use std::task::Poll::{self, *};
 
-use crate::sys::buffer::Buffer;
+use crate::sys::bytes::Bytes;
 use crate::sys::errno::{Errno, simple_errno};
 
 const FDSIZE: usize = size_of::<i32>();
@@ -88,7 +88,7 @@ impl Cmsg {
     #[inline]
     pub fn sendmsg<S: AsRawFd>(
         &mut self,
-        buf: &mut Buffer,
+        buf: &mut Bytes,
         socket: &S,
     ) -> Poll<Result<(), WriteError>> {
         sendmsg(buf, self, socket.as_raw_fd())
@@ -98,7 +98,7 @@ impl Cmsg {
     #[inline]
     pub fn recvmsg<S: AsRawFd>(
         &mut self,
-        buf: &mut Buffer,
+        buf: &mut Bytes,
         socket: &S,
     ) -> Poll<Result<(), ReadError>> {
         recvmsg(buf, self, socket.as_raw_fd())
@@ -142,7 +142,7 @@ fn cmsg_space(fd_len: usize) -> usize {
     unsafe { libc::CMSG_SPACE((fd_len * FDSIZE) as u32) as usize }
 }
 
-fn sendmsg(buf: &mut Buffer, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), WriteError>> {
+fn sendmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), WriteError>> {
     debug_assert!(!buf.is_empty());
 
     let mut cmsg_buf = NEW_CMSGBUF;
@@ -194,7 +194,7 @@ fn sendmsg(buf: &mut Buffer, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Wr
     Poll::Ready(Ok(()))
 }
 
-fn recvmsg(buf: &mut Buffer, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), ReadError>> {
+fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), ReadError>> {
     use ReadError as E;
 
     let mut cmsg_buf = NEW_CMSGBUF;

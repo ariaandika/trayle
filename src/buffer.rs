@@ -1,17 +1,17 @@
 use std::mem;
-use todex::sys::buffer::Buffer;
+use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
 
 struct Entry {
     id: u64,
-    read: Buffer,
-    write: Buffer,
+    read: Bytes,
+    write: Bytes,
 }
 
 pub struct BufferPool {
-    pub read_buf: Buffer,
+    pub read_buf: Bytes,
     pub read_fd: Cmsg,
-    pub write_buf: Buffer,
+    pub write_buf: Bytes,
     pub write_fd: Cmsg,
     pendings: Vec<Entry>,
 }
@@ -19,9 +19,9 @@ pub struct BufferPool {
 impl BufferPool {
     pub fn new() -> Self {
         Self {
-            read_buf: Buffer::new(),
+            read_buf: Bytes::new(),
             read_fd: Cmsg::new(),
-            write_buf: Buffer::new(),
+            write_buf: Bytes::new(),
             write_fd: Cmsg::new(),
             pendings: Vec::new(),
         }
@@ -67,15 +67,15 @@ impl BufferPool {
     }
 }
 
-fn take_if_not_empty(buffer: &mut Buffer) -> Buffer {
+fn take_if_not_empty(buffer: &mut Bytes) -> Bytes {
     if buffer.is_empty() {
-        Buffer::new()
+        Bytes::new()
     } else {
-        mem::replace(buffer, Buffer::new())
+        mem::replace(buffer, Bytes::new())
     }
 }
 
-fn swap_if_not_empty(buffer: &mut Buffer, dst: &mut Buffer) {
+fn swap_if_not_empty(buffer: &mut Bytes, dst: &mut Bytes) {
     if !buffer.is_empty() {
         mem::swap(buffer, dst);
     }

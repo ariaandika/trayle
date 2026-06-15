@@ -1,6 +1,7 @@
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::task::Poll;
-use todex::sys::buffer::{Buffer, WriteError};
+use todex::sys::bytes::Bytes;
+use todex::sys::cmsg::{Cmsg, WriteError};
 use todex::collections::slab::Slab;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
@@ -76,21 +77,17 @@ impl AsRawFd for ClientState {
 
 // ===== ClientMut =====
 
+/// Client API.
+///
+/// This state should be created at event time, that is when socket have read or write event.
 pub struct ClientMut<'a> {
     pub id: ClientId,
     pub state: &'a mut ClientState,
-    pub write_buf: &'a mut Buffer,
+    pub write_buf: &'a mut Bytes,
+    pub write_fd: &'a mut Cmsg,
 }
 
 impl<'a> ClientMut<'a> {
-    pub const fn new(id: ClientId, state: &'a mut ClientState, write_buf: &'a mut Buffer) -> Self {
-        Self {
-            id,
-            state,
-            write_buf,
-        }
-    }
-
     /// Send a message.
     ///
     /// Usually, object has a constructor for its message. The constructor returns the message
@@ -101,7 +98,7 @@ impl<'a> ClientMut<'a> {
         &mut self,
         message: E,
     ) {
-        log::send_message(message, self).encode_message(self.write_buf);
+        log::send_message(message, self).encode_message(self.write_buf, self.write_fd);
     }
 
     /// Send [`DeleteId`] event.
@@ -111,9 +108,9 @@ impl<'a> ClientMut<'a> {
         });
     }
 
-    /// Call [`Buffer::sendmsg`] on this client.
+    /// Call [`Cmsg::sendmsg`] on this client.
     pub fn sendmsg(&mut self) -> Poll<Result<(), WriteError>> {
-        self.write_buf.sendmsg(self.state)
+        self.write_fd.sendmsg(self.write_buf, self.state)
     }
 }
 

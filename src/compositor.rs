@@ -1,4 +1,5 @@
-use todex::sys::buffer::Buffer;
+use todex::sys::bytes::Bytes;
+use todex::sys::cmsg::Cmsg;
 use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, WlError};
 use todex::wayland::{Frame, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
@@ -42,12 +43,12 @@ impl Compositor {
         Ok(Self { seat: Seat::new()? })
     }
 
-    pub fn has_frame(&self, read_buf: &Buffer) -> bool {
+    pub fn has_frame(&self, read_buf: &Bytes) -> bool {
         Frame::has_frame(read_buf)
     }
 
-    pub fn route(&mut self, read_buf: &mut Buffer, client: &mut ClientMut) -> Result<(), ()> {
-        match route(self, read_buf, client) {
+    pub fn route(&mut self, read_buf: &mut Bytes, read_fd: &mut Cmsg, client: &mut ClientMut) -> Result<(), ()> {
+        match route(self, read_buf, read_fd, client) {
             Ok(()) => Ok(()),
             Err(err) => {
                 log::malformed_message(err, client);
@@ -64,12 +65,13 @@ impl Compositor {
 
 fn route(
     compositor: &mut Compositor,
-    read_buf: &mut Buffer,
+    read_buf: &mut Bytes,
+    read_fd: &mut Cmsg,
     client: &mut ClientMut,
 ) -> Result<(), WlError> {
     use wayland::interfaces::*;
 
-    let (id, op, frame) = Frame::new(read_buf)?;
+    let (id, op, frame) = Frame::new(read_buf, read_fd)?;
     let interface = client.objects.get_mut(id)?;
 
     macro_rules! handle_me {

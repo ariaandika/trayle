@@ -1,4 +1,5 @@
-use crate::sys::buffer::Buffer;
+use crate::sys::bytes::Bytes;
+use crate::sys::cmsg::Cmsg;
 use crate::wayland::ObjectId;
 
 use MessageError as E;
@@ -6,12 +7,13 @@ use MessageError as E;
 /// Encoded message.
 pub struct Frame<'a> {
     /// - guarantee to contains one valid length message
-    read_buf: &'a mut Buffer,
+    read_buf: &'a mut Bytes,
+    read_fd: &'a mut Cmsg,
 }
 
 impl<'a> Frame<'a> {
     #[inline]
-    pub fn has_frame(read_buf: &Buffer) -> bool {
+    pub fn has_frame(read_buf: &Bytes) -> bool {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return false;
         };
@@ -20,7 +22,7 @@ impl<'a> Frame<'a> {
     }
 
     #[inline]
-    pub fn new(read_buf: &'a mut Buffer) -> Result<(ObjectId, u16, Self), MessageError> {
+    pub fn new(read_buf: &'a mut Bytes, read_fd: &'a mut Cmsg) -> Result<(ObjectId, u16, Self), MessageError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(E::InsufficientSize);
         };
@@ -35,12 +37,12 @@ impl<'a> Frame<'a> {
         if read_buf.len() < len as usize {
             return Err(E::InsufficientSize);
         }
-        Ok((id, hdr2 as u16, Self { read_buf }))
+        Ok((id, hdr2 as u16, Self { read_buf, read_fd }))
     }
 
     #[inline]
     pub fn pop_fd(&mut self) -> Option<i32> {
-        self.read_buf.pop_front_fd()
+        self.read_fd.read_fd()
     }
 
     #[inline]

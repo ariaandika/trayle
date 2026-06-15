@@ -1,5 +1,5 @@
+use todex::sys::cmsg;
 use todex::rt::poller::{Interest, Poller};
-use todex::sys::buffer;
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, Clients};
@@ -26,7 +26,7 @@ impl ClientService {
     ) {
         let mut id = ClientId::from_raw(key);
 
-        let Some(client_state) = clients.get_mut(id) else {
+        let Some(state) = clients.get_mut(id) else {
             log::warn!(target: "poll", "unknown client id from event key: {id}");
             return;
         };
@@ -36,7 +36,12 @@ impl ClientService {
             buffer.restore_pending(id.to_raw());
         }
 
-        let mut client = ClientMut::new(id, client_state, &mut buffer.write_buf);
+        let mut client = ClientMut {
+            id,
+            state,
+            write_buf: &mut buffer.write_buf,
+            write_fd: &mut buffer.write_fd,
+        };
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
@@ -47,9 +52,9 @@ impl ClientService {
             if interest.is_read() {
                 loop {
                     if compositor.has_frame(&buffer.read_buf) {
-                        compositor.route(&mut buffer.read_buf, &mut client)?;
+                        compositor.route(&mut buffer.read_buf, &mut buffer.read_fd, &mut client)?;
                     } else {
-                        if buffer.read_buf.recvmsg(&client)?.is_pending() {
+                        if buffer.read_fd.recvmsg(&mut buffer.read_buf, &client)?.is_pending() {
                             break;
                         }
                     }
@@ -82,7 +87,7 @@ impl ClientService {
             // socket, it will be stored in dedicated storage
             if let Some((read, write)) = buffer.store_pending(id.to_raw()) {
                 id = id.set_pending();
-                poll.modify(id.to_raw(), interest.is_write(), client_state);
+                poll.modify(id.to_raw(), interest.is_write(), state);
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message, read: {read}, write: {write}",
@@ -106,8 +111,8 @@ impl ClientService {
 
 struct HandleError;
 
-impl From<buffer::ReadError> for HandleError {
-    fn from(err: buffer::ReadError) -> Self {
+impl From<cmsg::ReadError> for HandleError {
+    fn from(err: cmsg::ReadError) -> Self {
         if !err.is_connection_aborted() {
             log::error!("failed to read socket: {err}");
         }
@@ -115,8 +120,8 @@ impl From<buffer::ReadError> for HandleError {
     }
 }
 
-impl From<buffer::WriteError> for HandleError {
-    fn from(err: buffer::WriteError) -> Self {
+impl From<cmsg::WriteError> for HandleError {
+    fn from(err: cmsg::WriteError) -> Self {
         log::error!("failed to write socket: {err}");
         Self
     }
