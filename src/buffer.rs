@@ -3,7 +3,7 @@ use todex::sys::buffer::Buffer;
 use todex::sys::cmsg::Cmsg;
 
 struct Entry {
-    id: usize,
+    id: u64,
     read: Buffer,
     write: Buffer,
 }
@@ -27,14 +27,10 @@ impl BufferPool {
         }
     }
 
-    pub fn is_empty(&self) -> bool {
-        self.read_buf.is_empty() && self.write_buf.is_empty()
-    }
-
     /// Store pending buffer with given id if any.
     ///
     /// Returns `Some((read_len, write_len))` if there is in fact pending buffer.
-    pub fn store_pending(&mut self, id: usize) -> Option<(usize, usize)> {
+    pub fn store_pending(&mut self, id: u64) -> Option<(usize, usize)> {
         if self.read_buf.is_empty() && self.write_buf.is_empty() {
             return None;
         }
@@ -53,7 +49,7 @@ impl BufferPool {
     ///
     /// Note that this is expected to be rare case. It must be flagged externally that given id does
     /// infact have a pending buffer.
-    pub fn restore_pending(&mut self, id: usize) {
+    pub fn restore_pending(&mut self, id: u64) {
         let Some(idx) = self.pendings.iter().position(|e| e.id == id) else {
             return;
         };

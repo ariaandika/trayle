@@ -19,7 +19,7 @@ impl<'a> ListenerService<'a> {
             match result {
                 Ok(fd) => {
                     let (id, sock) = clients.insert(fd);
-                    poll.add(id, sock);
+                    poll.add(id.to_raw(), sock);
                     log::debug!(target: format_args!("client#{id}"), "connected");
                 }
                 Err(err) => {

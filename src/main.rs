@@ -8,8 +8,8 @@ use todex::rt::poller::Poller;
 use buffer::BufferPool;
 use client::Clients;
 use compositor::Compositor;
-use service::clients::ClientService;
 use service::listener::ListenerService;
+use service::clients::ClientService;
 use error::FatalError;
 
 mod buffer;
@@ -28,10 +28,10 @@ mod error;
 // TODO: returning interface specific error
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
+const MSB: u64 = i64::MIN as u64;
 
-const STATIC_FLAG: u64 = i64::MIN as u64;
-const LISTENER_KEY: u64 = STATIC_FLAG;
-const SIGFD_KEY: u64 = STATIC_FLAG | 1;
+const LISTENER_KEY: u64 = MSB;
+const SIGFD_KEY: u64 = MSB | 1;
 
 fn main() -> ExitCode {
     let _guard = log::init();
@@ -63,7 +63,7 @@ pub fn event_loop() -> Result<(), FatalError> {
             poll.wait(None);
             continue;
         };
-        if key & STATIC_FLAG != 0 {
+        if key & MSB == MSB {
             match key {
                 SIGFD_KEY => {
                     log::info!("{} signal received", sigfd.read());
@@ -78,8 +78,8 @@ pub fn event_loop() -> Result<(), FatalError> {
                 interest,
                 &poll,
                 &mut buffer,
-                &mut compositor,
                 &mut clients,
+                &mut compositor,
             );
         }
     }

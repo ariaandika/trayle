@@ -1,24 +1,74 @@
 use std::os::fd::{AsRawFd, OwnedFd};
-
-use todex::sys::buffer::{Buffer, SmallBuf};
+use std::task::Poll;
+use todex::sys::buffer::{Buffer, WriteError};
 use todex::collections::slab::Slab;
-use todex::compositor::objects::Objects;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
 use todex::wayland::{AsInterface, AsObjectId, AsOpCode, EncodeMessage};
+use todex::compositor::objects::Objects;
 
 use crate::log;
+
+// ===== ClientId =====
+
+const ID_BITS: u64 = u32::MAX as u64;
+
+const MSB: u64 = i64::MIN as u64;
+const PENDING_FLAG: u64 = MSB >> 1;
+
+/// Client Id.
+#[derive(Debug, Clone, Copy)]
+pub struct ClientId(u64);
+
+impl ClientId {
+    fn idx(self) -> usize {
+        (self.0 & ID_BITS) as usize
+    }
+
+    /// Restore client id from raw integer.
+    ///
+    /// Note that this should only be used to restore id from [`ClientId::to_raw`]. Creating client
+    /// id cannot be done externally.
+    pub fn from_raw(id: u64) -> Self {
+        debug_assert!(id & MSB == 0);
+        Self(id)
+    }
+
+    /// Convert to raw integer representation.
+    ///
+    /// The returned integer will always have its most significant bit unset.
+    pub fn to_raw(self) -> u64 {
+        self.0
+    }
+
+    /// Returns `true` if pending flag is set.
+    pub fn is_pending(self) -> bool {
+        self.0 & PENDING_FLAG == PENDING_FLAG
+    }
+
+    // `Interest` also have flag for pending but only on `write` event, thus this bitflag is needed
+
+    /// Set pending flag.
+    pub fn set_pending(self) -> Self {
+        Self(self.0 | PENDING_FLAG)
+    }
+
+    /// Unset pending flag.
+    pub fn unset_pending(self) -> Self {
+        Self(self.0 & (!PENDING_FLAG))
+    }
+
+}
 
 // ===== Client =====
 
 /// Client state.
-pub struct Client {
+pub struct ClientState {
     pub socket: OwnedFd,
     pub objects: Objects,
-    pub buffer: SmallBuf,
 }
 
-impl AsRawFd for Client {
+impl AsRawFd for ClientState {
     fn as_raw_fd(&self) -> i32 {
         self.socket.as_raw_fd()
     }
@@ -27,13 +77,13 @@ impl AsRawFd for Client {
 // ===== ClientMut =====
 
 pub struct ClientMut<'a> {
-    pub id: u64,
-    pub state: &'a mut Client,
+    pub id: ClientId,
+    pub state: &'a mut ClientState,
     pub write_buf: &'a mut Buffer,
 }
 
 impl<'a> ClientMut<'a> {
-    pub const fn new(id: u64, state: &'a mut Client, write_buf: &'a mut Buffer) -> Self {
+    pub const fn new(id: ClientId, state: &'a mut ClientState, write_buf: &'a mut Buffer) -> Self {
         Self {
             id,
             state,
@@ -56,7 +106,14 @@ impl<'a> ClientMut<'a> {
 
     /// Send [`DeleteId`] event.
     pub fn delete_id<O: AsObjectId>(&mut self, object: O) {
-        self.send(DeleteId { id: object.object_id() });
+        self.send(DeleteId {
+            id: object.object_id(),
+        });
+    }
+
+    /// Call [`Buffer::sendmsg`] on this client.
+    pub fn sendmsg(&mut self) -> Poll<Result<(), WriteError>> {
+        self.write_buf.sendmsg(self.state)
     }
 }
 
@@ -67,7 +124,7 @@ impl AsRawFd for ClientMut<'_> {
 }
 
 impl<'a> std::ops::Deref for ClientMut<'a> {
-    type Target = &'a mut Client;
+    type Target = &'a mut ClientState;
 
     fn deref(&self) -> &Self::Target {
         &self.state
@@ -86,34 +143,38 @@ const INITIAL_CAP: usize = 8;
 
 /// Collections of clients.
 pub struct Clients {
-    buf: Slab<Client>
+    buf: Slab<ClientState>
 }
 
 impl Clients {
-    #[inline]
     pub fn new() -> Self {
         Self {
             buf: Slab::with_capacity(INITIAL_CAP),
         }
     }
 
-    #[inline]
-    pub fn insert(&mut self, socket: OwnedFd) -> (u64, &mut Client) {
-        let (id, client) = self.buf.insert(Client {
+    pub fn insert(&mut self, socket: OwnedFd) -> (ClientId, &mut ClientState) {
+        let (id, client) = self.buf.insert(ClientState {
             socket,
             objects: Objects::new(),
-            buffer: SmallBuf::default(),
         });
-        (id as u64, client)
+        assert!(id as u64 & MSB == 0, "client id exhausted");
+        (ClientId(id as u64), client)
     }
 
-    #[inline]
-    pub fn get_mut(&mut self, id: u64) -> Option<&mut Client> {
-        self.buf.get_mut(id as usize)
+    pub fn get_mut(&mut self, id: ClientId) -> Option<&mut ClientState> {
+        self.buf.get_mut(id.idx())
     }
 
-    #[inline]
-    pub fn remove(&mut self, id: u64) -> Option<Client> {
-        self.buf.remove(id as usize)
+    pub fn remove(&mut self, id: ClientId) -> Option<ClientState> {
+        self.buf.remove(id.idx())
+    }
+}
+
+// ===== std traits =====
+
+impl std::fmt::Display for ClientId {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.idx().fmt(f)
     }
 }
