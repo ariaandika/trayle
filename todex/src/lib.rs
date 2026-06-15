@@ -7,9 +7,9 @@
 //!
 //! This crate does not provide an event loop.
 //!
-//! [`Poller`][rt::poller::Poller] monitor resources for readiness. Application can register
-//! resources, like listener or socket, then `Poller` will callback with an events ready to proceed.
-//! See its documentation for more details.
+//! [`Poller`][poller::Poller] monitor resources for readiness. Application can register sources,
+//! like listener or socket, then `Poller` will callback with an events ready to proceed. See its
+//! documentation for more details.
 //!
 //! # Wayland
 //!
@@ -32,5 +32,5 @@ pub mod alloc;
 pub mod collections;
 pub mod wayland;
 pub mod compositor;
-pub mod rt;
+pub mod poller;
 pub mod log;

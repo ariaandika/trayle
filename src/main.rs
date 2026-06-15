@@ -1,9 +1,10 @@
 // this is binary crate, compatibility is not a problem
 #![allow(refining_impl_trait)]
 use std::process::ExitCode;
+use todex::sys::epoll::Epoll;
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
-use todex::rt::poller::Poller;
+use todex::poller::Poller;
 
 use buffer::BufferPool;
 use client::Clients;
@@ -25,13 +26,14 @@ mod error;
 
 // TODO: destructor trait
 // TODO: global object trait, for version checking
-// TODO: returning interface specific error
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const MSB: u64 = i64::MIN as u64;
 
 const LISTENER_KEY: u64 = MSB;
 const SIGFD_KEY: u64 = MSB | 1;
+
+const EVENT_BUF: usize = 128;
 
 fn main() -> ExitCode {
     let _guard = log::init();
@@ -42,7 +44,9 @@ pub fn event_loop() -> Result<(), FatalError> {
     // ===== sys =====
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
-    let mut poll = Poller::new()?;
+    let epoll = Epoll::new()?;
+    epoll.add(LISTENER_KEY, &listener);
+    epoll.add(SIGFD_KEY, &sigfd);
 
     // ===== states =====
     let mut clients = Clients::new();
@@ -50,39 +54,30 @@ pub fn event_loop() -> Result<(), FatalError> {
     let mut compositor = Compositor::new()?;
 
     // ===== services =====
-    let mut listener_service = ListenerService::new(&listener);
-    let mut client_service = ClientService::new();
+    let mut listener_service = ListenerService::new(&listener, &epoll);
+    let mut client_service = ClientService::new(&epoll);
 
-    poll.add(LISTENER_KEY, &listener);
-    poll.add(SIGFD_KEY, &sigfd);
+    // ===== poller =====
+    let mut poll = Poller::new(EVENT_BUF, &epoll);
 
     loop {
-        let Some((key, interest)) = poll.next_event() else {
+        let Some(event) = poll.next_event() else {
             log::debug!(target: "polling", "blocking");
             log::flush();
             poll.wait(None);
             continue;
         };
-        if key & MSB == MSB {
-            match key {
+        if event.key & MSB == MSB {
+            match event.key {
                 SIGFD_KEY => {
                     log::info!("{} signal received", sigfd.read());
-                    break;
+                    break Ok(());
                 }
-                LISTENER_KEY => listener_service.serve(&poll, &mut clients),
+                LISTENER_KEY => listener_service.serve(&mut clients),
                 _ => {}
             }
         } else {
-            client_service.serve(
-                key,
-                interest,
-                &poll,
-                &mut buffer,
-                &mut clients,
-                &mut compositor,
-            );
+            client_service.serve(event, &mut buffer, &mut clients, &mut compositor);
         }
     }
-
-    Ok(())
 }

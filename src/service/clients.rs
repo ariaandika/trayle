@@ -1,30 +1,32 @@
+use todex::sys::epoll::Epoll;
 use todex::sys::cmsg;
-use todex::rt::poller::{Interest, Poller};
+use todex::poller::Event;
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, Clients};
 use crate::compositor::Compositor;
 use crate::log;
 
-pub struct ClientService;
-
-impl ClientService {
-    pub fn new() -> Self {
-        Self {}
-    }
+pub struct ClientService<'a> {
+    epoll: &'a Epoll,
 }
 
-impl ClientService {
+impl<'a> ClientService<'a> {
+    pub fn new(epoll: &'a Epoll) -> Self {
+        Self { epoll }
+    }
+
+}
+
+impl ClientService<'_> {
     pub fn serve(
         &mut self,
-        key: u64,
-        interest: Interest,
-        poll: &Poller,
+        event: Event,
         buffer: &mut BufferPool,
         clients: &mut Clients,
         compositor: &mut Compositor,
     ) {
-        let mut id = ClientId::from_raw(key);
+        let mut id = ClientId::from_raw(event.key);
 
         let Some(state) = clients.get_mut(id) else {
             log::warn!(target: "poll", "unknown client id from event key: {id}");
@@ -45,11 +47,11 @@ impl ClientService {
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
-            if interest.is_close() {
+            if event.interest.is_close() {
                 return Err(HandleError);
             }
 
-            if interest.is_read() {
+            if event.interest.is_read() {
                 loop {
                     if compositor.has_frame(&buffer.read_buf) {
                         compositor.route(&mut buffer.read_buf, &mut buffer.read_fd, &mut client)?;
@@ -63,17 +65,17 @@ impl ClientService {
 
             if !client.write_buf.is_empty() {
                 let is_pending = client.sendmsg()?.is_pending();
-                let was_pending = interest.is_write();
+                let was_pending = event.interest.is_write();
                 match (is_pending, was_pending) {
                     (true, false) => {
                         id = id.set_pending();
                         // first time write pending, add write interest
-                        poll.modify(id.to_raw(), true, &client);
+                        self.epoll.modify(true, id.to_raw(), &client);
                     }
                     (false, true) => {
                         id = id.unset_pending();
                         // previous write pending complete, remove write interest
-                        poll.modify(id.to_raw(), false, &client);
+                        self.epoll.modify(false, id.to_raw(), &client);
                     }
                     _ => {} // otherwise, double pending or no pending
                 }
@@ -87,7 +89,7 @@ impl ClientService {
             // socket, it will be stored in dedicated storage
             if let Some((read, write)) = buffer.store_pending(id.to_raw()) {
                 id = id.set_pending();
-                poll.modify(id.to_raw(), interest.is_write(), state);
+                self.epoll.modify(event.interest.is_write(), id.to_raw(), state);
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message, read: {read}, write: {write}",
@@ -98,7 +100,7 @@ impl ClientService {
             if !client.write_buf.is_empty() {
                 let _ = client.sendmsg();
             }
-            poll.delete(&client);
+            self.epoll.delete(&client);
             clients.remove(id);
             log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
