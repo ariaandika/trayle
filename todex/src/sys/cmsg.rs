@@ -41,7 +41,7 @@ impl Cmsg {
     }
 
     fn spare_len(&self) -> usize {
-        MAXFD - self.off - self.len
+        self.buf.len() - self.off - self.len
     }
 
     fn spare_ptr(&mut self) -> *mut MaybeUninit<i32> {
@@ -150,6 +150,12 @@ fn sendmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Wri
         (ptr::null_mut(), 0)
     } else {
         cmsg_buf[0].cmsg_len = cmsg_len(cmsg.len);
+        unsafe {
+            // copy fds
+            let src = cmsg.buf.as_ptr().add(cmsg.off);
+            let dst = cmsg_buf.as_mut_ptr().add(1).cast();
+            src.copy_to_nonoverlapping(dst, cmsg.len);
+        }
         (cmsg_buf.as_mut_ptr().cast(), cmsg_space(cmsg.len))
     };
     let mut msghdr = libc::msghdr {
@@ -201,7 +207,7 @@ fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Rea
     let mut msghdr = libc::msghdr {
         msg_name: ptr::null_mut(),
         msg_namelen: 0,
-        msg_iov: &mut buf.iovec(),
+        msg_iov: &mut buf.spare_iovec(),
         msg_iovlen: 1,
         msg_control: cmsg_buf.as_mut_ptr().cast(),
         msg_controllen: CMSG_SPACE,

@@ -101,7 +101,7 @@ impl Bytes {
 }
 
 impl Bytes {
-    /// Create [`iovec`] from this buffer.
+    /// Create [`iovec`] from this buffer content.
     ///
     /// Note that the lifetime is not bound. This is intended to be used in a scope.
     ///
@@ -110,6 +110,18 @@ impl Bytes {
         libc::iovec {
             iov_base: self.ptr.as_ptr().cast(),
             iov_len: self.len,
+        }
+    }
+
+    /// Create [`iovec`] from this buffer spare capacity.
+    ///
+    /// Note that the lifetime is not bound. This is intended to be used in a scope.
+    ///
+    /// [`iovec`]: libc::iovec
+    pub(crate) fn spare_iovec(&self) -> libc::iovec {
+        libc::iovec {
+            iov_base: unsafe { self.ptr.add(self.len) }.as_ptr().cast(),
+            iov_len: self.cap - self.len,
         }
     }
 }
