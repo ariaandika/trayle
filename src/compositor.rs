@@ -3,6 +3,7 @@ use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, W
 use todex::wayland::{Frame, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
 
+use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
 use crate::log;
@@ -37,8 +38,8 @@ pub struct Compositor {
 }
 
 impl Compositor {
-    pub fn new(seat: Seat) -> Self {
-        Self { seat }
+    pub fn new() -> Result<Self, FatalError> {
+        Ok(Self { seat: Seat::new()? })
     }
 
     pub fn has_frame(&self, read_buf: &Buffer) -> bool {
@@ -50,7 +51,11 @@ impl Compositor {
             Ok(()) => Ok(()),
             Err(err) => {
                 log::malformed_message(err, client);
-                client.send(GlobalError::new(ObjectId::wl_display(), err.code(), err.message()));
+                client.send(GlobalError::new(
+                    ObjectId::wl_display(),
+                    err.code(),
+                    err.message(),
+                ));
                 Err(())
             }
         }

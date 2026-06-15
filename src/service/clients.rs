@@ -1,84 +1,40 @@
-use std::task::Poll::*;
+use todex::rt::poller::{Interest, Poller};
 use todex::sys::buffer;
-use todex::sys::listener::{Listener, SocketPath};
-use todex::sys::sigfd::Sigfd;
-use todex::rt::poller::Poller;
 
 use crate::buffer::BufferPool;
-use crate::seat::Seat;
-use crate::client::{ClientMut, Clients};
-use crate::log;
-use crate::error::FatalError;
 use crate::compositor::Compositor;
+use crate::{log};
+use crate::client::{ClientMut, Clients};
 
-const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
-const STATIC_KEY: u64 = i64::MIN as u64;
+pub struct ClientService {
 
-const LISTENER_KEY: u64 = STATIC_KEY;
-const SIGFD_KEY: u64 = STATIC_KEY | 1;
+}
 
-pub fn event_loop() -> Result<(), FatalError> {
-    let listener = Listener::new(SOCKET_PATH)?;
-    let sigfd = Sigfd::new()?;
+impl ClientService {
+    pub fn new() -> Self {
+        Self {}
+    }
 
-    let seat = Seat::new()?;
-    let mut compositor = Compositor::new(seat);
-    let mut clients = Clients::new();
-    let mut buffer = BufferPool::new();
-
-    let mut poll = Poller::new()?;
-
-    poll.add(LISTENER_KEY, &listener);
-    poll.add(SIGFD_KEY, &sigfd);
-
-    // ===== event loop =====
-
-    loop {
-        let Some((key, interest)) = poll.next_event() else {
-            log::debug!(target: "polling", "blocking");
-            log::flush();
-            poll.wait(None);
-            continue;
-        };
-
-        if key & STATIC_KEY == STATIC_KEY {
-            match key {
-                SIGFD_KEY => {
-                    log::info!("{} signal received", sigfd.read());
-                    break;
-                }
-                LISTENER_KEY => {
-                    while let Ready(result) = listener.poll_accept() {
-                        match result {
-                            Ok(fd) => {
-                                let (id, sock) = clients.insert(fd);
-                                poll.add(id, sock);
-                                log::debug!(target: format_args!("client#{id}"), "connected");
-                            },
-                            Err(err) => {
-                                log::error!(target: "listener", "{err}")
-                            },
-                        }
-                    }
-                },
-                _ => {},
-            }
-            continue;
-        }
-
-        debug_assert!(buffer.is_empty());
-
-        let id = key;
-
+    pub fn serve(
+        &mut self,
+        id: u64,
+        interest: Interest,
+        poll: &Poller,
+        buffer: &mut BufferPool,
+        compositor: &mut Compositor,
+        clients: &mut Clients,
+    ) {
         // TODO: add flag for pending buffer
         // buffer.restore_pending(id as usize);
 
         let Some(client) = clients.get_mut(id) else {
             log::warn!(target: "polling", "unknown client id from event key: {id}");
-            continue;
+            return;
         };
 
-        client.buffer.restore(&mut buffer.read_buf, &mut buffer.write_buf);
+        client
+            .buffer
+            .restore(&mut buffer.read_buf, &mut buffer.write_buf);
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
@@ -138,8 +94,6 @@ pub fn event_loop() -> Result<(), FatalError> {
 
         buffer.clear();
     }
-
-    Ok(())
 }
 
 struct HandleError;
