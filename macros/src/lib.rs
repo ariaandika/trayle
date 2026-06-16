@@ -59,7 +59,9 @@ define! {
 }
 
 define! {
-    /// Implement `WlEnum` and `Display`.
+    /// Implement `WlEnum`, `fmt::Display`, `display::Display2`.
+    ///
+    /// This also add name getter.
     #[proc_macro_derive(WlEnum)]
     pub fn wl_enum() { wl_enum::process }
 }

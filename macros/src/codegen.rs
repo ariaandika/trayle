@@ -18,6 +18,15 @@ macro_rules! impl_generate {
             .chain(crate::codegen::impl_generate!($($tt)*))
     };
 
+    // arbitrary blocked input
+    (#{ $e:expr }) => {
+        IntoIterator::into_iter(Some(TokenTree::from($e)))
+    };
+    (#{ $e:expr } $($tt:tt)*) => {
+        IntoIterator::into_iter(Some(TokenTree::from($e)))
+            .chain(crate::codegen::impl_generate!($($tt)*))
+    };
+
     // optional arbitrary input
     (?$i:ident) => {
         IntoIterator::into_iter(Clone::clone(&$i).map(TokenTree::from))
