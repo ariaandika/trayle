@@ -1,9 +1,9 @@
-use proc_macro::{Group, Ident, Literal, Punct, TokenStream, TokenTree};
+use crate::tree::*;
 
 macro_rules! generate {
-    () => {proc_macro::TokenStream::new()};
+    () => {TokenStream::new()};
     ($($tt:tt)*) => {{
-        let mut tokens = proc_macro::TokenStream::new();
+        let mut tokens = TokenStream::new();
         crate::codegen::gen_extends!(tokens $($tt)*);
         tokens
     }};
@@ -24,21 +24,21 @@ macro_rules! gen_extends {
     // groups
     ($tokens:ident { $($gt:tt)* } $($tt:tt)*) => {{
         crate::codegen::ToTokens::into_tokens(
-            Group::new(proc_macro::Delimiter::Brace, crate::codegen::generate!($($gt)*)),
+            Group::new(Delimiter::Brace, crate::codegen::generate!($($gt)*).into()),
             &mut $tokens
         );
         crate::codegen::gen_extends!($tokens $($tt)*);
     }};
     ($tokens:ident [ $($gt:tt)* ] $($tt:tt)*) => {{
         crate::codegen::ToTokens::into_tokens(
-            Group::new(proc_macro::Delimiter::Bracket, crate::codegen::generate!($($gt)*)),
+            Group::new(Delimiter::Bracket, crate::codegen::generate!($($gt)*).into()),
             &mut $tokens
         );
         crate::codegen::gen_extends!($tokens $($tt)*);
     }};
     ($tokens:ident ( $($gt:tt)* ) $($tt:tt)*) => {{
         crate::codegen::ToTokens::into_tokens(
-            Group::new(proc_macro::Delimiter::Parenthesis, crate::codegen::generate!($($gt)*)),
+            Group::new(Delimiter::Parenthesis, crate::codegen::generate!($($gt)*).into()),
             &mut $tokens
         );
         crate::codegen::gen_extends!($tokens $($tt)*);
@@ -116,20 +116,27 @@ macro_rules! impl_single {
     ($($me:ident),*) => {$(
         impl ToTokens for $me {
             fn into_tokens(self, tokens: &mut TokenStream) {
-                tokens.extend(Some(self));
+                tokens.push(self);
             }
         }
     )*};
 }
 impl_single!(Ident, Punct, Group, Literal, TokenTree);
 
-macro_rules! impl_iter {
-    ($( $(const $n:ident)? $me:ty ),*) => {$(
-        impl$(<const $n: usize>)? ToTokens for $me {
-            fn into_tokens(self, tokens: &mut TokenStream) {
-                tokens.extend(self);
-            }
-        }
-    )*};
+impl ToTokens for TokenStream {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        tokens.extend(self);
+    }
 }
-impl_iter!(TokenStream, const N [Punct; N], const N [TokenTree; N]);
+
+impl<const N: usize> ToTokens for [Punct; N] {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        tokens.extend(self.into_iter().map(<_>::into));
+    }
+}
+
+impl<const N: usize> ToTokens for [TokenTree; N] {
+    fn into_tokens(self, tokens: &mut TokenStream) {
+        tokens.extend(self);
+    }
+}

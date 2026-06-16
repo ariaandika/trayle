@@ -16,7 +16,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             _ => return None,
         };
         let content = parser.next_group_of(Delimiter::Parenthesis)?;
-        let iface = Parser::new(content.stream()).next_ident()?;
+        let iface = Parser::new(content.stream().into()).next_ident()?;
         Some((opkind, iface))
     });
     let Some((opkind, iface)) = kind_attr else {
@@ -28,7 +28,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let wl_name = Literal::string(&to_snake(&name.to_string()));
 
     let body = parser.next_group_of(Delimiter::Brace).map(|e|e.stream()).unwrap_or_default();
-    let mut body = Parser::new(body);
+    let mut body = Parser::new(body.into());
 
     let mut dec_1 = None;
     let mut dec_fd = TokenStream::new();
@@ -76,7 +76,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             dec_1 = Some(name.clone());
         }
 
-        dec_read.extend([name.clone()]);
+        dec_read.push(name.clone());
 
         if len != 1 {
             let comma = Literal::character(',');
@@ -85,11 +85,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
         if is_fd {
             dec_fd.extend(generate!(let #&name = decoder.pop_fd()?;));
-            dec_read.extend(Some(gen_token!(,)));
+            dec_read.push(gen_token!(,));
             enc_fd.extend(generate!(self.#&name,));
             display.extend(generate!(std::fmt::Display::fmt(&"<fd>", f)?;));
         } else {
-            dec_read.extend(Some(col));
+            dec_read.push(col);
             dec_read.extend(generate!(reader.read()?,));
             enc_len.extend(generate!(+ self.#&name.size()));
             enc_write.extend(generate!(.write(self.#&name)));

@@ -1,4 +1,4 @@
-use proc_macro::*;
+use crate::prelude::*;
 
 // ===== Error =====
 
@@ -33,7 +33,9 @@ impl From<Error> for TokenStream {
             Punct::new('!', Spacing::Alone).into(),
             Group::new(
                 Delimiter::Parenthesis,
-                <_>::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
+                proc_macro::TokenStream::from(
+                    TokenStream::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
+                )
             ).into(),
             Punct::new(';', Spacing::Alone).into(),
         ])

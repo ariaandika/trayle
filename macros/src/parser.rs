@@ -1,4 +1,4 @@
-use proc_macro::*;
+use crate::tree::*;
 
 use Delimiter as Delim;
 use TokenTree as Tree;
@@ -20,7 +20,7 @@ pub trait Parse: Sized {
 // ===== Parser =====
 
 pub struct Parser {
-    iter: proc_macro::token_stream::IntoIter,
+    iter: IntoIter,
     cache: [Option<Tree>; 2],
 }
 

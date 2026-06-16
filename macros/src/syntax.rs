@@ -1,10 +1,7 @@
-use proc_macro::*;
-
-use Delimiter as Delim;
-
-use crate::Error;
-use crate::codegen::ToTokens;
-use crate::parser::{Parse, Parser};
+use crate::tree::*;
+use crate::parser::*;
+use crate::codegen::*;
+use crate::error::*;
 
 impl Parse for Ident {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
@@ -69,13 +66,12 @@ impl Parse for Lifetimes {
 
 impl ToTokens for Lifetimes {
     fn into_tokens(self, tokens: &mut TokenStream) {
-        use std::iter::once;
-        tokens.extend(once(self.delim.0));
+        tokens.push(self.delim.0);
         for lf in self.lfs {
             lf.into_tokens(tokens);
             crate::codegen::gen_token!(,).into_tokens(tokens);
         }
-        tokens.extend(once(self.delim.1));
+        tokens.push(self.delim.1);
     }
 }
 
@@ -84,18 +80,18 @@ impl ToTokens for Lifetimes {
 #[allow(unused)]
 pub struct Attribute {
     pub hash: Punct,
-    pub delim: Delim,
+    pub delim: Delimiter,
     pub tokens: TokenStream,
 }
 
 impl Parse for Attribute {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let hash = parser.punct_of('#')?;
-        let group = parser.group_of(Delim::Bracket)?;
+        let group = parser.group_of(Delimiter::Bracket)?;
         Ok(Self {
             hash,
             delim: group.delimiter(),
-            tokens: group.stream(),
+            tokens: group.stream().into(),
         })
     }
 }
@@ -103,7 +99,7 @@ impl Parse for Attribute {
 impl ToTokens for Attribute {
     fn into_tokens(self, tokens: &mut TokenStream) {
         self.hash.into_tokens(tokens);
-        Group::new(self.delim, self.tokens).into_tokens(tokens);
+        Group::new(self.delim, self.tokens.into()).into_tokens(tokens);
     }
 }
 

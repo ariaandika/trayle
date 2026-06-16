@@ -5,7 +5,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("enum")?;
     let name = parser.ident()?;
-    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream());
+    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream().into());
 
     let mut names_arm = TokenStream::new();
     let mut match_arm = TokenStream::new();
