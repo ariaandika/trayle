@@ -33,9 +33,7 @@ impl From<Error> for TokenStream {
             Punct::new('!', Spacing::Alone).into(),
             Group::new(
                 Delimiter::Parenthesis,
-                proc_macro::TokenStream::from(
-                    TokenStream::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
-                )
+                TokenStream::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
             ).into(),
             Punct::new(';', Spacing::Alone).into(),
         ])

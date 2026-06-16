@@ -23,14 +23,14 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         let const_entry = Ident::new(&wl_entry.to_uppercase(), Span::call_site());
 
         consts.extend(generate! {
-            #attrs
-            pub const #const_entry: Self = Self(#&value);
+            @attrs
+            pub const #const_entry: Self = Self(#value);
         });
 
         let wl_entry = Literal::string(&wl_entry);
         let sepr = Literal::character('|');
         display.extend(generate! {
-            if self.#&zero & #&value == #&value {
+            if self.#zero & #value == #value {
                 sepr.fmt(f)?;
                 sepr = #sepr;
                 #wl_entry.fmt(f)?;
@@ -39,57 +39,57 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     }
 
     Ok(generate! {
-        impl std::ops::BitAnd for #&name {
+        impl std::ops::BitAnd for #name {
             type Output = Self;
             #[inline]
             fn bitand(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero & rhs.#&zero)
+                Self(self.#zero & rhs.#zero)
             }
         }
-        impl std::ops::BitOr for #&name {
+        impl std::ops::BitOr for #name {
             type Output = Self;
             #[inline]
             fn bitor(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero | rhs.#&zero)
+                Self(self.#zero | rhs.#zero)
             }
         }
-        impl std::ops::BitXor for #&name {
+        impl std::ops::BitXor for #name {
             type Output = Self;
             #[inline]
             fn bitxor(self, rhs: Self) -> Self::Output {
-                Self(self.#&zero ^ rhs.#&zero)
+                Self(self.#zero ^ rhs.#zero)
             }
         }
-        impl WlEnum for #&name {
+        impl WlEnum for #name {
             #[inline]
             fn from_u32(uint: u32) -> Option<Self> {
                 Some(Self(uint))
             }
             #[inline]
             fn to_u32(self) -> u32 {
-                self.#&zero
+                self.#zero
             }
         }
-        impl #&name {
-            #consts
+        impl #name {
+            @consts
         }
-        impl std::fmt::Display for #&name {
+        impl std::fmt::Display for #name {
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                if self.#&zero == #&zero {
+                if self.#zero == #zero {
                     "<none>".fmt(f)?;
                 } else {
                     let mut sepr = #lt;
-                    #display
+                    @display
                     #gt.fmt(f)?;
                 }
                 Ok(())
             }
         }
-        impl display::Display2 for #&name {
+        impl display::Display2 for #name {
             #[inline]
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 std::fmt::Display::fmt(self, f)
             }
         }
-    })
+    }.collect())
 }

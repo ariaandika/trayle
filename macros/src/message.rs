@@ -5,10 +5,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("struct")?;
     let name = parser.ident()?;
-    let lf = Lifetimes::parse_opt(&mut parser)?;
-    let plf = lf.as_ref().map(|_|generate!(<'_>));
+    let lf_token = Lifetimes::parse_opt(&mut parser)?;
+    let plf = lf_token.as_ref().map(|_|generate!(<'_>).collect::<TokenStream>()).unwrap_or_default();
+    let lf = lf_token.map(|e|e.into_iter().collect()).unwrap_or_else(TokenStream::new);
 
-    let kind_attr = attrs.into_iter().find_map(|mut parser|{
+    let kind_attr = attrs.attrs_parser().find_map(|mut parser|{
         let name = parser.next_ident()?;
         let opkind = match name.to_string().as_str() {
             "request" => Ident::new("RequestOp", name.span()),
@@ -16,7 +17,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             _ => return None,
         };
         let content = parser.next_group_of(Delimiter::Parenthesis)?;
-        let iface = Parser::new(content.stream().into()).next_ident()?;
+        let iface = content.body_parser().next_ident()?;
         Some((opkind, iface))
     });
     let Some((opkind, iface)) = kind_attr else {
@@ -28,7 +29,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let wl_name = Literal::string(&to_snake(&name.to_string()));
 
     let body = parser.next_group_of(Delimiter::Brace).map(|e|e.stream()).unwrap_or_default();
-    let mut body = Parser::new(body.into());
+    let mut body = Parser::new(body);
 
     let mut dec_1 = None;
     let mut dec_fd = TokenStream::new();
@@ -84,48 +85,48 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         }
 
         if is_fd {
-            dec_fd.extend(generate!(let #&name = decoder.pop_fd()?;));
-            dec_read.push(gen_token!(,));
-            enc_fd.extend(generate!(self.#&name,));
+            dec_fd.extend(generate!(let #name = decoder.pop_fd()?;));
+            dec_read.extend(gentoken!(,));
+            enc_fd.extend(generate!(self.#name,));
             display.extend(generate!(std::fmt::Display::fmt(&"<fd>", f)?;));
         } else {
             dec_read.push(col);
             dec_read.extend(generate!(reader.read()?,));
-            enc_len.extend(generate!(+ self.#&name.size()));
-            enc_write.extend(generate!(.write(self.#&name)));
-            display.extend(generate!(crate::wayland::display::fmt_me(&self.#&name, f)?;));
+            enc_len.extend(generate!(+ self.#name.size()));
+            enc_write.extend(generate!(.write(self.#name)));
+            display.extend(generate!(crate::wayland::display::fmt_me(&self.#name, f)?;));
         }
 
-        ctor_args.extend(generate!(, #&name: #ty));
+        ctor_args.extend(generate!(, #name: @ty));
         ctor.extend(generate!(#name,));
     }
 
     let coding_mut = if dec_fd.is_empty() {
         None
     } else {
-        Some(gen_token!(mut))
+        gentoken!(mut)
     };
 
     let reader = match (len, encodable) {
-        (0, _) => generate!(let _ = decoder.reader();),
-        (1, 1) => generate!(),
-        _ => generate!(let mut reader = decoder.reader();),
+        (0, _) => generate!(let _ = decoder.reader();).collect::<TokenStream>(),
+        (1, 1) => generate!().collect(),
+        _ => generate!(let mut reader = decoder.reader();).collect(),
     };
     let ret = match (len, encodable) {
-        (0, _) => generate!({}),
-        (1, 1) => generate!({ #dec_1: decoder.read()? }),
-        _ => generate!({ #dec_read }),
+        (0, _) => generate!({}).collect::<TokenStream>(),
+        (1, 1) => generate!({ ?dec_1: decoder.read()? }).collect(),
+        _ => generate!({ @dec_read }).collect(),
     };
 
     let enc_fds_impl = if enc_fd.is_empty() {
-        None
+        TokenStream::new()
     } else {
-        Some(generate! {
+        generate! {
             #[inline]
             fn fds(&self) -> impl IntoIterator<Item = i32> {
-                [#enc_fd]
+                [@enc_fd]
             }
-        })
+        }.collect::<TokenStream>()
     };
 
     let ctor = if len <= 6
@@ -133,69 +134,75 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         && !super::KEYWORDS.contains(&mname.as_str())
     {
         let mname = Ident::new(&mname, name.span());
-        Some(generate! {
-            impl #&iface {
+        generate! {
+            impl #iface {
                 #[inline]
-                pub fn #mname #&lf (&self #ctor_args) -> Encodable<#&name #&lf> {
-                    Encodable::new(self, #&name { #ctor })
+                pub fn #mname @lf (&self @ctor_args) -> Encodable<#name @lf> {
+                    Encodable::new(self, #name { @ctor })
                 }
             }
-        })
+        }.collect::<TokenStream>()
     } else {
-        None
+        TokenStream::new()
     };
 
-    Ok(generate! {
-        #ctor
+    let gen1 = generate! {
+        @ctor
  
-        impl AsInterface for #&name #&plf {
+        impl AsInterface for #name @plf {
             #[inline]
             fn interface(&self) -> Interface {
                 Interface::#iface
             }
         }
 
-        impl AsOpCode for #&name #&plf {
-            type OpCode = #&opkind;
+        impl AsOpCode for #name @plf {
+            type OpCode = #opkind;
 
-            const OPCODE: Self::OpCode = #opkind::#&name;
+            const OPCODE: Self::OpCode = #opkind::#name;
 
             const OPNAME: &'static str = #wl_name;
         }
+    };
 
-        impl Decode for #&name #&plf {
-            type Output<'a> = #&name #lf;
+    let gen2 = generate! {
+        impl Decode for #name @plf {
+            type Output<'a> = #name @lf;
 
             #[inline]
-            fn decode<'a>(#&coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, DecodeError> {
-                #dec_fd
-                #reader
-                Ok(#&name #ret)
+            fn decode<'a>(?coding_mut decoder: Decoder<'a>) -> Result<Self::Output<'a>, DecodeError> {
+                @dec_fd
+                @reader
+                Ok(#name @ret)
             }
         }
 
-        impl Encode for #&name #&plf {
+        impl Encode for #name @plf {
             #[inline]
             fn size(&self) -> u16 {
-                #enc_len
+                @enc_len
             }
 
             #[inline]
             fn encode(self, writer: Writer) {
-                writer #enc_write;
+                writer @enc_write;
             }
 
-            #enc_fds_impl
+            @enc_fds_impl
         }
+    };
 
-        impl display::AsDisplay for #&name #&plf {
+    let gen3 = generate! {
+        impl display::AsDisplay for #name @plf {
             #[inline]
             fn display(&self) -> impl std::fmt::Display {
                 std::fmt::from_fn(|f|{
-                    #display
+                    @display
                     Ok(())
                 })
             }
-        }
-    })
+        };
+    };
+
+    Ok(gen1.chain(gen2).chain(gen3).collect())
 }

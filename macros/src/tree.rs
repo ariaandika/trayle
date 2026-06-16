@@ -6,7 +6,7 @@
 use std::cell::OnceCell;
 use proc_macro as p;
 
-pub use proc_macro::{Group, Punct, Literal, Span, Delimiter, Spacing};
+pub use proc_macro::{Span, Delimiter, Spacing};
 
 pub trait TokenResult {
     fn into_token_stream(self) -> p::TokenStream;
@@ -23,10 +23,14 @@ impl TokenResult for Result<TokenStream, crate::Error> {
 
 // ===== TokenStream =====
 
-#[derive(Clone)]
+#[derive(Default, Clone)]
 pub struct TokenStream(p::TokenStream);
 
 impl TokenStream {
+    pub fn new() -> Self {
+        Self(p::TokenStream::new())
+    }
+
     pub fn is_empty(&self) -> bool {
         self.0.is_empty()
     }
@@ -36,22 +40,16 @@ impl TokenStream {
     }
 }
 
-impl TokenStream {
-    pub fn new() -> Self {
-        Self(p::TokenStream::new())
-    }
-}
-
 pub struct IntoIter(std::iter::Map<p::token_stream::IntoIter, fn(p::TokenTree) -> TokenTree>);
 
 // ===== TokenTree =====
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum TokenTree {
-    Group(p::Group),
+    Group(Group),
     Ident(Ident),
-    Punct(p::Punct),
-    Literal(p::Literal),
+    Punct(Punct),
+    Literal(Literal),
 }
 
 impl TokenTree {
@@ -62,6 +60,25 @@ impl TokenTree {
             TokenTree::Punct(p) => p.span(),
             TokenTree::Literal(l) => l.span(),
         }
+    }
+}
+
+// ===== Group =====
+
+#[derive(Debug, Clone)]
+pub struct Group(p::Group);
+
+impl Group {
+    pub fn new(delim: Delimiter, stream: TokenStream) -> Self {
+        Self(p::Group::new(delim, stream.into()))
+    }
+
+    pub fn body_parser(&self) -> crate::Parser {
+        crate::Parser::new(self.0.stream().into())
+    }
+
+    pub fn stream(&self) -> TokenStream {
+        self.0.stream().into()
     }
 }
 
@@ -94,6 +111,48 @@ impl Ident {
 
     pub fn span(&self) -> Span {
         self.token.span()
+    }
+}
+
+// ===== Punct =====
+
+#[derive(Debug, Clone)]
+pub struct Punct(p::Punct);
+
+impl Punct {
+    pub fn new(ch: char, spacing: Spacing) -> Self {
+        Self(p::Punct::new(ch, spacing))
+    }
+}
+
+// ===== Literal =====
+
+#[derive(Debug, Clone)]
+pub struct Literal(p::Literal);
+
+impl Literal {
+    pub fn u8_unsuffixed(n: u8) -> Self {
+        Self(p::Literal::u8_unsuffixed(n))
+    }
+
+    pub fn u16_suffixed(n: u16) -> Self {
+        Self(p::Literal::u16_suffixed(n))
+    }
+
+    pub fn u32_unsuffixed(n: u32) -> Self {
+        Self(p::Literal::u32_unsuffixed(n))
+    }
+
+    pub fn usize_unsuffixed(n: usize) -> Self {
+        Self(p::Literal::usize_unsuffixed(n))
+    }
+
+    pub fn character(ch: char) -> Self {
+        Self(p::Literal::character(ch))
+    }
+
+    pub fn string(string: &str) -> Self {
+        Self(p::Literal::string(string))
     }
 }
 
@@ -141,10 +200,10 @@ impl FromIterator<TokenTree> for TokenStream {
 impl From<p::TokenTree> for TokenTree {
     fn from(value: p::TokenTree) -> Self {
         match value {
-            p::TokenTree::Group(g) => Self::Group(g),
+            p::TokenTree::Group(g) => Self::Group(g.into()),
             p::TokenTree::Ident(i) => Self::Ident(i.into()),
-            p::TokenTree::Punct(p) => Self::Punct(p),
-            p::TokenTree::Literal(l) => Self::Literal(l),
+            p::TokenTree::Punct(p) => Self::Punct(p.into()),
+            p::TokenTree::Literal(l) => Self::Literal(l.into()),
         }
     }
 }
@@ -152,10 +211,10 @@ impl From<p::TokenTree> for TokenTree {
 impl From<TokenTree> for p::TokenTree {
     fn from(value: TokenTree) -> Self {
         match value {
-            TokenTree::Group(g) => p::TokenTree::Group(g),
+            TokenTree::Group(g) => p::TokenTree::Group(g.into()),
             TokenTree::Ident(i) => p::TokenTree::Ident(i.into()),
-            TokenTree::Punct(p) => p::TokenTree::Punct(p),
-            TokenTree::Literal(l) => p::TokenTree::Literal(l),
+            TokenTree::Punct(p) => p::TokenTree::Punct(p.into()),
+            TokenTree::Literal(l) => p::TokenTree::Literal(l.into()),
         }
     }
 }
@@ -171,8 +230,38 @@ macro_rules! token_tree_from {
         )*
     };
 }
-token_tree_from!(Group(p::Group), Ident(Ident), Punct(p::Punct), Literal(p::Literal));
+token_tree_from!(Group(Group), Ident(Ident), Punct(Punct), Literal(Literal));
 
+macro_rules! wrapper {
+    ($($me:ident),*) => {
+        $(
+        impl From<p::$me> for $me {
+            fn from(value: p::$me) -> Self {
+                Self(value)
+            }
+        }
+        impl From<$me> for p::$me {
+            fn from(value: $me) -> Self {
+                value.0
+            }
+        }
+        impl std::ops::Deref for $me {
+            type Target = p::$me;
+
+            fn deref(&self) -> &Self::Target {
+                &self.0
+            }
+        }
+
+        impl std::ops::DerefMut for $me {
+            fn deref_mut(&mut self) -> &mut Self::Target {
+                &mut self.0
+            }
+        }
+        )*
+    };
+}
+wrapper!(Group, Punct, Literal);
 
 impl From<p::Ident> for Ident {
     fn from(value: p::Ident) -> Self {

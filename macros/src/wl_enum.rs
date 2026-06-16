@@ -5,7 +5,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("enum")?;
     let name = parser.ident()?;
-    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream().into());
+    let mut body = parser.group_of(Delimiter::Brace)?.body_parser();
 
     let mut names_arm = TokenStream::new();
     let mut match_arm = TokenStream::new();
@@ -27,25 +27,25 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         let wl_variant = Literal::string(&to_snake(&variant.to_string()));
 
         body.next_punct_of(',');
-        match_arm.extend(generate!(#lit => Some(Self::#&variant),));
+        match_arm.extend(generate!(#lit => Some(Self::#variant),));
         names_arm.extend(generate!(Self::#variant => #wl_variant,));
     }
 
     Ok(generate! {
-        impl #&name {
+        impl #name {
             /// Returns the wayland name.
             #[inline]
             pub const fn name(&self) -> &'static str {
                 match self {
-                    #names_arm
+                    @names_arm
                 }
             }
         }
-        impl WlEnum for #&name {
+        impl WlEnum for #name {
             #[inline]
             fn from_u32(uint: u32) -> Option<Self> {
                 match uint {
-                    #match_arm
+                    @match_arm
                     _ => None,
                 }
             }
@@ -55,17 +55,17 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 self as u32
             }
         }
-        impl std::fmt::Display for #&name {
+        impl std::fmt::Display for #name {
             #[inline]
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 self.name().fmt(f)
             }
         }
-        impl display::Display2 for #&name {
+        impl display::Display2 for #name {
             #[inline]
             fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
                 std::fmt::Display::fmt(self, f)
             }
         }
-    })
+    }.collect())
 }

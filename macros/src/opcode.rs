@@ -6,7 +6,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let _ = parser.ident_of("enum")?;
     let name = parser.ident()?;
 
-    let mut body = Parser::new(parser.group_of(Delimiter::Brace)?.stream().into());
+    let mut body = parser.group_of(Delimiter::Brace)?.body_parser();
 
     let zero = Literal::u8_unsuffixed(0);
     let mut names_arm = TokenStream::new();
@@ -15,7 +15,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
     loop {
         let wl_entry = Literal::string(&to_snake(&last_variant.to_string()));
-        names_arm.extend(generate!(Self::#&last_variant => #wl_entry,));
+        names_arm.extend(generate!(Self::#last_variant => #wl_entry,));
 
         body.next_punct_of(',');
         let Some(next_ident) = body.next_ident() else {
@@ -28,30 +28,30 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let from_op = match i {
         1 => generate! {
             if op == #zero { Some(Self::#last_variant) } else { None }
-        },
+        }.collect::<TokenStream>(),
         _ => generate! {
             if op as u8 <= Self::#last_variant as u8 {
                 Some(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
             } else {
                 None
             }
-        },
+        }.collect(),
     };
 
     Ok(generate! {
-        impl #&name {
+        impl #name {
             /// Returns the wayland name.
             #[inline]
             pub const fn name(&self) -> &'static str {
                 match self {
-                    #names_arm
+                    @names_arm
                 }
             }
         }
-        impl OpCode for #&name {
+        impl OpCode for #name {
             #[inline]
             fn from_op(op: u16) -> Option<Self> {
-                #from_op
+                @from_op
             }
 
             #[inline]
@@ -65,7 +65,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 self.name().fmt(f)
             }
         }
-    })
+    }.collect())
 }
 
 fn err_empty_enum() -> Error {

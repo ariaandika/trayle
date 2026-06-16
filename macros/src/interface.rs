@@ -7,25 +7,25 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let name = parser.ident()?;
 
     Ok(generate! {
-        impl FromObjectId for #&name {
+        impl FromObjectId for #name {
             #[inline]
             fn from_object_id(id: ObjectId) -> Self {
                 Self { id }
             }
         }
 
-        impl AsObjectId for #&name {
+        impl AsObjectId for #name {
             #[inline]
             fn object_id(&self) -> ObjectId {
                 self.id
             }
         }
 
-        impl AsInterface for #&name {
+        impl AsInterface for #name {
             #[inline]
             fn interface(&self) -> Interface {
-                Interface::#&name
+                Interface::#name
             }
         }
-    })
+    }.collect())
 }

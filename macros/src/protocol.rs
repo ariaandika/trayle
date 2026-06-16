@@ -51,7 +51,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         ]);
 
         if !is_todo {
-            reexports.extend(generate!(pub use super::#&name as #name_camel;));
+            reexports.extend(generate!(pub use super::#name as #name_camel;));
             mod_declare.extend([
                 TokenTree::from(vis),
                 mod_kw.into(),
@@ -64,16 +64,16 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let len = Literal::usize_unsuffixed(len);
 
     Ok(generate! {
-        #attrs
-        #vis #enum_kw #&name {
-            #variants
+        @attrs
+        #vis #enum_kw #name {
+            @variants
         }
 
-        impl #&name {
+        impl #name {
             #[doc = " Returns lower cased name of current interface."]
             #[inline]
             pub fn name(&self) -> &'static str {
-                static LOOKUP: [&'static str; #len] = [#names];
+                static LOOKUP: [&'static str; #len] = [@names];
                 unsafe { LOOKUP.get_unchecked(*self as usize) }
             }
         }
@@ -85,11 +85,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
         }
 
-        #mod_declare
+        @mod_declare
 
-        #mod_attrs
+        @mod_attrs
         #mod_vis #mod_kw #mod_name {
-            #reexports
+            @reexports
         }
-    })
+    }.collect())
 }
