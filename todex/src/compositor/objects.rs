@@ -1,6 +1,4 @@
-use std::ptr::NonNull;
-
-use crate::alloc;
+use crate::collections::slots::Slots;
 use crate::wayland::{AsInterface, AsObjectId, Interface, NewId};
 use crate::wayland::{Object, ObjectError, ObjectId, WlObject};
 
@@ -10,39 +8,20 @@ const INITIAL_CAP: usize = 32;
 
 /// A list of wayland objects.
 ///
-/// This is a list where each object is an `Option`. Client can append or reuse removed object slot.
+/// This is an array type where client can associate an index with given object.
 ///
 /// Client can only append one index after the last used object slot. An attempt to insert past it
 /// will result in an error.
 pub struct Objects {
-    ptr: NonNull<Option<(Interface, usize)>>,
-    len: usize,
-    cap: usize,
-}
-
-impl Drop for Objects {
-    fn drop(&mut self) {
-        // if in the future, `Object` contains something that needs `Drop`, this should be changed.
-        alloc::deallocate(self.ptr);
-    }
+    slots: Slots<(Interface, usize)>,
 }
 
 impl Objects {
     #[inline]
     pub fn new() -> Self {
         Self {
-            ptr: alloc::allocate(INITIAL_CAP),
-            len: 0,
-            cap: INITIAL_CAP,
+            slots: Slots::with_capacity(INITIAL_CAP),
         }
-    }
-
-    #[cold]
-    #[inline(never)]
-    fn grow(&mut self) {
-        let new_cap = alloc::calc_exp(self.cap);
-        self.ptr = alloc::reallocate(self.ptr, new_cap);
-        self.cap = new_cap;
     }
 
     /// Create and insert new object from [`NewId`].
@@ -64,7 +43,7 @@ impl Objects {
     /// The value can be retrieved in the [`Object`] struct.
     #[inline]
     pub fn insert_with<O: WlObject>(&mut self, object: &O, value: usize) -> Result<(), ObjectError> {
-        self.insert_inner(object.object_id(), Some((object.interface(), value)))
+        self.insert_inner(object.object_id(), (object.interface(), value))
     }
 
     /// Insert new object from parts.
@@ -72,44 +51,27 @@ impl Objects {
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
     #[inline]
     pub fn insert_parts(&mut self, object_id: ObjectId, interface: Interface, value: usize) -> Result<(), ObjectError> {
-        self.insert_inner(object_id, Some((interface, value)))
+        self.insert_inner(object_id, (interface, value))
+    }
+
+    fn insert_inner(&mut self, id: ObjectId, object: (Interface, usize)) -> Result<(), ObjectError> {
+        let Some(idx) = id.to_u32().checked_sub(2).map(|e|e as usize) else {
+            return Err(E::InvalidNewId);
+        };
+        match self.slots.insert(idx, object) {
+            Ok(()) => Ok(()),
+            // NOTE: can be out of bounds error
+            Err(_) => Err(E::OccupiedNewId),
+        }
     }
 
     /// This has the same effect of inserting the id and immediately remove it.
     #[inline]
-    pub fn use_one<O: WlObject>(&mut self, object: &O) -> Result<(), ObjectError> {
-        self.insert_inner(object.object_id(), None)
-    }
-
-    fn insert_inner(&mut self, id: ObjectId, object: Option<(Interface, usize)>) -> Result<(), ObjectError> {
-        if self.len == self.cap {
-            self.grow();
-        }
-
-        let Some(idx) = id.to_u32().checked_sub(2).map(|e|e as usize) else {
-            return Err(E::InvalidNewId);
+    pub fn use_one<O: WlObject>(&mut self, object: &O) {
+        let Some(idx) = object.object_id().to_u32().checked_sub(2).map(|e|e as usize) else {
+            return;
         };
-
-        // appending can only be one index after the last used id
-        //
-        // if it skips unused id, it will left skipped id unitialized
-        if idx > self.len {
-            return Err(E::OutOfBoundsNewId);
-        }
-
-        if idx == self.len {
-            // SAFETY: `idx == len`
-            unsafe { self.ptr.add(idx).write(object) };
-            self.len += 1;
-        } else {
-            // SAFETY: `idx < len`
-            let entry_mut = unsafe { self.ptr.add(idx).replace(object) };
-            if entry_mut.is_some() {
-                return Err(E::OccupiedNewId);
-            }
-        }
-
-        Ok(())
+        self.slots.use_one(idx);
     }
 
     /// Performs an object lookup.
@@ -128,16 +90,9 @@ impl Objects {
 
     fn entry(&self, id: ObjectId) -> Result<&(Interface, usize), ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Ok(&(Interface::WlDisplay, 0))
+            return Ok(&(Interface::WlDisplay, 0));
         };
-        if (idx as usize) < self.len {
-            match unsafe { self.ptr.add(idx as usize).as_mut() } {
-                Some(ok) => Ok(ok),
-                None => Err(E::UnknownId),
-            }
-        } else {
-            Err(E::UnknownId)
-        }
+        self.slots.get(idx as usize).ok_or(E::UnknownId)
     }
 }
 

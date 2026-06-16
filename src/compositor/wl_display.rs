@@ -10,7 +10,7 @@ use crate::compositor::prelude::*;
 impl RequestHandler<Sync> for Compositor {
     fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_callback = sync.callback.create();
-        client.objects.use_one(&wl_callback)?;
+        client.objects.use_one(&wl_callback);
         client.send(wl_callback.done(0));
         client.delete_id(wl_callback);
         Ok(())
