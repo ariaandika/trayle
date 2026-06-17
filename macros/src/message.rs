@@ -11,7 +11,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
     let kind_attr = attrs.attrs_parser().find_map(|mut parser|{
         let name = parser.next_ident()?;
-        let opkind = match name.to_string().as_str() {
+        let opkind = match name.as_str() {
             "request" => Ident::new("RequestOp", name.span()),
             "event" => Ident::new("EventOp", name.span()),
             _ => return None,
@@ -26,7 +26,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             name.span()
         ));
     };
-    let wl_name = Literal::string(&to_snake(&name.to_string()));
+    let wl_name = Literal::string(&to_snake(name.as_str()));
 
     let body = parser.next_group_of(Delimiter::Brace).map(|e|e.stream()).unwrap_or_default();
     let mut body = Parser::new(body);
@@ -43,15 +43,10 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut encodable = 0;
     let mut len = 0;
 
-    loop {
-        let attrs = body.parse::<Attributes>()?;
-        let Some(_) = body.next_ident_of("pub") else {
-            break;
-        };
-
+    while let Some(FieldNamed { attrs, ident, col, ty, .. }) = body.separated(',')? {
         let is_fd = attrs.attrs.into_iter().any(|e|{
             match e.tokens.into_iter().next() {
-                Some(TokenTree::Ident(id)) => id.to_string().as_str() == "fd",
+                Some(TokenTree::Ident(id)) => id.as_str() == "fd",
                 _ => false,
             }
         });
@@ -59,25 +54,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         encodable += (!is_fd) as usize;
         len += 1;
 
-        let name = body.ident()?;
-        let col = body.punct_of(':')?;
-
-        // only support type which does not have comma in the middle
-        let mut ty = TokenStream::new();
-        while let Some(tree) = body.next() {
-            if let TokenTree::Punct(punct) = &tree
-                && punct.as_char() == ','
-            {
-                break;
-            }
-            ty.extend([tree]);
-        }
-
         if encodable == 1 {
-            dec_1 = Some(name.clone());
+            dec_1 = Some(ident.clone());
         }
 
-        dec_read.push(name.clone());
+        dec_read.push(ident.clone());
 
         if len != 1 {
             let comma = Literal::character(',');
@@ -85,20 +66,20 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         }
 
         if is_fd {
-            dec_fd.extend(generate!(let #name = decoder.pop_fd()?;));
+            dec_fd.extend(generate!(let #ident = decoder.pop_fd()?;));
             dec_read.extend(gentoken!(,));
-            enc_fd.extend(generate!(self.#name,));
+            enc_fd.extend(generate!(self.#ident,));
             display.extend(generate!(std::fmt::Display::fmt(&"<fd>", f)?;));
         } else {
             dec_read.push(col);
             dec_read.extend(generate!(reader.read()?,));
-            enc_len.extend(generate!(+ self.#name.size()));
-            enc_write.extend(generate!(.write(self.#name)));
-            display.extend(generate!(crate::wayland::display::fmt_me(&self.#name, f)?;));
+            enc_len.extend(generate!(+ self.#ident.size()));
+            enc_write.extend(generate!(.write(self.#ident)));
+            display.extend(generate!(crate::wayland::display::fmt_me(&self.#ident, f)?;));
         }
 
-        ctor_args.extend(generate!(, #name: @ty));
-        ctor.extend(generate!(#name,));
+        ctor_args.extend(generate!(, #ident: @ty));
+        ctor.extend(generate!(#ident,));
     }
 
     let coding_mut = if dec_fd.is_empty() {
@@ -130,7 +111,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     };
 
     let ctor = if len <= 6
-        && let mname = to_snake(&name.to_string())
+        && let mname = to_snake(name.as_str())
         && !super::KEYWORDS.contains(&mname.as_str())
     {
         let mname = Ident::new(&mname, name.span());
