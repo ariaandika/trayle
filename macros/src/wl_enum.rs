@@ -17,12 +17,12 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                     has_discr = Some(ident.span());
                 }
                 ok.expr
-            },
+            }
             None => {
                 let lit = Literal::u32_unsuffixed(i);
                 i += 1;
                 generate!(#lit).collect()
-            },
+            }
         };
         name_getter.add_field(&ident);
         wl_enum.add_field(&ident, discr);
@@ -31,8 +31,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     if let Some(custom_lit) = has_discr
         && i != 0
     {
-        return Err(Error::new(
-            "custom value must be all variant or nothing".into(),
+        return Err(Error::spanned(
+            "custom value must be all variant or nothing",
             custom_lit,
         ));
     }

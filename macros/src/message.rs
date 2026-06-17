@@ -21,8 +21,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         Some((opkind, iface))
     });
     let Some((opkind, iface)) = kind_attr else {
-        return Err(Error::new(
-            "`request` or `event` attribute with interface name is required".into(),
+        return Err(Error::spanned(
+            "`request` or `event` attribute with interface name is required",
             name.span()
         ));
     };

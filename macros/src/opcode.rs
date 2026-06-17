@@ -11,9 +11,9 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
     while let Some(Variant { ident, discr, .. }) = body.separated(',')? {
         if discr.is_some() {
-            return Err(Error::new(
-                "opcode enum cannot have discriminant".into(),
-                Span::call_site(),
+            return Err(Error::spanned(
+                "opcode enum cannot have discriminant",
+                ident.span(),
             ));
         }
         let wl_entry = Literal::string(&to_snake(ident.as_str()));
@@ -23,7 +23,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     }
 
     let Some(last_variant) = last_variant else {
-        return Err(Error::new("opcode enum cannot be empty".into(), Span::call_site()));
+        return Err(Error::new("opcode enum cannot be empty"));
     };
 
     let cmp: TokenStream = match i {

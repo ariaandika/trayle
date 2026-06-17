@@ -8,8 +8,12 @@ pub struct Error {
 }
 
 impl Error {
-    pub fn new(msg: String, span: Span) -> Self {
-        Self { msg, span }
+    pub fn new<S: Into<String>>(msg: S) -> Self {
+        Self { msg: msg.into(), span: Span::call_site() }
+    }
+
+    pub fn spanned<S: Into<String>>(msg: S, span: Span) -> Self {
+        Self { msg: msg.into(), span }
     }
 
     pub fn eof() -> Error {

@@ -7,7 +7,7 @@ use crate::Error;
 
 macro_rules! errfmt {
     ($me:ident, $($tt:tt)*) => {
-        Error::new(format!($($tt)*), $me.span())
+        Error::spanned(format!($($tt)*), $me.span())
     };
 }
 
@@ -153,11 +153,11 @@ macro_rules! try_tree {
         pub fn $fn(&mut $me) -> Result<$tr, Error> {
             match $me.next() {
                 Some(Tree::$tr(ok)) => Ok(ok),
-                Some(span) => Err(Error::new(
+                Some(span) => Err(Error::spanned(
                     format!(concat!("expected ", $ex, ", found {:?}"), span),
                     span.span()
                 )),
-                None => Err(Error::new("unexpected EOF".into(), Span::call_site())),
+                None => Err(Error::new("unexpected EOF")),
             }
         }
     };
