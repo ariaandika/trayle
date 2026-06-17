@@ -4,62 +4,19 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let name = parser.ident()?;
     let _ = parser.punct_of(';')?;
 
-    let zero = Literal::u32_unsuffixed(0);
-    let lt = Literal::character('<');
-    let gt = Literal::character('>');
-    let mut consts = TokenStream::new();
-    let mut display = TokenStream::new();
+    let mut consts = GenConsts::default();
+    let mut display = GenDisplay::default();
 
-    loop {
-        let attrs = parser.parse::<Attributes>()?;
-        let Some(entry) = parser.next_ident() else {
-            break;
+    while let Some(Variant { attrs, ident, discr, .. }) = parser.separated(',')? {
+        let Some(Discriminant { expr, .. }) = discr else {
+            return Err(Error::spanned("bitfield require explicit discriminant", ident.span()));
         };
-        let _ = parser.punct_of('=')?;
-        let value = parser.lit()?;
-        let _ = parser.next_punct_of(',');
-
-        let wl_entry = to_snake(&entry.to_string());
-        let const_entry = Ident::new(&wl_entry.to_uppercase(), Span::call_site());
-
-        consts.extend(generate! {
-            @attrs
-            pub const #const_entry: Self = Self(#value);
-        });
-
-        let wl_entry = Literal::string(&wl_entry);
-        let sepr = Literal::character('|');
-        display.extend(generate! {
-            if self.#zero & #value == #value {
-                sepr.fmt(f)?;
-                sepr = #sepr;
-                #wl_entry.fmt(f)?;
-            }
-        });
+        let wl_name = to_snake(&ident.to_string());
+        consts.add_variant(&wl_name, attrs, &expr);
+        display.add_variant(&wl_name, &expr);
     }
 
-    Ok(generate! {
-        impl std::ops::BitAnd for #name {
-            type Output = Self;
-            #[inline]
-            fn bitand(self, rhs: Self) -> Self::Output {
-                Self(self.#zero & rhs.#zero)
-            }
-        }
-        impl std::ops::BitOr for #name {
-            type Output = Self;
-            #[inline]
-            fn bitor(self, rhs: Self) -> Self::Output {
-                Self(self.#zero | rhs.#zero)
-            }
-        }
-        impl std::ops::BitXor for #name {
-            type Output = Self;
-            #[inline]
-            fn bitxor(self, rhs: Self) -> Self::Output {
-                Self(self.#zero ^ rhs.#zero)
-            }
-        }
+    let wl_enum = generate! {
         impl WlEnum for #name {
             #[inline]
             fn from_u32(uint: u32) -> Option<Self> {
@@ -67,29 +24,99 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
             #[inline]
             fn to_u32(self) -> u32 {
-                self.#zero
+                self.#ZERO
             }
         }
-        impl #name {
-            @consts
-        }
-        impl std::fmt::Display for #name {
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                if self.#zero == #zero {
-                    "<none>".fmt(f)?;
-                } else {
-                    let mut sepr = #lt;
-                    @display
-                    #gt.fmt(f)?;
-                }
-                Ok(())
-            }
-        }
-        impl display::Display2 for #name {
+    };
+
+    Ok(wl_enum
+        .chain(consts.generate(&name))
+        .chain(display.generate(&name))
+        .chain(gen_bitops(&name, "BitAnd", "bitand", '&'))
+        .chain(gen_bitops(&name, "BitOr", "bitor", '|'))
+        .chain(gen_bitops(&name, "BitXor", "bitxor", '^'))
+        .collect())
+}
+
+fn gen_bitops(name: &Ident, trait_: &str, fn_: &str, op: char) -> impl Iterator<Item = TokenTree> {
+    let tr = Ident::new(trait_, Span::call_site());
+    let f = Ident::new(fn_, Span::call_site());
+    let op = Punct::new(op, Spacing::Alone);
+    generate! {
+        impl std::ops::#tr for #{name.clone()} {
+            type Output = Self;
             #[inline]
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                std::fmt::Display::fmt(self, f)
+            fn #f(self, rhs: Self) -> Self::Output {
+                Self(self.#ZERO #op rhs.#ZERO)
             }
         }
-    }.collect())
+    }
+}
+
+// ===== impls =====
+
+#[derive(Default)]
+struct GenConsts {
+    tokens: TokenStream,
+}
+
+impl GenConsts {
+    fn add_variant(&mut self, wl_name: &str, attrs: Attributes, expr: &TokenStream) {
+        let const_entry = Ident::new(&wl_name.to_uppercase(), Span::call_site());
+        self.tokens.extend(generate! {
+            @attrs
+            pub const #const_entry: Self = Self(@expr);
+        });
+    }
+
+    fn generate(self, name: &Ident) -> impl Iterator<Item = TokenTree> {
+        generate!(impl #name).chain(Some(Group::new(Delimiter::Brace, self.tokens).into()))
+    }
+}
+
+#[derive(Default)]
+struct GenDisplay {
+    tokens: TokenStream,
+}
+
+impl GenDisplay {
+    fn add_variant(&mut self, wl_name: &str, expr: &TokenStream) {
+        let wl_name = Literal::string(wl_name);
+        let sepr = Literal::character('|');
+
+        self.tokens.extend(generate! {
+            if self.#ZERO & @expr == @expr {
+                sepr.fmt(f)?;
+                sepr = #sepr;
+                #wl_name.fmt(f)?;
+            }
+        });
+    }
+
+    fn generate(self, name: &Ident) -> impl Iterator<Item = TokenTree> {
+        let Self { tokens } = self;
+        let lt = Literal::character('<');
+        let gt = Literal::character('>');
+
+        generate! {
+            impl std::fmt::Display for #name {
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    if self.#ZERO == #ZERO {
+                        "<none>".fmt(f)?;
+                    } else {
+                        let mut sepr = #lt;
+                        @tokens
+                        #gt.fmt(f)?;
+                    }
+                    Ok(())
+                }
+            }
+            impl display::Display2 for #name {
+                #[inline]
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    std::fmt::Display::fmt(self, f)
+                }
+            }
+        }
+    }
 }

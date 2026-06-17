@@ -1,5 +1,10 @@
 use crate::tree::*;
 
+macro_rules! token_stream {
+    () => { TokenStream::new() };
+    ($($tt:tt)*) => { crate::codegen::generate!($($tt)*).collect::<TokenStream>() };
+}
+
 macro_rules! generate {
     () => {IntoIterator::into_iter(None::<TokenTree>)};
     ($($tt:tt)*) => {
@@ -11,10 +16,10 @@ macro_rules! impl_generate {
 
     // arbitrary input
     (#$i:ident) => {
-        IntoIterator::into_iter(Some(TokenTree::from(Clone::clone(&$i))))
+        IntoIterator::into_iter(Some(TokenTree::from($i.clone())))
     };
     (#$i:ident $($tt:tt)*) => {
-        IntoIterator::into_iter(Some(TokenTree::from(Clone::clone(&$i))))
+        IntoIterator::into_iter(Some(TokenTree::from($i.clone())))
             .chain(crate::codegen::impl_generate!($($tt)*))
     };
 
@@ -29,19 +34,19 @@ macro_rules! impl_generate {
 
     // optional arbitrary input
     (?$i:ident) => {
-        IntoIterator::into_iter(Clone::clone(&$i).map(TokenTree::from))
+        IntoIterator::into_iter($i.clone().map(TokenTree::from))
     };
     (?$i:ident $($tt:tt)*) => {
-        IntoIterator::into_iter(Clone::clone(&$i).map(TokenTree::from))
+        IntoIterator::into_iter($i.clone().map(TokenTree::from))
             .chain(crate::codegen::impl_generate!($($tt)*))
     };
 
     // iterator input
     (@$i:ident) => {
-        IntoIterator::into_iter(Clone::clone(&$i))
+        IntoIterator::into_iter($i.clone())
     };
     (@$i:ident $($tt:tt)*) => {
-        IntoIterator::into_iter(Clone::clone(&$i))
+        IntoIterator::into_iter($i.clone())
             .chain(crate::codegen::impl_generate!($($tt)*))
     };
 
@@ -117,7 +122,7 @@ macro_rules! gentoken {
     ($t:ident) => {Some(TokenTree::from(Ident::new(stringify!($t), Span::call_site())))};
 }
 
-pub(crate) use {gentoken, impl_generate, generate};
+pub(crate) use {token_stream, gentoken, impl_generate, generate};
 
 // ===== ToTokens =====
 

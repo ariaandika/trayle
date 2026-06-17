@@ -26,17 +26,17 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         return Err(Error::new("opcode enum cannot be empty"));
     };
 
-    let cmp: TokenStream = match i {
-        1 => generate!(op == #ZERO).collect(),
-        _ => generate!(op as u8 <= Self::#last_variant as u8).collect(),
+    let cmp = match i {
+        1 => token_stream!(op == #ZERO),
+        _ => token_stream!(op as u8 <= Self::#last_variant as u8),
     };
 
-    let cvt: TokenStream = match i {
-        1 => generate!(Self::#last_variant).collect(),
-        _ => generate!(unsafe { std::mem::transmute::<u8, Self>(op as u8) }).collect(),
+    let cvt = match i {
+        1 => token_stream!(Self::#last_variant),
+        _ => token_stream!(unsafe { std::mem::transmute::<u8, Self>(op as u8) }),
     };
 
-    Ok(generate! {
+    Ok(token_stream! {
         impl #name {
             /// Returns the wayland name.
             #[inline]
@@ -63,5 +63,5 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 self.name().fmt(f)
             }
         }
-    }.collect())
+    })
 }
