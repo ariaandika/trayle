@@ -1,41 +1,39 @@
 use crate::prelude::*;
 
 pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
-    let _ = parser.parse::<Attributes>()?;
-    let _ = parser.ident_of("pub")?;
-    let _ = parser.ident_of("enum")?;
-    let name = parser.ident()?;
+    let EnumItem { name, body, .. } = parser.parse()?;
 
-    let mut body = parser.group_of(Delimiter::Brace)?.body_parser();
+    let mut i = 0;
+    let mut last_variant = None;
 
-    let zero = Literal::u8_unsuffixed(0);
+    let mut body = body.body_parser();
     let mut names_arm = TokenStream::new();
-    let mut last_variant = body.next_ident().ok_or_else(err_empty_enum)?;
-    let mut i = 1;
 
-    loop {
-        let wl_entry = Literal::string(&to_snake(&last_variant.to_string()));
-        names_arm.extend(generate!(Self::#last_variant => #wl_entry,));
-
-        body.next_punct_of(',');
-        let Some(next_ident) = body.next_ident() else {
-            break;
-        };
-        last_variant = next_ident;
+    while let Some(Variant { ident, discr, .. }) = body.separated(',')? {
+        if discr.is_some() {
+            return Err(Error::new(
+                "opcode enum cannot have discriminant".into(),
+                Span::call_site(),
+            ));
+        }
+        let wl_entry = Literal::string(&to_snake(ident.as_str()));
+        names_arm.extend(generate!(Self::#ident => #wl_entry,));
+        last_variant = Some(ident);
         i += 1;
     }
 
-    let from_op = match i {
-        1 => generate! {
-            if op == #zero { Some(Self::#last_variant) } else { None }
-        }.collect::<TokenStream>(),
-        _ => generate! {
-            if op as u8 <= Self::#last_variant as u8 {
-                Some(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
-            } else {
-                None
-            }
-        }.collect(),
+    let Some(last_variant) = last_variant else {
+        return Err(Error::new("opcode enum cannot be empty".into(), Span::call_site()));
+    };
+
+    let cmp: TokenStream = match i {
+        1 => generate!(op == #ZERO).collect(),
+        _ => generate!(op as u8 <= Self::#last_variant as u8).collect(),
+    };
+
+    let cvt: TokenStream = match i {
+        1 => generate!(Self::#last_variant).collect(),
+        _ => generate!(unsafe { std::mem::transmute::<u8, Self>(op as u8) }).collect(),
     };
 
     Ok(generate! {
@@ -51,7 +49,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         impl OpCode for #name {
             #[inline]
             fn from_op(op: u16) -> Option<Self> {
-                @from_op
+                if @cmp { Some(@cvt) } else { None }
             }
 
             #[inline]
@@ -66,8 +64,4 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             }
         }
     }.collect())
-}
-
-fn err_empty_enum() -> Error {
-    Error::new("empty enum is not supported".into(), Span::call_site())
 }

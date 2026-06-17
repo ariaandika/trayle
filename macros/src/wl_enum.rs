@@ -1,42 +1,34 @@
 use crate::prelude::*;
 
 pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
-    let _ = parser.parse::<Attributes>()?;
-    let _ = parser.next_ident_of("pub");
-    let _ = parser.ident_of("enum")?;
-    let name = parser.ident()?;
-
-    let mut body = parser.group_of(Delimiter::Brace)?.body_parser();
+    let EnumItem { name, body, .. } = parser.parse()?;
 
     let mut i = 0u32;
-    let mut has_custom = None;
+    let mut has_discr = None;
 
+    let mut body = body.body_parser();
     let mut name_getter = GenNameGetter::new(&name);
     let mut wl_enum = GenWlEnum::new(&name);
 
-    loop {
-        let _ = body.parse::<Attributes>()?;
-        let Some(variant) = body.next_ident() else {
-            break;
+    while let Some(Variant { ident, discr, .. }) = body.separated(',')? {
+        let discr = match discr {
+            Some(ok) => {
+                if has_discr.is_none() {
+                    has_discr = Some(ident.span());
+                }
+                ok.expr
+            },
+            None => {
+                let lit = Literal::u32_unsuffixed(i);
+                i += 1;
+                generate!(#lit).collect()
+            },
         };
-        let lit = if body.next_punct_of('=').is_some() {
-            let lit = body.lit()?;
-            if has_custom.is_none() {
-                has_custom = Some(lit.span());
-            }
-            lit
-        } else {
-            let lit = Literal::u32_unsuffixed(i);
-            i += 1;
-            lit
-        };
-        body.next_punct_of(',');
-
-        wl_enum.add_field(&variant, lit);
-        name_getter.add_field(&variant);
+        name_getter.add_field(&ident);
+        wl_enum.add_field(&ident, discr);
     }
 
-    if let Some(custom_lit) = has_custom
+    if let Some(custom_lit) = has_discr
         && i != 0
     {
         return Err(Error::new(
@@ -113,8 +105,8 @@ impl GenWlEnum {
         }
     }
 
-    fn add_field(&mut self, variant: &Ident, lit: Literal) {
-        self.arms.extend(generate!(#lit => Some(Self::#{ variant.clone() }),));
+    fn add_field(&mut self, variant: &Ident, lit: TokenStream) {
+        self.arms.extend(generate!(@lit => Some(Self::#{ variant.clone() }),));
     }
 
     fn gens(self) -> impl Iterator<Item = TokenTree> {

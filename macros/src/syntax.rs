@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use crate::tree::*;
 use crate::parser::*;
 use crate::codegen::*;
@@ -6,6 +8,26 @@ use crate::error::*;
 impl Parse for Ident {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         parser.ident()
+    }
+}
+
+// ===== Vis =====
+
+#[derive(Clone)]
+pub enum Vis {
+    Inherit,
+    Public(Span, Option<Group>),
+}
+
+impl Parse for Vis {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        match parser.next_ident_of("pub") {
+            Some(id) => Ok(Vis::Public(
+                id.span(),
+                parser.next_group_of(Delimiter::Parenthesis),
+            )),
+            None => Ok(Self::Inherit),
+        }
     }
 }
 
@@ -41,6 +63,8 @@ impl IntoIterator for Lifetime {
         [TokenTree::from(self.backtick), self.name.into()].into_iter()
     }
 }
+
+// ===== Lifetimes =====
 
 #[derive(Clone)]
 pub struct Lifetimes {
@@ -161,6 +185,8 @@ impl IntoIterator for Attribute {
     }
 }
 
+// ===== Attributes =====
+
 #[derive(Clone)]
 pub struct Attributes {
     pub attrs: Vec<Attribute>,
@@ -197,5 +223,84 @@ impl IntoIterator for Attributes {
 
     fn into_iter(self) -> Self::IntoIter {
         self.attrs.into_iter().flatten()
+    }
+}
+
+// ===== Enum =====
+
+#[derive(Clone)]
+pub struct EnumItem {
+    pub attrs: Attributes,
+    pub vis: Vis,
+    pub enum_kw: Ident,
+    pub name: Ident,
+    pub body: Group,
+}
+
+impl Parse for EnumItem {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        Ok(Self {
+            attrs: parser.parse()?,
+            vis: parser.parse()?,
+            enum_kw: parser.ident_of("enum")?,
+            name: parser.ident()?,
+            body: parser.group_of(Delimiter::Brace)?,
+        })
+    }
+}
+
+impl EnumItem {
+    pub fn variant(parser: &mut Parser) -> Result<Option<Variant>, Error> {
+        if parser.peek().is_none() {
+            return Ok(None);
+        }
+        parser.parse().map(Some)
+    }
+}
+
+// ===== Enum =====
+
+#[derive(Clone)]
+pub struct Variant {
+    pub attrs: Attributes,
+    pub ident: Ident,
+    pub discr: Option<Discriminant>,
+}
+
+#[derive(Clone)]
+pub struct Discriminant {
+    pub eq: Punct,
+    pub expr: TokenStream,
+}
+
+impl Parse for Variant {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        Ok(Self {
+            attrs: parser.parse()?,
+            ident: parser.ident()?,
+            discr: {
+                let discr = match parser.is_punct_of('=') {
+                    Some(_) => Some(parser.parse()?),
+                    None => None,
+                };
+                let _ = parser.next_punct_of(',');
+                discr
+            }
+        })
+    }
+}
+
+impl Parse for Discriminant {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        Ok(Self {
+            eq: parser.punct_of('=')?,
+            expr: {
+                let mut expr = TokenStream::new();
+                while parser.is_punct_of(',').is_none() {
+                    expr.push(parser.try_next()?);
+                }
+                expr
+            }
+        })
     }
 }

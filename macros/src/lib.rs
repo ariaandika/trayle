@@ -17,6 +17,8 @@ mod prelude {
     pub use crate::codegen::*;
     pub use crate::syntax::*;
     pub use crate::error::Error;
+
+    pub const ZERO: crate::Zero = crate::Zero;
 }
 
 mod interface;
@@ -160,3 +162,12 @@ static KEYWORDS: [&str; 40] = [
     "mut", "pub", "ref", "return", "self", "static", "struct", "super", "trait", "true", "type",
     "union", "unsafe", "use", "where", "while",
 ];
+
+#[derive(Clone, Copy)]
+struct Zero;
+
+impl From<Zero> for tree::TokenTree {
+    fn from(_: Zero) -> Self {
+        tree::TokenTree::Literal(tree::Literal::u8_unsuffixed(0))
+    }
+}

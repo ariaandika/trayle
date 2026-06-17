@@ -42,6 +42,10 @@ impl Parser {
         }
     }
 
+    pub fn try_next(&mut self) -> Result<Tree, Error> {
+        self.next().ok_or_else(Error::eof)
+    }
+
     pub fn next_if_map<O, F: FnOnce(Tree) -> Result<O, Tree>>(
         &mut self,
         f: F,
@@ -72,6 +76,15 @@ impl Parser {
 
     pub fn parse<T: Parse>(&mut self) -> Result<T, Error> {
         T::parse(self)
+    }
+
+    pub fn separated<T: Parse>(&mut self, sep: char) -> Result<Option<T>, Error> {
+        if self.peek().is_none() {
+            return Ok(None);
+        }
+        let token = T::parse(self)?;
+        let _ = self.next_punct_of(sep);
+        Ok(Some(token))
     }
 }
 
@@ -111,7 +124,8 @@ impl Parser {
     }
 
     pub fn ident_of(&mut self, expect: &str) -> Result<Ident, Error> {
-        self.next_ident_of(expect).ok_or_else(Error::eof)
+        self.next_ident_of(expect)
+            .ok_or_else(|| errfmt!(self, "expected `{expect}`"))
     }
 
     pub fn group_of(&mut self, delim: Delim) -> Result<Group, Error> {
