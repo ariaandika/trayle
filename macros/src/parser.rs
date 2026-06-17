@@ -137,7 +137,7 @@ fn delim_punct(delim: Delim) -> &'static str {
 macro_rules! try_tree {
     ($fn:ident($me:ident) -> $tr:ident, $ex:literal) => {
         pub fn $fn(&mut $me) -> Result<$tr, Error> {
-            match $me.iter.next() {
+            match $me.next() {
                 Some(Tree::$tr(ok)) => Ok(ok),
                 Some(span) => Err(Error::new(
                     format!(concat!("expected ", $ex, ", found {:?}"), span),
