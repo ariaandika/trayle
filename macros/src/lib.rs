@@ -10,17 +10,18 @@ mod parser;
 // ===== syntax =====
 
 mod syntax;
+mod attr;
 
 // ===== implementations =====
 
 mod prelude {
-    pub(crate) use super::{to_camel, to_snake};
+    pub(crate) use super::{KEYWORDS, to_camel, to_snake};
     pub use crate::tree::*;
     pub use crate::codegen::*;
     pub use crate::error::*;
     pub use crate::parser::*;
     pub use crate::syntax::*;
-
+    pub use crate::attr::*;
     pub const ZERO: crate::Zero = crate::Zero;
 }
 

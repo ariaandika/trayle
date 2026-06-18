@@ -11,7 +11,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         .map(|e| e.stream())
         .unwrap_or_default();
 
-    let meta = Metadata::new(attrs)?;
+    let meta = Metadata::new(&name, attrs)?;
     let lf_ph = if lf.lfs.is_empty() {
         token_stream!()
     } else {
@@ -58,29 +58,17 @@ struct Metadata {
 }
 
 impl Metadata {
-    fn new(attrs: Attributes) -> Result<Self, Error> {
-        let mut opkind = None;
-        for Attribute { ident, meta, .. } in attrs.attrs {
-            let Ok(seq) = meta.try_seq() else {
-                continue;
-            };
-            let mut body = seq.body_parser();
-            let Some(iface) = body.next_ident() else {
-                continue;
-            };
-            if opkind.is_none() {
-                let opkind_ = match ident.as_str() {
-                    "request" => Ident::new("RequestOp", ident.span()),
-                    "event" => Ident::new("EventOp", ident.span()),
-                    _ => continue,
-                };
-                opkind = Some((opkind_, iface));
-            }
-        }
-        let Some((opkind, iface)) = opkind else {
-            return Err(Error::new(
-                "`request` or `event` attribute with interface name is required",
+    fn new(name: &Ident, attrs: Attributes) -> Result<Self, Error> {
+        let Some((attr_id, iface)) = attrs.find_seq_with::<Ident, _>(|e|matches!(e, "request"|"event"))? else {
+            return Err(Error::spanned(
+                "`request` or `event` attribute is required",
+                name.span()
             ));
+        };
+        let opkind = match attr_id.as_str() {
+            "request" => Ident::new("RequestOp", Span::call_site()),
+            "event" => Ident::new("EventOp", Span::call_site()),
+            _ => unreachable!(),
         };
         Ok(Self {
             opkind,
@@ -133,7 +121,7 @@ impl GenConstructor {
             return None.into_iter().flatten();
         }
         let mname = to_snake(name.as_str());
-        if super::KEYWORDS.contains(&mname.as_str()) {
+        if KEYWORDS.contains(&mname.as_str()) {
             return None.into_iter().flatten();
         }
         let mname = Ident::new(&mname, Span::call_site());

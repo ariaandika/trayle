@@ -1,9 +1,9 @@
 use crate::tree::*;
+use crate::error::*;
 
 use Delimiter as Delim;
 use TokenTree as Tree;
 
-use crate::Error;
 
 macro_rules! errfmt {
     ($me:ident, $($tt:tt)*) => {
