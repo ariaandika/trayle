@@ -53,32 +53,42 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 // ===== impl =====
 
 struct Metadata {
-    opkind: Ident,
     iface: Ident,
+    is_request: bool,
+    is_destructor: bool,
 }
 
 impl Metadata {
     fn new(name: &Ident, attrs: Attributes) -> Result<Self, Error> {
-        let Some((attr_id, iface)) = attrs.find_seq_with::<Ident, _>(|e|matches!(e, "request"|"event"))? else {
+        let Some((attr_id, iface)) = attrs.find_seq_with(|e| matches!(e, "request" | "event"))?
+        else {
             return Err(Error::spanned(
                 "`request` or `event` attribute is required",
-                name.span()
+                name.span(),
             ));
         };
-        let opkind = match attr_id.as_str() {
-            "request" => Ident::new("RequestOp", Span::call_site()),
-            "event" => Ident::new("EventOp", Span::call_site()),
-            _ => unreachable!(),
-        };
+        let is_request = matches!(attr_id.as_str(), "request");
+        let is_destructor = attrs.contains("destructor");
         Ok(Self {
-            opkind,
             iface,
+            is_request,
+            is_destructor,
         })
     }
 
     fn generate(&self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
-        let Self { opkind, iface } = self;
+        let Self { is_request, iface, .. } = self;
+        let opkind = Ident::new(
+            if *is_request { "RequestOp" } else { "EventOp" },
+            Span::call_site(),
+        );
         let wl_name = Literal::string(&to_snake(name.as_str()));
+        let is_request = Bool(*is_request);
+        let destructor = if self.is_destructor {
+            token_stream!(const IS_DESTRUCTOR: bool = #TRUE;)
+        } else {
+            token_stream!()
+        };
         generate! {
             impl AsInterface for #name @lf_ph {
                 #[inline]
@@ -93,6 +103,11 @@ impl Metadata {
                 const OPCODE: Self::OpCode = #opkind::#name;
 
                 const OPNAME: &'static str = #wl_name;
+            }
+
+            impl Operation for #name @lf_ph {
+                const IS_REQUEST: bool = #is_request;
+                @destructor
             }
         }
     }

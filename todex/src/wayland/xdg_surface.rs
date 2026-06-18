@@ -19,6 +19,7 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(XdgSurface)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(Message, Debug)]

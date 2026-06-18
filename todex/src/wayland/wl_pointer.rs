@@ -23,6 +23,7 @@ pub struct SetCursor {
 
 #[derive(Message, Debug)]
 #[request(WlPointer)]
+#[destructor]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]

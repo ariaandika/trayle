@@ -119,6 +119,10 @@ pub struct Attributes {
 }
 
 impl Attributes {
+    pub fn contains(&self, name: &str) -> bool {
+        self.attrs.iter().any(|e|e.ident.as_str() == name)
+    }
+
     pub fn find_seq_with<T: Parse, F: Fn(&str) -> bool>(&self, f: F) -> Result<Option<(Ident, T)>, Error> {
         for attr in &self.attrs {
             if !f(attr.ident.as_str()) {

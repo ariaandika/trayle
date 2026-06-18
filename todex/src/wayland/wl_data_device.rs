@@ -33,6 +33,7 @@ pub struct SetSelection {
 
 #[derive(Message, Debug)]
 #[request(WlDataDevice)]
+#[destructor]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]

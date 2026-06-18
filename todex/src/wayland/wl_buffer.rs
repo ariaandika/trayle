@@ -12,6 +12,7 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(WlBuffer)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(OpCode, Debug, Clone, Copy)]

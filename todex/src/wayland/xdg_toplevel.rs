@@ -27,6 +27,11 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(XdgToplevel)]
+#[destructor]
+pub struct Destroy;
+
+#[derive(Message, Debug)]
+#[request(XdgToplevel)]
 pub struct SetParent {
     pub parent: Option<Object<XdgToplevel>>,
 }

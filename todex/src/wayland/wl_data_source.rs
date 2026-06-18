@@ -21,6 +21,7 @@ pub struct Offer<'a> {
 
 #[derive(Message, Debug)]
 #[request(WlDataSource)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(Message, Debug)]

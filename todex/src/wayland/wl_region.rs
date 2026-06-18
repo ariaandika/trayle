@@ -14,6 +14,7 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(WlRegion)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(Message, Debug)]

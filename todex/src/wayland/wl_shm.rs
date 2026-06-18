@@ -23,6 +23,7 @@ pub struct CreatePool {
 
 #[derive(Message, Debug)]
 #[request(WlShm)]
+#[destructor]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]

@@ -28,4 +28,5 @@ pub struct CreateRegion {
 
 #[derive(Message, Debug)]
 #[request(WlCompositor)]
+#[destructor]
 pub struct Release;

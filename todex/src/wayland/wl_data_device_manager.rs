@@ -30,6 +30,7 @@ pub struct GetDataDevice {
 
 #[derive(Message, Debug)]
 #[request(WlDataDeviceManager)]
+#[destructor]
 pub struct Release;
 
 #[derive(Debug, Clone, Copy)]

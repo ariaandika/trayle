@@ -36,6 +36,7 @@ pub struct GetTouch {
 
 #[derive(Message, Debug)]
 #[request(WlSeat)]
+#[destructor]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]

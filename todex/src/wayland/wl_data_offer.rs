@@ -32,6 +32,7 @@ pub struct Receive<'a> {
 
 #[derive(Message, Debug)]
 #[request(WlDataOffer)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(Message, Debug)]

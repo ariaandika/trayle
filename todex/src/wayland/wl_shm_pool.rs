@@ -27,6 +27,7 @@ pub struct CreateBuffer {
 
 #[derive(Message, Debug)]
 #[request(WlShmPool)]
+#[destructor]
 pub struct Destroy;
 
 #[derive(Message, Debug)]

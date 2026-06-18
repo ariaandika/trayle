@@ -1,3 +1,4 @@
+use proc_macro::Span;
 use tree::{TokenStream, p};
 use error::Error;
 use parser::Parser;
@@ -15,7 +16,7 @@ mod attr;
 // ===== implementations =====
 
 mod prelude {
-    pub(crate) use super::{KEYWORDS, to_camel, to_snake};
+    pub(crate) use super::{Bool, KEYWORDS, to_camel, to_snake};
     pub use crate::tree::*;
     pub use crate::codegen::*;
     pub use crate::error::*;
@@ -23,6 +24,7 @@ mod prelude {
     pub use crate::syntax::*;
     pub use crate::attr::*;
     pub const ZERO: crate::Zero = crate::Zero;
+    pub const TRUE: crate::Bool = crate::Bool(true);
 }
 
 mod interface;
@@ -46,9 +48,14 @@ pub fn opcode(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, opcode::process)
 }
 
-/// Implement `Decode`, `Encode`, `AsInterface`, and add constructor of the message in the interface
-/// object.
-#[proc_macro_derive(Message, attributes(request, event, fd))]
+/// Implement `Decode`, `Encode`, `AsInterface`, `Operator` and add constructor of the message in
+/// the interface object.
+///
+/// Attribute `#[request(..)]` or `#[event(..)]` is required, with interface struct as the input.
+///
+/// Add `#[destructor]` to mark operation as `type=destructor`, it will set
+/// `Operator::IS_DESTRUCTOR`  to `true`.
+#[proc_macro_derive(Message, attributes(request, event, fd, destructor))]
 pub fn message(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, message::process)
 }
@@ -166,5 +173,17 @@ struct Zero;
 impl From<Zero> for tree::TokenTree {
     fn from(_: Zero) -> Self {
         tree::TokenTree::Literal(tree::Literal::u8_unsuffixed(0))
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Bool(bool);
+
+impl From<Bool> for tree::TokenTree {
+    fn from(ok: Bool) -> Self {
+        tree::TokenTree::Ident(tree::Ident::new(
+            if ok.0 { "true" } else { "false" },
+            Span::call_site(),
+        ))
     }
 }

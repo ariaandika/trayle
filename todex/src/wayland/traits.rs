@@ -35,13 +35,6 @@ pub trait AsOpCode {
     const OPNAME: &str;
 }
 
-// ===== object =====
-
-/// Type that represent a wayland object.
-pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
-
-impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
-
 // ===== enum =====
 
 /// Type that represent a wayland enum.
@@ -53,4 +46,21 @@ pub trait WlEnum: Sized {
 
     /// Returns `u32` representation of the enum.
     fn to_u32(self) -> u32;
+}
+
+// ===== object =====
+
+/// Type that represent a wayland object.
+pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
+
+impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
+
+// ===== operation =====
+
+pub trait Operation: AsInterface + AsOpCode {
+    const IS_REQUEST: bool;
+
+    const IS_EVENT: bool = !Self::IS_REQUEST;
+
+    const IS_DESTRUCTOR: bool = false;
 }

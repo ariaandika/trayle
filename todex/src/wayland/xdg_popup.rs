@@ -16,6 +16,11 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(XdgPopup)]
+#[destructor]
+pub struct Destroy;
+
+#[derive(Message, Debug)]
+#[request(XdgPopup)]
 pub struct Grab {
     pub seat: Object<WlSeat>,
     pub serial: u32,

@@ -13,6 +13,7 @@ pub enum RequestOp {
 
 #[derive(Message, Debug)]
 #[request(WlKeyboard)]
+#[destructor]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
