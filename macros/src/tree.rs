@@ -4,22 +4,9 @@
 //! These types wrap them and give common functionality and if needed, cache it locally.
 
 use std::cell::OnceCell;
-use proc_macro as p;
 
+pub use proc_macro as p;
 pub use proc_macro::{Span, Delimiter, Spacing};
-
-pub trait TokenResult {
-    fn into_token_stream(self) -> p::TokenStream;
-}
-
-impl TokenResult for Result<TokenStream, crate::Error> {
-    fn into_token_stream(self) -> p::TokenStream {
-        match self {
-            Ok(ok) => ok.into(),
-            Err(err) => TokenStream::from(err).into(),
-        }
-    }
-}
 
 // ===== TokenStream =====
 

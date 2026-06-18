@@ -15,9 +15,7 @@ macro_rules! generate {
 macro_rules! impl_generate {
 
     // arbitrary input
-    (#$i:ident) => {
-        IntoIterator::into_iter(Some(TokenTree::from($i.clone())))
-    };
+    (#$i:ident) => {<_>::into_iter(Some(TokenTree::from($i.clone())))};
     (#$i:ident $($tt:tt)*) => {
         IntoIterator::into_iter(Some(TokenTree::from($i.clone())))
             .chain(crate::codegen::impl_generate!($($tt)*))
@@ -126,22 +124,21 @@ pub(crate) use {token_stream, gentoken, impl_generate, generate};
 
 // ===== ToTokens =====
 
-#[allow(unused)] // temp
 pub trait ToTokens {
     fn to_tokens(&self, tokens: &mut TokenStream);
 
     fn to_token_stream(&self) -> TokenStream {
-        let mut stream = TokenStream::new();
-        self.to_tokens(&mut stream);
-        stream
+        let mut tokens = TokenStream::new();
+        self.to_tokens(&mut tokens);
+        tokens
     }
 
-    // fn into_token_stream(self) -> TokenStream
-    // where
-    //     Self: Sized,
-    // {
-    //     self.to_token_stream()
-    // }
+    fn into_token_stream(self) -> TokenStream
+    where
+        Self: Sized,
+    {
+        self.to_token_stream()
+    }
 }
 
 impl<T: ToTokens> ToTokens for Option<T> {
@@ -150,11 +147,44 @@ impl<T: ToTokens> ToTokens for Option<T> {
             me.to_tokens(tokens);
         }
     }
+
+    fn into_token_stream(self) -> TokenStream
+    where
+        Self: Sized,
+    {
+        self.map(<_>::into_token_stream).unwrap_or_default()
+    }
+}
+
+impl<T: ToTokens, E: ToTokens> ToTokens for Result<T, E> {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        match self {
+            Ok(ok) => ok.to_tokens(tokens),
+            Err(err) => err.to_tokens(tokens),
+        }
+    }
+
+    fn into_token_stream(self) -> TokenStream
+    where
+        Self: Sized,
+    {
+        match self {
+            Ok(ok) => ok.into_token_stream(),
+            Err(err) => err.into_token_stream(),
+        }
+    }
 }
 
 impl ToTokens for TokenStream {
     fn to_tokens(&self, tokens: &mut TokenStream) {
         tokens.extend(self.clone());
+    }
+
+    fn into_token_stream(self) -> TokenStream
+    where
+        Self: Sized,
+    {
+        self
     }
 }
 
@@ -168,3 +198,32 @@ macro_rules! impl_single {
     )*};
 }
 impl_single!(Ident, Punct, Group, Literal, TokenTree);
+macro_rules! impl_int {
+    ($($me:ident = $fn:ident),* $(,)?) => {$(
+        impl ToTokens for $me {
+            fn to_tokens(&self, tokens: &mut TokenStream) {
+                tokens.push(Literal::from(p::Literal::$fn(*self)));
+            }
+        }
+    )*};
+}
+impl_int! {
+    u8 = u8_suffixed,
+    u16 = u16_suffixed,
+    u32 = u32_suffixed,
+    u64 = u64_suffixed,
+    usize = usize_suffixed,
+}
+
+impl ToTokens for bool {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        let ident = if *self { "true" } else { "false" };
+        tokens.push(Ident::new(ident, Span::call_site()));
+    }
+}
+
+impl ToTokens for str {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.push(Literal::string(self));
+    }
+}

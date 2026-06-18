@@ -1,4 +1,5 @@
-use crate::prelude::*;
+use crate::tree::*;
+use crate::codegen::*;
 
 // ===== Error =====
 
@@ -28,18 +29,30 @@ impl Error {
         msg.insert_str(0, cx);
         Self { msg, span }
     }
+
+    fn generate(&self) -> impl Iterator<Item = TokenTree> {
+        [
+            Ident::new("compile_error", self.span).into(),
+            Punct::new('!', Spacing::Alone).into(),
+            Group::new(
+                Delimiter::Parenthesis,
+                TokenTree::Literal(Literal::string(&self.msg)).into_token_stream(),
+            )
+            .into(),
+            Punct::new(';', Spacing::Alone).into(),
+        ]
+        .into_iter()
+    }
 }
 
 impl From<Error> for TokenStream {
     fn from(value: Error) -> Self {
-        <_>::from_iter([
-            TokenTree::Ident(Ident::new("compile_error", value.span)),
-            Punct::new('!', Spacing::Alone).into(),
-            Group::new(
-                Delimiter::Parenthesis,
-                TokenStream::from_iter([TokenTree::Literal(Literal::string(&value.msg))]),
-            ).into(),
-            Punct::new(';', Spacing::Alone).into(),
-        ])
+        value.generate().collect()
+    }
+}
+
+impl ToTokens for crate::Error {
+    fn to_tokens(&self, tokens: &mut TokenStream) {
+        tokens.extend(self.generate());
     }
 }

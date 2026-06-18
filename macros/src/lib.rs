@@ -36,7 +36,7 @@ macro_rules! define {
     ) => {
         $(#[$meta])*
         $vis $f $name(tokens: TokenStream) -> TokenStream {
-            prelude::TokenResult::into_token_stream($process(Parser::new(tokens.into())))
+            codegen::ToTokens::into_token_stream($process(Parser::new(tokens.into()))).into()
         }
     };
 }
