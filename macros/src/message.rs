@@ -61,7 +61,10 @@ impl Metadata {
     fn new(attrs: Attributes) -> Result<Self, Error> {
         let mut opkind = None;
         for Attribute { ident, meta, .. } in attrs.attrs {
-            let mut body = meta.try_seq()?.body_parser();
+            let Ok(seq) = meta.try_seq() else {
+                continue;
+            };
+            let mut body = seq.body_parser();
             let Some(iface) = body.next_ident() else {
                 continue;
             };
