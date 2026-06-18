@@ -11,7 +11,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         .map(|e| e.stream())
         .unwrap_or_default();
 
-    let (opkind, iface) = metadata(attrs)?;
+    let meta = Metadata::new(attrs)?;
     let lf_ph = if lf.lfs.is_empty() {
         token_stream!()
     } else {
@@ -32,10 +32,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         let is_fd = attrs
             .attrs
             .into_iter()
-            .any(|e| match e.tokens.into_iter().next() {
-                Some(TokenTree::Ident(id)) => id.as_str() == "fd",
-                _ => false,
-            });
+            .any(|e| e.ident.as_str() == "fd");
         constructor.add_field(&ident, ty);
         decode.add_field(is_fd, encodable, &ident);
         encode.add_field(is_fd, encodable, &ident);
@@ -44,8 +41,9 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         len += 1;
     }
 
-    Ok(gen_metadata(&name, &lf_ph, &iface, &opkind)
-        .chain(constructor.generate(len, &name, &lf, &iface))
+    Ok(meta
+        .generate(&name, &lf_ph)
+        .chain(constructor.generate(len, &name, &lf, &meta.iface))
         .chain(decode.generate(len, encodable, &name, &lf, &lf_ph))
         .chain(encode.generate(&name, &lf_ph))
         .chain(display.generate(&name, &lf_ph))
@@ -54,47 +52,57 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
 // ===== impl =====
 
-fn metadata(attrs: Attributes) -> Result<(Ident, Ident), Error> {
-    let kind_attr = attrs.attrs_parser().find_map(|mut parser| {
-        let name = parser.next_ident()?;
-        let opkind = match name.as_str() {
-            "request" => Ident::new("RequestOp", name.span()),
-            "event" => Ident::new("EventOp", name.span()),
-            _ => return None,
-        };
-        let content = parser.next_group_of(Delimiter::Parenthesis)?;
-        let iface = content.body_parser().next_ident()?;
-        Some((opkind, iface))
-    });
-    match kind_attr {
-        Some(ok) => Ok(ok),
-        None => Err(Error::new(
-            "`request` or `event` attribute with interface name is required",
-        )),
-    }
+struct Metadata {
+    opkind: Ident,
+    iface: Ident,
 }
 
-fn gen_metadata(
-    name: &Ident,
-    lf_ph: &TokenStream,
-    iface: &Ident,
-    opkind: &Ident,
-) -> impl Iterator<Item = TokenTree> {
-    let wl_name = Literal::string(&to_snake(name.as_str()));
-    generate! {
-        impl AsInterface for #name @lf_ph {
-            #[inline]
-            fn interface(&self) -> Interface {
-                Interface::#iface
+impl Metadata {
+    fn new(attrs: Attributes) -> Result<Self, Error> {
+        let mut opkind = None;
+        for Attribute { ident, meta, .. } in attrs.attrs {
+            let mut body = meta.try_seq()?.body_parser();
+            let Some(iface) = body.next_ident() else {
+                continue;
+            };
+            if opkind.is_none() {
+                let opkind_ = match ident.as_str() {
+                    "request" => Ident::new("RequestOp", ident.span()),
+                    "event" => Ident::new("EventOp", ident.span()),
+                    _ => continue,
+                };
+                opkind = Some((opkind_, iface));
             }
         }
+        let Some((opkind, iface)) = opkind else {
+            return Err(Error::new(
+                "`request` or `event` attribute with interface name is required",
+            ));
+        };
+        Ok(Self {
+            opkind,
+            iface,
+        })
+    }
 
-        impl AsOpCode for #name @lf_ph {
-            type OpCode = #opkind;
+    fn generate(&self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
+        let Self { opkind, iface } = self;
+        let wl_name = Literal::string(&to_snake(name.as_str()));
+        generate! {
+            impl AsInterface for #name @lf_ph {
+                #[inline]
+                fn interface(&self) -> Interface {
+                    Interface::#iface
+                }
+            }
 
-            const OPCODE: Self::OpCode = #opkind::#name;
+            impl AsOpCode for #name @lf_ph {
+                type OpCode = #opkind;
 
-            const OPNAME: &'static str = #wl_name;
+                const OPCODE: Self::OpCode = #opkind::#name;
+
+                const OPNAME: &'static str = #wl_name;
+            }
         }
     }
 }

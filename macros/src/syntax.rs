@@ -97,20 +97,6 @@ impl Parse for Lifetimes {
     }
 }
 
-// impl ToTokens for Lifetimes {
-//     fn to_tokens(&self, tokens: &mut TokenStream) {
-//         if self.lfs.is_empty() {
-//             return;
-//         }
-//         tokens.push(self.delim.0.clone());
-//         for lf in &self.lfs {
-//             lf.to_tokens(tokens);
-//             Punct::new(',', Spacing::Alone).to_tokens(tokens);
-//         }
-//         tokens.push(self.delim.1.clone());
-//     }
-// }
-
 mod abomination {
     use super::*;
     use std::array::IntoIter as AI;
@@ -151,39 +137,101 @@ mod abomination {
 
 // ===== Attribute =====
 
+/// Outer attribute.
 #[derive(Clone)]
 pub struct Attribute {
     pub hash: Punct,
+    pub style: Option<Punct>,
     pub delim: Delimiter,
-    pub tokens: TokenStream,
+    /// Actually, this can be `unsafe` or path
+    pub ident: Ident,
+    pub meta: Meta,
 }
 
 impl Parse for Attribute {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let hash = parser.punct_of('#')?;
+        let style = parser.next_punct_of('!');
         let group = parser.group_of(Delimiter::Bracket)?;
-        Ok(Self {
-            hash,
-            delim: group.delimiter(),
-            tokens: group.stream(),
-        })
-    }
-}
-
-impl ToTokens for Attribute {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        self.hash.to_tokens(tokens);
-        Group::new(self.delim, self.tokens.clone()).to_tokens(tokens);
+        let delim = group.delimiter();
+        let mut input = Parser::new(group.stream());
+        let ident = input.parse()?;
+        let meta = input.parse()?;
+        Ok(Self { hash, style, delim, ident, meta })
     }
 }
 
 impl IntoIterator for Attribute {
     type Item = TokenTree;
 
-    type IntoIter = std::array::IntoIter<TokenTree, 2>;
+    type IntoIter = IntoIter;
 
     fn into_iter(self) -> Self::IntoIter {
-        [TokenTree::from(self.hash), Group::new(self.delim, self.tokens).into()].into_iter()
+        let mut tokens = TokenStream::new();
+        tokens.push(self.hash);
+        if let Some(punct) = self.style {
+            tokens.push(punct);
+        }
+        let mut input = TokenStream::new();
+        input.push(self.ident);
+        tokens.push(Group::new(
+            self.delim,
+            match self.meta {
+                Meta::None => input,
+                Meta::Seq(g) => {
+                    input.push(g);
+                    input
+                }
+                Meta::Expr(punct, tokens) => {
+                    input.push(punct);
+                    input.extend(tokens);
+                    input
+                },
+            },
+        ));
+        tokens.into_iter()
+    }
+}
+
+// ===== Meta =====
+
+#[derive(Clone)]
+pub enum Meta {
+    None,
+    Seq(Group),
+    Expr(Punct, TokenStream),
+}
+
+impl Meta {
+    pub fn try_none(self) -> Result<(), Error> {
+        const MSG: &str = "unexpected token";
+        match self {
+            Self::None => Ok(()),
+            Self::Seq(g) => Err(Error::spanned(MSG, g.span())),
+            Self::Expr(p, _) => Err(Error::spanned(MSG, p.span())),
+        }
+    }
+
+    pub fn try_seq(self) -> Result<Group, Error> {
+        const MSG: &str = "expected sequence";
+        match self {
+            Self::None => Err(Error::spanned(MSG, Span::call_site())),
+            Self::Seq(g) => Ok(g),
+            Self::Expr(p, _) => Err(Error::spanned(MSG, p.span())),
+        }
+    }
+}
+
+impl Parse for Meta {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        let Some(tree) = parser.next() else {
+            return Ok(Self::None);
+        };
+        match tree {
+            TokenTree::Group(g) if g.delimiter() == Delimiter::Parenthesis => Ok(Self::Seq(g)),
+            TokenTree::Punct(p) if p.as_char() == '=' => Ok(Self::Expr(p, parser.drain())),
+            tree => Err(Error::spanned("unexpected token, expected `(..)`, `=` or nothing", tree.span())),
+        }
     }
 }
 
@@ -194,12 +242,6 @@ pub struct Attributes {
     pub attrs: Vec<Attribute>,
 }
 
-impl Attributes {
-    pub fn attrs_parser(self) -> impl Iterator<Item = Parser> {
-        self.attrs.into_iter().map(|e| Parser::new(e.tokens))
-    }
-}
-
 impl Parse for Attributes {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let mut attrs = vec![];
@@ -207,14 +249,6 @@ impl Parse for Attributes {
             attrs.push(parser.parse()?);
         }
         Ok(Self { attrs })
-    }
-}
-
-impl ToTokens for Attributes {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        for attr in &self.attrs {
-            attr.to_tokens(tokens);
-        }
     }
 }
 

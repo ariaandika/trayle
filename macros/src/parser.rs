@@ -86,6 +86,10 @@ impl Parser {
         let _ = self.next_punct_of(sep);
         Ok(Some(token))
     }
+
+    pub fn drain(&mut self) -> TokenStream {
+        std::iter::from_fn(||self.next()).collect()
+    }
 }
 
 // TokenTree

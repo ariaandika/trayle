@@ -32,7 +32,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         len += 1;
 
         let is_todo = attr
-            .and_then(|attr| Parser::new(attr.tokens).next_ident_of("todo"))
+            .filter(|attr| attr.ident.as_str() == "todo")
             .is_some();
         let mod_kw = parser.ident_of("mod")?;
         let name = parser.ident()?;
