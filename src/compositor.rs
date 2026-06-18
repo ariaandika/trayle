@@ -1,6 +1,6 @@
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, Operation, WlError};
 use todex::wayland::{Frame, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
 
@@ -21,6 +21,8 @@ mod wl_data_source;
 mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
+
+// TODO: global object trait, for version checking
 
 trait RequestHandler<Request>: Sized {
     fn handle(&mut self, request: Request, client: &mut ClientMut) -> Result<(), WlError>;
@@ -47,9 +49,15 @@ impl Compositor {
         Frame::has_frame(read_buf)
     }
 
-    pub fn route(&mut self, read_buf: &mut Bytes, read_fd: &mut Cmsg, client: &mut ClientMut) -> Result<(), ()> {
+    pub fn route(
+        &mut self,
+        read_buf: &mut Bytes,
+        read_fd: &mut Cmsg,
+        client: &mut ClientMut,
+    ) -> Result<(), ()> {
         match route(self, read_buf, read_fd, client) {
-            Ok(()) => Ok(()),
+            Ok(true) => Ok(()),
+            Ok(false) => Err(()),
             Err(err) => {
                 log::malformed_message(err, client);
                 client.send(GlobalError::new(
@@ -68,7 +76,7 @@ fn route(
     read_buf: &mut Bytes,
     read_fd: &mut Cmsg,
     client: &mut ClientMut,
-) -> Result<(), WlError> {
+) -> Result<bool, WlError> {
     use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf, read_fd)?;
@@ -78,25 +86,37 @@ fn route(
         (@OP $iface:ident { $($req:ident $call:ident),* $(, $(.. $fb:ident)? $(,)? )? }) => {
             match <_>::from_op(op).ok_or(DecodeError::UnknownOpCode)? {
                 $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $call),)*
-                $($(op => compositor.$fb(interface, op, client),)?)?
+                $($(op => return Err(compositor.$fb(interface, op, client)),)?)?
             }
         };
         (@CALL $iface:ident $req:ident $call:ident) => {
-            compositor.$call(
+            match compositor.$call(
                 log::recv_message($iface::$req::decode_with(frame)?, client),
                 client,
-            )
+            ) {
+                Ok(_) => {
+                    if <$iface::$req as Operation>::IS_DESTRUCTOR {
+                        client.delete_id(id);
+                    }
+                    Ok(true)
+                }
+                Err(err) => {
+                    log::handler_error(interface, op, err, client);
+                    client.send(GlobalError::new(id, err.code(), err.message()));
+                    Ok(false)
+                }
+            }
         };
         ($($iface:ident {$($tt:tt)*})*) => {
             match interface {
                 $(Interface::$iface => handle_me!(@OP $iface {$($tt)*}),)*
-                iface => compositor.todo_interface(iface, op, client),
+                iface => return Err(compositor.todo_interface(iface, op, client)),
             }
         };
     }
 
     // one can use goto definition in the method call
-    let result = handle_me! {
+    handle_me! {
         // ===== core =====
         WlDisplay {
             Sync handle,
@@ -158,14 +178,7 @@ fn route(
             SetAppId handle,
             .. todo_interface,
         }
-    };
-
-    if let Err(err) = result {
-        log::handler_error(interface, op, err, client);
-        client.send(GlobalError::new(id, err.code(), err.message()));
     }
-
-    Ok(())
 }
 
 impl Compositor {
@@ -174,16 +187,16 @@ impl Compositor {
         interface: Interface,
         op: Op,
         client: &mut ClientMut,
-    ) -> Result<(), WlError> {
+    ) -> WlError {
         log::todo_interface(interface, op, client);
-        Err(WlError::NotYetImplemented)
+        WlError::NotYetImplemented
     }
 
     pub fn todo<R: AsOpCode + AsInterface>(
         &mut self,
         req: R,
         client: &mut ClientMut,
-    ) -> Result<(), WlError> {
+    ) -> Result<bool, WlError> {
         log::todo_operation(req, client);
         Err(WlError::NotYetImplemented)
     }

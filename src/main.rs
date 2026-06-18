@@ -24,9 +24,6 @@ mod service;
 mod log;
 mod error;
 
-// TODO: destructor trait
-// TODO: global object trait, for version checking
-
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const MSB: u64 = i64::MIN as u64;
 

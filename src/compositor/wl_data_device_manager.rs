@@ -21,8 +21,6 @@ impl RequestHandler<GetDataDevice> for Compositor {
 impl RequestHandler<Release> for Compositor {
     fn handle(&mut self, _: Release, _: &mut ClientMut) -> Result<(), WlError> {
         self.seat.clear_data_device();
-        // TODO: blocker: destructor trait
-        // client.delete_id(object);
         Ok(())
     }
 }
