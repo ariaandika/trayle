@@ -1,22 +1,25 @@
-use proc_macro::TokenStream;
+use tree::{TokenStream, p};
 use error::Error;
 use parser::Parser;
 
 mod tree;
-mod parser;
 mod codegen;
-mod syntax;
 mod error;
+mod parser;
+
+// ===== syntax =====
+
+mod syntax;
 
 // ===== implementations =====
 
 mod prelude {
     pub(crate) use super::{to_camel, to_snake};
     pub use crate::tree::*;
-    pub use crate::parser::*;
     pub use crate::codegen::*;
+    pub use crate::error::*;
+    pub use crate::parser::*;
     pub use crate::syntax::*;
-    pub use crate::error::Error;
 
     pub const ZERO: crate::Zero = crate::Zero;
 }
@@ -28,98 +31,91 @@ mod wl_enum;
 mod bitfield;
 mod protocol;
 
-// ===== exports =====
+// ===== definitions =====
 
-macro_rules! define {
-    ($(#[$meta:meta])*
-     $vis:vis $f:ident $name:ident() { $process:path }
-    ) => {
-        $(#[$meta])*
-        $vis $f $name(tokens: TokenStream) -> TokenStream {
-            codegen::ToTokens::into_token_stream($process(Parser::new(tokens.into()))).into()
-        }
-    };
+/// Implement `FromObjectId`, `AsObjectId` and `AsInterface`.
+#[proc_macro_derive(Interface)]
+pub fn interface(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, interface::process)
 }
 
-define! {
-    /// Implement `FromObjectId`, `AsObjectId` and `AsInterface`.
-    #[proc_macro_derive(Interface)]
-    pub fn interface() { interface::process }
+/// Implement `OpCode` and `Display`.
+#[proc_macro_derive(OpCode)]
+pub fn opcode(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, opcode::process)
 }
 
-define! {
-    /// Implement `OpCode` and `Display`.
-    #[proc_macro_derive(OpCode)]
-    pub fn opcode() { opcode::process }
+/// Implement `Decode`, `Encode`, `AsInterface`, and add constructor of the message in the interface
+/// object.
+#[proc_macro_derive(Message, attributes(request, event, fd))]
+pub fn message(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, message::process)
 }
 
-define! {
-    /// Implement `Decode`, `Encode`, `AsInterface`, and add constructor of the message in the
-    /// interface object.
-    #[proc_macro_derive(Message, attributes(request, event, fd))]
-    pub fn message() { message::process }
+/// Implement `WlEnum`, `fmt::Display`, `display::Display2`.
+///
+/// This also add name getter.
+#[proc_macro_derive(WlEnum)]
+pub fn wl_enum(tokens:p::TokenStream) -> p::TokenStream {
+    call(tokens, wl_enum::process)
 }
 
-define! {
-    /// Implement `WlEnum`, `fmt::Display`, `display::Display2`.
-    ///
-    /// This also add name getter.
-    #[proc_macro_derive(WlEnum)]
-    pub fn wl_enum() { wl_enum::process }
+/// Define an enum containing all implemented interfaces.
+///
+/// Define module that reexports all interface modules to upper camel case.
+///
+/// For interface that want to be added to the enum, but not yet implemented, add the `#[todo]`
+/// attribute.
+///
+/// The enum will also have a method that returns the snake cased wayland name.
+///
+/// ```ignore
+/// protocol! {
+///     /// Reexport interfaces as upper camel case.
+///     pub mod interfaces;
+///
+///     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+///     pub enum Interface;
+///
+///     pub mod wl_display;
+///     pub mod wl_registry;
+///
+///     // variant will be defined, but module will not be declared
+///     #[todo]
+///     pub mod wp_presentation;
+/// }
+///
+/// let wl_display = Interface::WlDisplay;
+/// assert_eq!(wl_display.name(), "wl_display");
+/// ```
+#[proc_macro]
+pub fn protocol(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, protocol::process)
 }
 
-define! {
-    /// Define an enum containing all implemented interfaces.
-    ///
-    /// Define module that reexports all interface modules to upper camel case.
-    ///
-    /// For interface that want to be added to the enum, but not yet implemented, add the `#[todo]`
-    /// attribute.
-    ///
-    /// The enum will also have a method that returns the snake cased wayland name.
-    ///
-    /// ```ignore
-    /// protocol! {
-    ///     /// Reexport interfaces as upper camel case.
-    ///     pub mod interfaces;
-    ///
-    ///     #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    ///     pub enum Interface;
-    ///
-    ///     pub mod wl_display;
-    ///     pub mod wl_registry;
-    ///
-    ///     // variant will be defined, but module will not be declared
-    ///     #[todo]
-    ///     pub mod wp_presentation;
-    /// }
-    ///
-    /// let wl_display = Interface::WlDisplay;
-    /// assert_eq!(wl_display.name(), "wl_display");
-    /// ```
-    #[proc_macro]
-    pub fn protocol() { protocol::process }
+/// Implement `WlEnum`, `Display`, `Bit{And, Or, Xor}` and define constant for each entries.
+///
+/// Target struct must be a single field struct of `u32`.
+///
+/// Currently, the `WlEnum` implementation ignore unknown bits.
+///
+/// ```ignore
+/// bitfield! {
+///     DndAction;
+///
+///     None = 0,
+///     Copy = 1,
+///     Move = 2,
+///     Ask = 4,
+/// }
+/// ```
+#[proc_macro]
+pub fn bitfield(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, bitfield::process)
 }
 
-define! {
-    /// Implement `WlEnum`, `Display`, `Bit{And, Or, Xor}` and define constant for each entries.
-    ///
-    /// Target struct must be a single field struct of `u32`.
-    ///
-    /// Currently, the `WlEnum` implementation ignore unknown bits.
-    ///
-    /// ```ignore
-    /// bitfield! {
-    ///     DndAction;
-    ///
-    ///     None = 0,
-    ///     Copy = 1,
-    ///     Move = 2,
-    ///     Ask = 4,
-    /// }
-    /// ```
-    #[proc_macro]
-    pub fn bitfield() { bitfield::process }
+fn call(tokens: p::TokenStream, f: fn(Parser) -> Result<TokenStream, Error>) -> p::TokenStream {
+    codegen::ToTokens::into_token_stream(f(Parser::new(tokens.into()))).into()
 }
 
 fn to_camel(string: &str) -> String {
