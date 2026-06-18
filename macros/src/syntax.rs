@@ -72,15 +72,14 @@ pub struct Lifetimes {
     pub lfs: Vec<Lifetime>,
 }
 
-impl Lifetimes {
-    pub fn parse_opt(parser: &mut Parser) -> Result<Option<Self>, Error> {
-        parser.is_punct_of('<').map(|()|parser.parse()).transpose()
-    }
-}
-
 impl Parse for Lifetimes {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        let d1 = parser.punct_of('<')?;
+        let Some(d1) = parser.next_punct_of('<') else {
+            return Ok(Self {
+                delim: (Punct::new('<', Spacing::Alone), Punct::new('>', Spacing::Alone)),
+                lfs: Vec::new(),
+            })
+        };
         let mut lfs = vec![];
         let d2 = loop {
             match parser.next_punct_of('>') {
@@ -98,30 +97,30 @@ impl Parse for Lifetimes {
     }
 }
 
-impl ToTokens for Lifetimes {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        if self.lfs.is_empty() {
-            return;
-        }
-        tokens.push(self.delim.0.clone());
-        for lf in &self.lfs {
-            lf.to_tokens(tokens);
-            Punct::new(',', Spacing::Alone).to_tokens(tokens);
-        }
-        tokens.push(self.delim.1.clone());
-    }
-}
+// impl ToTokens for Lifetimes {
+//     fn to_tokens(&self, tokens: &mut TokenStream) {
+//         if self.lfs.is_empty() {
+//             return;
+//         }
+//         tokens.push(self.delim.0.clone());
+//         for lf in &self.lfs {
+//             lf.to_tokens(tokens);
+//             Punct::new(',', Spacing::Alone).to_tokens(tokens);
+//         }
+//         tokens.push(self.delim.1.clone());
+//     }
+// }
 
 mod abomination {
     use super::*;
     use std::array::IntoIter as AI;
-    use std::iter::{Chain, FlatMap};
+    use std::iter::{Chain, FlatMap, Flatten};
     use std::option::IntoIter as OI;
     use std::vec::IntoIter as VI;
     impl IntoIterator for Lifetimes {
         type Item = TokenTree;
 
-        type IntoIter = Chain<
+        type IntoIter = Flatten<OI<Chain<
             Chain<
                 OI<TokenTree>,
                 FlatMap<
@@ -131,18 +130,21 @@ mod abomination {
                 >,
             >,
             OI<TokenTree>,
-        >;
+        >>>;
 
         fn into_iter(self) -> Self::IntoIter {
+            if self.lfs.is_empty() {
+                return None.into_iter().flatten();
+            }
             fn mapme(e: Lifetime) -> Chain<AI<TokenTree, 2>, OI<TokenTree>> {
                 e.into_iter()
                     .chain(Some(TokenTree::Punct(Punct::new(',', Spacing::Alone))))
             }
 
-            Some(TokenTree::Punct(self.delim.0))
+            Some(Some(TokenTree::Punct(self.delim.0))
                 .into_iter()
                 .chain(self.lfs.into_iter().flat_map(mapme as _))
-                .chain(Some(TokenTree::Punct(self.delim.1)))
+                .chain(Some(TokenTree::Punct(self.delim.1)))).into_iter().flatten()
         }
     }
 }
