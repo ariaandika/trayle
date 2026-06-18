@@ -68,10 +68,10 @@ impl Objects {
     /// This has the same effect of inserting the id and immediately remove it.
     #[inline]
     pub fn use_one<O: WlObject>(&mut self, object: &O) {
-        let Some(idx) = object.object_id().to_u32().checked_sub(2).map(|e|e as usize) else {
+        let Some(idx) = object.object_id().to_u32().checked_sub(2) else {
             return;
         };
-        self.slots.use_one(idx);
+        self.slots.use_one(idx as usize);
     }
 
     /// Performs an object lookup.

@@ -88,7 +88,7 @@ impl<T> Slots<T> {
         }
 
         if idx == self.len {
-            // SAFETY: `idx == len`, one after last element always uninitialized
+            // SAFETY: `idx == len`, one after last element always uninitialized, no drop required
             unsafe { self.ptr.add(idx).write(Some(value)) };
             self.len += 1;
         } else {
@@ -114,6 +114,8 @@ impl<T> Slots<T> {
             self.grow_one();
         }
         if idx == self.len {
+            // SAFETY: `idx == len`, one after last element always uninitialized, no drop required
+            unsafe { self.ptr.add(idx).write(None) };
             self.len += 1;
         }
     }
