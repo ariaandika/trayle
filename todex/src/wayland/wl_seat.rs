@@ -4,6 +4,7 @@ use crate::wayland::wl_pointer::WlPointer;
 use crate::wayland::wl_touch::WlTouch;
 
 #[derive(Interface, Debug)]
+#[global(10)]
 pub struct WlSeat {
     id: ObjectId,
 }

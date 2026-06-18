@@ -123,6 +123,19 @@ impl Attributes {
         self.attrs.iter().any(|e|e.ident.as_str() == name)
     }
 
+    pub fn find_seq<T: Parse>(&self, name: &str) -> Result<Option<(Ident, T)>, Error> {
+        for attr in &self.attrs {
+            if attr.ident.as_str() != name {
+                continue;
+            }
+            let Meta::Seq(seq) = &attr.meta else {
+                continue;
+            };
+            return Ok(Some((attr.ident.clone(), Parser::new(seq.stream()).parse()?)));
+        }
+        Ok(None)
+    }
+
     pub fn find_seq_with<T: Parse, F: Fn(&str) -> bool>(&self, f: F) -> Result<Option<(Ident, T)>, Error> {
         for attr in &self.attrs {
             if !f(attr.ident.as_str()) {

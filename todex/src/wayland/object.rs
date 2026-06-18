@@ -1,4 +1,5 @@
-use crate::wayland::{AsInterface, AsObjectId, FromObjectId, Interface, ObjectId, WlObject};
+use crate::wayland::{AsGlobal, AsInterface, AsObjectId, FromObjectId, WlObject};
+use crate::wayland::{Interface, ObjectId};
 
 /// A wayland object.
 ///
@@ -89,6 +90,27 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Object<T> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.object.fmt(f)
+    }
+}
+
+// ===== Global =====
+
+/// A runtime value global object.
+#[derive(Debug)]
+pub struct Global {
+    pub name: &'static str,
+    pub version: u32,
+    pub interface: Interface,
+}
+
+impl Global {
+    /// Create global from [`AsGlobal`] implementation.
+    pub const fn of<G: AsGlobal>() -> Self {
+        Self {
+            name: G::NAME,
+            version: G::VERSION,
+            interface: G::INTERFACE,
+        }
     }
 }
 

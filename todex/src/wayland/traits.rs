@@ -55,8 +55,22 @@ pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
 
 impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 
+// ===== global =====
+
+/// Type that is a wayland global object.
+pub trait AsGlobal {
+    const NAME: &str;
+
+    const VERSION: u32;
+
+    const INTERFACE: Interface;
+}
+
 // ===== operation =====
 
+/// Type that represent wayland operation.
+///
+/// Wayland operation is either a request or event.
 pub trait Operation: AsInterface + AsOpCode {
     const IS_REQUEST: bool;
 

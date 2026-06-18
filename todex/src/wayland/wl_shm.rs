@@ -2,6 +2,7 @@ use crate::wayland::prelude::*;
 use crate::wayland::wl_shm_pool::WlShmPool;
 
 #[derive(Interface, Debug)]
+#[global(2)]
 pub struct WlShm {
     id: ObjectId,
 }

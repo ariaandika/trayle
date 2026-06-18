@@ -3,6 +3,7 @@ use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::{PixelFormat, WlShm};
 use wayland::wl_compositor::CreateSurface;
+use wayland::Global;
 
 use crate::compositor::GLOBALS;
 use crate::compositor::prelude::*;
@@ -21,8 +22,8 @@ impl RequestHandler<GetRegistry> for Compositor {
     fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_registry = client.objects.create(request.registry)?;
 
-        for ((iface, version, _), i) in GLOBALS.iter().zip(0..) {
-            client.send(wl_registry.global(i, iface, *version));
+        for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
+            client.send(wl_registry.global(i, name, *version));
         }
 
         Ok(())
@@ -31,19 +32,19 @@ impl RequestHandler<GetRegistry> for Compositor {
 
 impl RequestHandler<Bind<'_>> for Compositor {
     fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
-        let Some((bind_name, version, iface)) = GLOBALS.get(bind.name as usize) else {
+        let Some(global) = GLOBALS.get(bind.name as usize) else {
             return Err(BindError::UnknownName.into());
         };
-        if bind.id_name != *bind_name {
+        if bind.id_name != global.name {
             return Err(BindError::MissmatchName.into());
         }
-        if bind.id_version > *version {
+        if bind.id_version > global.version {
             return Err(BindError::UnsupportedVersion.into());
         }
-        client.objects.insert_parts(bind.id, *iface, 0)?;
+        client.objects.insert_parts(bind.id, global.interface, bind.id_version as usize)?;
 
         // some interface has side-effect after binding
-        match iface {
+        match global.interface {
             Interface::WlSeat => {
                 let wl_seat = bind.create::<WlSeat>();
                 client.send(wl_seat.name(self.seat.name()));

@@ -1,7 +1,7 @@
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
 use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, Operation, WlError};
-use todex::wayland::{Frame, Interface, ObjectId};
+use todex::wayland::{Frame, Global, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
 
 use crate::error::FatalError;
@@ -22,19 +22,20 @@ mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
 
-// TODO: global object trait, for version checking
-
 trait RequestHandler<Request>: Sized {
     fn handle(&mut self, request: Request, client: &mut ClientMut) -> Result<(), WlError>;
 }
 
-static GLOBALS: [(&str, u32, Interface); 5] = [
-    ("wl_compositor", 7, Interface::WlCompositor),
-    ("wl_shm", 2, Interface::WlShm),
-    ("wl_data_device_manager", 4, Interface::WlDataDeviceManager),
-    ("wl_seat", 10, Interface::WlSeat),
-    ("xdg_wm_base", 7, Interface::XdgWmBase),
-];
+static GLOBALS: [Global; 5] = {
+    use wayland::interfaces::*;
+    [
+        Global::of::<WlCompositor::WlCompositor>(),
+        Global::of::<WlShm::WlShm>(),
+        Global::of::<WlDataDeviceManager::WlDataDeviceManager>(),
+        Global::of::<WlSeat::WlSeat>(),
+        Global::of::<XdgWmBase::XdgWmBase>(),
+    ]
+};
 
 pub struct Compositor {
     seat: Seat,

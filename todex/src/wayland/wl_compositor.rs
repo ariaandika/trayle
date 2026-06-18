@@ -3,6 +3,7 @@ use crate::wayland::wl_region::WlRegion;
 use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
+#[global(7)]
 pub struct WlCompositor {
     id: ObjectId,
 }

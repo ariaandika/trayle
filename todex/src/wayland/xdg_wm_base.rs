@@ -4,6 +4,7 @@ use crate::wayland::xdg_positioner::XdgPositioner;
 use crate::wayland::xdg_surface::XdgSurface;
 
 #[derive(Interface, Debug)]
+#[global(7)]
 pub struct XdgWmBase {
     id: ObjectId,
 }

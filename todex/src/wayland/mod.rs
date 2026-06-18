@@ -78,9 +78,9 @@
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use fixed::Fixed;
-pub use object::{Object, Any, ObjectError};
+pub use object::{Any, Global, Object, ObjectError};
 pub use error::WlError;
-pub use traits::{AsInterface, AsOpCode, OpCode, Operation, WlEnum, WlObject};
+pub use traits::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation, WlEnum, WlObject};
 pub use message::{Frame, MessageError};
 
 pub use decode::{Decode, DecodeError};
@@ -105,10 +105,10 @@ pub mod display;
 
 mod prelude {
     pub use super::{AsObjectId, FromObjectId};
-    pub use super::{AsInterface, AsOpCode, Decode, Encode, OpCode, Operation, WlEnum};
+    pub use super::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation, WlEnum};
     pub use super::{Fixed, Interface, NewId, Object, ObjectId};
-    pub use super::decode::{Decoder, DecodeError};
-    pub use super::encode::{Encodable, Sized2, Writer};
+    pub use super::decode::{Decode, Decoder, DecodeError};
+    pub use super::encode::{Encode, Encodable, Sized2, Writer};
     pub use super::display;
 
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};

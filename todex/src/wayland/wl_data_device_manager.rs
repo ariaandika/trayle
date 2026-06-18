@@ -4,6 +4,7 @@ use crate::wayland::wl_data_source::WlDataSource;
 use crate::wayland::wl_seat::WlSeat;
 
 #[derive(Interface, Debug)]
+#[global(4)]
 pub struct WlDataDeviceManager {
     id: ObjectId,
 }
