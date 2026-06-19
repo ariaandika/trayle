@@ -1,7 +1,7 @@
 use crate::wayland::prelude::*;
 
 #[derive(Interface, Debug)]
-#[data(BindVersion)]
+#[data(Version)]
 pub struct WlRegistry {
     id: ObjectId,
 }
@@ -16,7 +16,7 @@ pub enum RequestOp {
 pub struct Bind<'a> {
     pub name: u32,
     pub id_name: &'a str,
-    pub id_version: u32,
+    pub id_version: Version,
     pub id: ObjectId,
 }
 
@@ -46,49 +46,26 @@ impl<'a> Bind<'a> {
     /// Create object from current bind id.
     ///
     /// Note that this does not check for matching interface.
-    #[inline]
     pub fn create<O: FromObjectId>(self) -> O {
         O::from_object_id(self.id)
     }
-}
 
-// ===== Data =====
-
-#[derive(Debug, Clone, Copy)]
-#[repr(transparent)]
-pub struct BindVersion(std::num::NonZeroU32);
-
-impl ObjectData for BindVersion {
+    /// Create [`BindData`] from current bind request.
     #[inline]
-    fn from_raw(raw: usize) -> Self {
-        Self(
-            std::num::NonZeroU32::new(raw as u32).expect("internal error: raw object data mutated"),
-        )
-    }
-
-    #[inline]
-    fn to_raw(self) -> usize {
-        self.0.get() as usize
+    pub fn data(&self, interface: Interface) -> BindData {
+        BindData {
+            interface,
+            version: self.id_version,
+        }
     }
 }
 
-impl std::cmp::PartialEq<u32> for BindVersion {
-    fn eq(&self, other: &u32) -> bool {
-        self.0.get().eq(other)
-    }
-}
+// ===== BindData =====
 
-impl std::cmp::PartialOrd<u32> for BindVersion {
-    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
-        self.0.get().partial_cmp(other)
-    }
-}
-
-impl std::fmt::Display for BindVersion {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.0.fmt(f)
-    }
+#[derive(Debug)]
+pub struct BindData {
+    pub interface: Interface,
+    pub version: Version,
 }
 
 // ===== BindError =====

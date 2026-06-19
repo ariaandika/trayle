@@ -109,7 +109,7 @@ pub mod display;
 
 mod prelude {
     pub use super::{FromObjectId, AsObjectId, AsInterface, AsOpCode};
-    pub use super::{AsGlobal, AsObjectData, ObjectData, OpCode, Operation, WlEnum};
+    pub use super::{AsGlobal, AsObjectData, OpCode, Operation, WlEnum};
     pub use super::{Fixed, Interface, NewId, Object, ObjectId, Version};
     pub use super::decode::{Decode, Decoder, DecodeError};
     pub use super::encode::{Encode, Encodable, Sized2, Writer};

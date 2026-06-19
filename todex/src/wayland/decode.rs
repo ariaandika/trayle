@@ -1,4 +1,4 @@
-use crate::wayland::{Fixed, Frame, FromObjectId, NewId, Object, ObjectId, WlEnum};
+use crate::wayland::{Fixed, Frame, FromObjectId, NewId, Object, ObjectId, Version, WlEnum};
 
 use DecodeError as E;
 
@@ -66,6 +66,8 @@ pub enum DecodeError {
     UnknownOpCode,
     /// Missing fd.
     MissingFd,
+    /// Invalid version.
+    InvalidVersion,
 }
 
 impl DecodeError {
@@ -78,6 +80,7 @@ impl DecodeError {
             Self::UnknownEnumEntry => "unknown enum entry",
             Self::UnknownOpCode => "unknown op code",
             Self::MissingFd => "missing fd",
+            Self::InvalidVersion => "invalid version",
         }
     }
 }
@@ -132,6 +135,15 @@ impl Read<'_> for ObjectId {
         reader
             .read_ne_bytes()
             .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(E::ZeroId))
+    }
+}
+
+impl Read<'_> for Version {
+    #[inline]
+    fn decode(reader: &mut Reader) -> Result<Self, DecodeError> {
+        reader
+            .read_ne_bytes()
+            .and_then(|id| Version::new(u32::from_ne_bytes(id)).ok_or(E::InvalidVersion))
     }
 }
 

@@ -1,12 +1,10 @@
 use crate::wayland::prelude::*;
 use crate::wayland::wl_keyboard::WlKeyboard;
 use crate::wayland::wl_pointer::WlPointer;
-use crate::wayland::wl_registry::BindVersion;
 use crate::wayland::wl_touch::WlTouch;
 
 #[derive(Interface, Debug)]
 #[global(10)]
-#[data(BindVersion)]
 pub struct WlSeat {
     id: ObjectId,
 }

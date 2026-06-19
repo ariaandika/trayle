@@ -42,7 +42,7 @@ impl std::fmt::Display for Fixed {
 // ===== Version =====
 
 /// An operation version.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
 pub struct Version(std::num::NonZeroU32);
 
@@ -62,6 +62,20 @@ impl Version {
     #[inline]
     pub const fn to_u32(self) -> u32 {
         self.0.get()
+    }
+}
+
+impl std::cmp::PartialEq<u32> for Version {
+    #[inline]
+    fn eq(&self, other: &u32) -> bool {
+        self.0.get().eq(other)
+    }
+}
+
+impl std::cmp::PartialOrd<u32> for Version {
+    #[inline]
+    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
+        self.0.get().partial_cmp(other)
     }
 }
 

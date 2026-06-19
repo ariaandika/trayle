@@ -1,4 +1,4 @@
-use crate::wayland::{AsObjectId, Encodable, Fixed, NewId, Object, ObjectId};
+use crate::wayland::{AsObjectId, Encodable, Fixed, NewId, Object, ObjectId, Version};
 
 #[inline]
 pub fn fmt_me<D: Display2>(value: &D, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -37,6 +37,7 @@ delegate!(i32);
 delegate!(ObjectId);
 delegate!(NewId<T>);
 delegate!(Fixed);
+delegate!(Version);
 
 impl Display2 for Option<ObjectId> {
     #[inline]

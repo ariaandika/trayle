@@ -106,3 +106,13 @@ impl ObjectData for () {
         0
     }
 }
+
+impl ObjectData for Version {
+    fn from_raw(raw: usize) -> Self {
+        Version::new(raw as u32).expect("internal error: raw object data mutated")
+    }
+
+    fn to_raw(self) -> usize {
+        self.to_u32() as usize
+    }
+}

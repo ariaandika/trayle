@@ -1,6 +1,6 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
-use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Object, OpCode, WlEnum};
+use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Object, OpCode, Version, WlEnum};
 use crate::wayland::{Fixed, Interface, NewId, ObjectId};
 
 // ===== Encode =====
@@ -191,6 +191,7 @@ impl_write_for_int!(ObjectId);
 
 sized4!(impl Sized2 for Option<ObjectId>);
 sized4!(impl Sized2 for Fixed);
+sized4!(impl Sized2 for Version);
 sized4!(impl<T> Sized2 for NewId<T>);
 sized4!(impl<T> Sized2 for Object<T>);
 sized4!(impl<T> Sized2 for Option<Object<T>>);
@@ -227,6 +228,13 @@ impl private::Sealed for Fixed {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
         self.to_i32().write(writer)
+    }
+}
+
+impl private::Sealed for Version {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        self.to_u32().write(writer)
     }
 }
 
