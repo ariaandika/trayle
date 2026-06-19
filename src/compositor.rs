@@ -81,17 +81,23 @@ fn route(
     use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf, read_fd)?;
-    let interface = client.objects.get_mut(id)?;
+    let (interface, _) = client.objects.get_mut(id)?;
 
     macro_rules! handle_me {
-        (@OP $iface:ident { $($req:ident $call:ident),* $(, $(.. $fb:ident)? $(,)? )? }) => {
+        (@OP $iface:ident { $($req:ident $($call:ident)?),* $(, $(.. $fb:ident)? $(,)? )? }) => {
             match <_>::from_op(op).ok_or(DecodeError::UnknownOpCode)? {
-                $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $call),)*
+                $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $($call)?),)*
                 $($(op => return Err(compositor.$fb(interface, op, client)),)?)?
             }
         };
+        (@CALL $iface:ident $req:ident) => {{
+            let err = compositor.todo($iface::$req::decode_with(frame)?, client);
+            client.send(GlobalError::new(id, err.code(), err.message()));
+            Ok(false)
+        }};
         (@CALL $iface:ident $req:ident $call:ident) => {
-            match compositor.$call(
+            match RequestHandler::$call(
+                compositor,
                 log::recv_message($iface::$req::decode_with(frame)?, client),
                 client,
             ) {
@@ -117,6 +123,8 @@ fn route(
     }
 
     // one can use goto definition in the method call
+    //
+    // other forwarded to `Compositor::todo`
     handle_me! {
         // ===== core =====
         WlDisplay {
@@ -129,13 +137,13 @@ fn route(
         // ===== compositor =====
         WlCompositor {
             CreateSurface handle,
-            CreateRegion todo,
-            Release todo,
+            CreateRegion,
+            Release,
         }
         // ===== shm =====
         WlShm {
-            CreatePool todo,
-            Release todo,
+            CreatePool,
+            Release,
         }
         // ===== seat =====
         WlSeat {
@@ -147,8 +155,8 @@ fn route(
         // ===== data =====
         WlDataSource {
             Offer handle,
-            Destroy todo,
-            SetActions todo,
+            Destroy,
+            SetActions,
         }
         WlDataDeviceManager {
             CreateDataSource handle,
@@ -197,8 +205,8 @@ impl Compositor {
         &mut self,
         req: R,
         client: &mut ClientMut,
-    ) -> Result<bool, WlError> {
+    ) -> WlError {
         log::todo_operation(req, client);
-        Err(WlError::NotYetImplemented)
+        WlError::NotYetImplemented
     }
 }

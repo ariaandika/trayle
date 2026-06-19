@@ -41,7 +41,8 @@ impl RequestHandler<Bind<'_>> for Compositor {
         if bind.id_version > global.version.to_u32() {
             return Err(BindError::UnsupportedVersion.into());
         }
-        client.objects.insert_parts(bind.id, global.interface, bind.id_version as usize)?;
+        client.objects.insert_parts(bind.id, global.interface, bind.id_version)?;
+        client.binds.push(bind.data(global.interface));
 
         // some interface has side-effect after binding
         match global.interface {

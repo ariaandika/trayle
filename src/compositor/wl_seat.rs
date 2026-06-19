@@ -1,4 +1,4 @@
-use wayland::wl_keyboard::KeymapFormat;
+use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
 use wayland::wl_seat::{self, GetKeyboard, GetPointer, GetTouch};
 
 use crate::compositor::prelude::*;
@@ -16,8 +16,14 @@ impl RequestHandler<GetKeyboard> for Compositor {
     fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_keyboard = client.objects.create(req.keyboard)?;
         client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
-        // TODO: check for bind version
-        client.send(wl_keyboard.repeat_info(50, 160));
+        if let Some(bind) = client
+            .binds
+            .iter()
+            .find(|e| e.interface == Interface::WlSeat)
+            && bind.version >= RepeatInfo::SINCE
+        {
+            client.send(wl_keyboard.repeat_info(50, 160));
+        }
         Ok(())
     }
 }
