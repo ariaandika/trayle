@@ -12,12 +12,16 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             impl AsGlobal for #name {
                 const NAME: &str = #wl_name;
 
-                const VERSION: u32 = #version;
+                const VERSION: Version = Version::new(#version).unwrap();
 
                 const INTERFACE: Interface = Interface::#name;
             }
         },
         None => token_stream!(),
+    };
+    let data = match attrs.find_seq::<Ident>("data")? {
+        Some(ok) => TokenTree::from(ok.1),
+        None => Group::new(Delimiter::Parenthesis, token_stream!()).into(),
     };
 
     Ok(generate! {
@@ -40,6 +44,10 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             fn interface(&self) -> Interface {
                 Interface::#name
             }
+        }
+
+        impl AsObjectData for #name {
+            type Data = #data;
         }
 
         @global

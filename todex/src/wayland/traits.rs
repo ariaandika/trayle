@@ -1,4 +1,4 @@
-use crate::wayland::{AsObjectId, FromObjectId, Interface};
+use crate::wayland::{AsObjectId, FromObjectId, Interface, Version};
 
 // ===== interface =====
 
@@ -61,7 +61,7 @@ impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 pub trait AsGlobal {
     const NAME: &str;
 
-    const VERSION: u32;
+    const VERSION: Version;
 
     const INTERFACE: Interface;
 }
@@ -77,4 +77,32 @@ pub trait Operation: AsInterface + AsOpCode {
     const IS_EVENT: bool = !Self::IS_REQUEST;
 
     const IS_DESTRUCTOR: bool = false;
+}
+
+// ===== ObjectData =====
+
+/// Type that is associated with an opaque object data.
+///
+/// Object data is an integer.
+pub trait AsObjectData {
+    type Data: ObjectData;
+}
+
+/// An object specific data.
+///
+/// The data is usually an id referencing global resource.
+pub trait ObjectData: Copy {
+    /// Restore data from raw integer.
+    fn from_raw(raw: usize) -> Self;
+
+    /// Convert data to raw integer.
+    fn to_raw(self) -> usize;
+}
+
+impl ObjectData for () {
+    fn from_raw(_: usize) -> Self {}
+
+    fn to_raw(self) -> usize {
+        0
+    }
 }

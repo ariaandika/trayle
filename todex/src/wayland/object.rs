@@ -1,5 +1,5 @@
 use crate::wayland::{AsGlobal, AsInterface, AsObjectId, FromObjectId, WlObject};
-use crate::wayland::{Interface, ObjectId};
+use crate::wayland::{Interface, ObjectId, Version};
 
 /// A wayland object.
 ///
@@ -99,7 +99,7 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Object<T> {
 #[derive(Debug)]
 pub struct Global {
     pub name: &'static str,
-    pub version: u32,
+    pub version: Version,
     pub interface: Interface,
 }
 

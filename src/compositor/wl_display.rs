@@ -23,7 +23,7 @@ impl RequestHandler<GetRegistry> for Compositor {
         let wl_registry = client.objects.create(request.registry)?;
 
         for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
-            client.send(wl_registry.global(i, name, *version));
+            client.send(wl_registry.global(i, name, version.to_u32()));
         }
 
         Ok(())
@@ -38,7 +38,7 @@ impl RequestHandler<Bind<'_>> for Compositor {
         if bind.id_name != global.name {
             return Err(BindError::MissmatchName.into());
         }
-        if bind.id_version > global.version {
+        if bind.id_version > global.version.to_u32() {
             return Err(BindError::UnsupportedVersion.into());
         }
         client.objects.insert_parts(bind.id, global.interface, bind.id_version as usize)?;

@@ -76,6 +76,10 @@ pub struct RepeatInfo {
     pub delay: i32,
 }
 
+impl RepeatInfo {
+    pub const SINCE: u32 = 4;
+}
+
 #[derive(WlEnum, Debug, Clone, Copy)]
 pub enum KeymapFormat {
     NoKeymap,

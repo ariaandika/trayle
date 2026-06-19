@@ -37,7 +37,7 @@ mod protocol;
 // ===== definitions =====
 
 /// Implement `FromObjectId`, `AsObjectId` and `AsInterface`.
-#[proc_macro_derive(Interface, attributes(global))]
+#[proc_macro_derive(Interface, attributes(global, data))]
 pub fn interface(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, interface::process)
 }

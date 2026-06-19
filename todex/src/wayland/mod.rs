@@ -47,11 +47,14 @@
 //! This module also provide traits that can be used by high level APIs.
 //!
 //! - [`FromObjectId`]: Constructs type with given object id.
-//! - [`AsOpCode`]: Type that is associated with an opcode.
 //! - [`AsObjectId`]: Type that is associated with an object id.
 //! - [`AsInterface`]: Type that is associated with an interface.
-//! - [`OpCode`]: Request/event opcode
+//! - [`AsOpCode`]: Type that is associated with an opcode.
+//! - [`AsGlobal`]: Type that is a singleton global object.
 //! - [`WlObject`]: Type that represent a wayland object.
+//! - [`ObjectData`] Arbitrary type that is associated to an object.
+//! - [`Operation`]: Typa that represent a wayland operation
+//! - [`OpCode`]: Request/event opcode
 //!
 //! These traits are not meant to be implemented by application.
 //!
@@ -77,10 +80,11 @@
 //! - `wl_registry::global` constructor: `wl_registry::WlRegistry::global`
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
-pub use fixed::Fixed;
+pub use types::{Fixed, Version};
 pub use object::{Any, Global, Object, ObjectError};
 pub use error::WlError;
-pub use traits::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation, WlEnum, WlObject};
+pub use traits::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation};
+pub use traits::{AsObjectData, ObjectData, WlEnum, WlObject};
 pub use message::{Frame, MessageError};
 
 pub use decode::{Decode, DecodeError};
@@ -93,7 +97,7 @@ macro_rules! roundup4 {
 }
 
 mod object_id;
-mod fixed;
+mod types;
 mod object;
 mod error;
 mod traits;
@@ -104,9 +108,9 @@ mod encode;
 pub mod display;
 
 mod prelude {
-    pub use super::{AsObjectId, FromObjectId};
-    pub use super::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation, WlEnum};
-    pub use super::{Fixed, Interface, NewId, Object, ObjectId};
+    pub use super::{FromObjectId, AsObjectId, AsInterface, AsOpCode};
+    pub use super::{AsGlobal, AsObjectData, ObjectData, OpCode, Operation, WlEnum};
+    pub use super::{Fixed, Interface, NewId, Object, ObjectId, Version};
     pub use super::decode::{Decode, Decoder, DecodeError};
     pub use super::encode::{Encode, Encodable, Sized2, Writer};
     pub use super::display;

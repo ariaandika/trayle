@@ -12,6 +12,10 @@ impl AsInterface for WlDisplay {
     }
 }
 
+impl AsObjectData for WlDisplay {
+    type Data = ();
+}
+
 #[derive(OpCode, Debug, Clone, Copy)]
 pub enum RequestOp {
     Sync,
