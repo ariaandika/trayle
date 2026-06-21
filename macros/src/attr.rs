@@ -89,7 +89,7 @@ impl SequenceAttr {
         }
     }
 
-    pub fn next_flag_of(&mut self, flag: &str) -> Result<bool, Error> {
+    pub fn next_flag_of(&mut self, flag: &str) -> Result<Option<Ident>, Error> {
         let ok = self.parser.next_if_map(|tree| match tree {
             TokenTree::Ident(id) if id.as_str() == flag => Ok(id),
             tree => Err(tree),
@@ -97,7 +97,7 @@ impl SequenceAttr {
         if ok.is_some() {
             self.check_leftover()?;
         }
-        Ok(ok.is_some())
+        Ok(ok)
     }
 
     pub fn try_next_named<T: Parse>(&mut self) -> Result<(Ident, T), Error> {

@@ -63,7 +63,7 @@ pub struct Frame;
 pub struct Cancel;
 
 #[derive(Message, Debug)]
-#[message(event = WlTouch)]
+#[message(event = WlTouch, since = 6)]
 pub struct Shape {
     pub id: i32,
     pub major: Fixed,
@@ -71,7 +71,7 @@ pub struct Shape {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlTouch)]
+#[message(event = WlTouch, since = 6)]
 pub struct Orientation {
     pub id: i32,
     pub orientation: Fixed,

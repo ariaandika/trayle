@@ -115,13 +115,13 @@ pub struct Leave {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlSurface)]
+#[message(event = WlSurface, since = 6)]
 pub struct PreferredBufferScale {
     pub factor: i32,
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlSurface)]
+#[message(event = WlSurface, since = 6)]
 pub struct PreferredBufferTransform {
     pub transform: Transform,
 }

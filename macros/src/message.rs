@@ -56,7 +56,8 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 struct MessageAttr {
     iface: Ident,
     is_request: bool,
-    is_destructor: bool,
+    is_destructor: Option<Ident>,
+    since: Option<Literal>,
 }
 
 impl Parse for MessageAttr {
@@ -72,29 +73,32 @@ impl Parse for MessageAttr {
             )),
         };
         let is_destructor = seq.next_flag_of("destructor")?;
+        let since = seq.next_named_of("since")?;
         seq.check_empty()?;
         Ok(Self {
             iface,
             is_request,
             is_destructor,
+            since,
         })
     }
 }
 
 impl MessageAttr {
-    fn generate(&self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
+    fn generate(self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
         let Self { is_request, iface, .. } = self;
         let opkind = Ident::new(
-            if *is_request { "RequestOp" } else { "EventOp" },
+            if is_request { "RequestOp" } else { "EventOp" },
             Span::call_site(),
         );
         let wl_name = Literal::string(&to_snake(name.as_str()));
-        let is_request = Bool(*is_request);
-        let destructor = if self.is_destructor {
-            token_stream!(const IS_DESTRUCTOR: bool = #TRUE;)
-        } else {
-            token_stream!()
-        };
+        let is_request = Bool(is_request);
+        let destructor = self.is_destructor.map_stream(|_| generate! {
+            const IS_DESTRUCTOR: bool = #TRUE;
+        });
+        let since = self.since.map_stream(|since| generate! {
+            const SINCE: u32 = #since;
+        });
         generate! {
             impl AsInterface for #name @lf_ph {
                 #[inline]
@@ -114,6 +118,7 @@ impl MessageAttr {
             impl WlMessage for #name @lf_ph {
                 const IS_REQUEST: bool = #is_request;
                 @destructor
+                @since
             }
         }
     }

@@ -47,23 +47,23 @@ pub struct Mode {
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[message(event = WlOutput)]
+#[message(event = WlOutput, since = 2)]
 pub struct Done;
 
 #[derive(Message, Debug, Clone, Copy)]
-#[message(event = WlOutput)]
+#[message(event = WlOutput, since = 2)]
 pub struct Scale {
     pub factor: i32,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[message(event = WlOutput)]
+#[message(event = WlOutput, since = 4)]
 pub struct Name<'a> {
     pub name: &'a str,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[message(event = WlOutput)]
+#[message(event = WlOutput, since = 4)]
 pub struct Description<'a> {
     pub name: &'a str,
 }

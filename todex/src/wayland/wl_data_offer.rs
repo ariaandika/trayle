@@ -59,13 +59,13 @@ pub struct Offer<'a> {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlDataOffer)]
+#[message(event = WlDataOffer, since = 3)]
 pub struct SourceActions {
     pub source_actions: DndAction,
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlDataOffer)]
+#[message(event = WlDataOffer, since = 3)]
 pub struct Action {
     pub dnd_action: DndAction,
 }

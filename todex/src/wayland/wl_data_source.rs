@@ -58,15 +58,15 @@ pub struct Send<'a> {
 pub struct Cancelled;
 
 #[derive(Message, Debug)]
-#[message(event = WlDataSource)]
+#[message(event = WlDataSource, since = 3)]
 pub struct DndDropPerformed;
 
 #[derive(Message, Debug)]
-#[message(event = WlDataSource)]
+#[message(event = WlDataSource, since = 3)]
 pub struct DndFinished;
 
 #[derive(Message, Debug)]
-#[message(event = WlDataSource)]
+#[message(event = WlDataSource, since = 3)]
 pub struct Action {
     pub dnd_action: DndAction,
 }

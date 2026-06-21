@@ -82,38 +82,39 @@ pub struct Axis {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 5)]
 pub struct Frame;
 
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 5)]
 pub struct AxisSource {
     pub axis_source: AxisSourceTypes,
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 5)]
 pub struct AxisStop {
     pub time: u32,
     pub axis: AxisTypes,
 }
 
+/// DEPRECATED_SINCE = 8
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 5)]
 pub struct AxisDiscrete {
     pub axis: AxisTypes,
     pub discrete: i32,
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 8)]
 pub struct AxisValue120 {
     pub axis: AxisTypes,
     pub value120: i32,
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlPointer)]
+#[message(event = WlPointer, since = 9)]
 pub struct AxisRelativeDirection {
     pub axis: AxisTypes,
     pub direction: AxisRelativeDirectionEnum,

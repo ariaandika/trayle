@@ -11,6 +11,8 @@ pub trait WlMessage: AsInterface + AsOpCode {
     const IS_EVENT: bool = !Self::IS_REQUEST;
 
     const IS_DESTRUCTOR: bool = false;
+
+    const SINCE: u32 = 1;
 }
 
 // ===== message =====

@@ -52,7 +52,7 @@ pub struct Capabilities {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlSeat)]
+#[message(event = WlSeat, since = 2)]
 pub struct Name<'a> {
     pub name: &'a str,
 }

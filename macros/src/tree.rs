@@ -283,14 +283,14 @@ pub trait OptionExt<T> {
     fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
         self,
         f: F,
-    ) -> impl Iterator<Item = TokenTree>;
+    ) -> std::iter::Flatten<std::option::IntoIter<I>>;
 }
 
 impl<T> OptionExt<T> for Option<T> {
     fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
         self,
         f: F,
-    ) -> impl Iterator<Item = TokenTree> {
+    ) -> std::iter::Flatten<std::option::IntoIter<I>> {
         self.map(f).into_iter().flatten()
     }
 }
