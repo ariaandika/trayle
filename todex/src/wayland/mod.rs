@@ -1,94 +1,102 @@
 //! Wayland protocol.
 //!
-//! # Usage
+//! This module provide wayland primitive, object abstraction, interface definitions, message decoding and
+//! encoding.
 //!
-//! This API use [`Buffer`] and [`Cmsg`] as memory management. It is a bytes buffer and fds storage.
-//! Application can establish unix socket externally, then use [`Cmsg::sendmsg`] and
-//! [`Cmsg::recvmsg`] to send and receive messages respectively.
+//! # Primitives
 //!
-//! [`Frame::has_frame`] returns `true` if the buffer contains enough bytes for a frame. Then the
-//! buffer can be passed to [`Frame`] to decode the actual message. Application can send back a
-//! message, using [`Encode`] trait. Note that this operation is buffered, application requires to
-//! flush the message using method mentioned previously.
+//! Most wayland primitives represented by rust primitive:
 //!
-//! [`Buffer`]: crate::sys::buffer::Buffer
-//! [`Cmsg`]: crate::sys::cmsg::Cmsg
-//! [`Cmsg::sendmsg`]: crate::sys::cmsg::Cmsg::sendmsg
-//! [`Cmsg::recvmsg`]: crate::sys::cmsg::Cmsg::recvmsg
+//! - `int` `uint` -> `i32` `u32`
+//! - `fixed` -> [`Fixed`]
+//! - `string` -> `&str`
+//! - `array` -> `&[u8]`
+//! - `fd` -> `i32`
 //!
-//! # Types
+//! [`ObjectId`] represent wayland object id. Object id cannot be `0`.
 //!
-//! [`ObjectId`] represents wayland object id. `ObjectId` cannot be zero. [`NewId`] is a wrapper for
-//! `ObjectId` with generic parameter to represent created object.
+//! [`NewId<I>`] wraps object id with type safe interface, representing new id for new object that
+//! implement associated interface. Note that implicit interface for new id is not supported, its
+//! embedded as field in the message. Its massively increase complexity while in practice only
+//! **one** message uses it.
 //!
-//! [`Fixed`] represents wayland fixed primitive. Can be created from `f32`.
+//! `object` in wayland represented as type safe [`Object<I>`] with associated interface. It can
+//! also represent untyped object where the interface stored as runtime value [`Interface`].
 //!
-//! Other primitive types can be represented by its respective rust primitive types.
+//! The `fd` are pulled from ancillary data.
 //!
-//! [`Interface`] is a runtime value representing an interface. This can be used by high level APIs
-//! to store mutliple interfaces in a list without dynamic dispatch.
+//! # Object / Interface
 //!
-//! [`Object`] represent wayland object. It can be type safe or runtime value.
+//! Wayland is an object-oriented protocol. Each object follows exactly one interface. An interface
+//! is a collection of message and enumeration definitions.
 //!
-//! [`Encodable`] associate object id to a message payload. Encoding required its interface object
-//! id. One cannot simply define object id field to a message payload. This struct wraps the payload
-//! and associate it with object id to form a complete encodable message.
+//! To create an object, select one of available interface and use [`FromObjectId`] implementation.
+//! Each interface have its message's constructor as method. All of the methods returns message
+//! payload wrapped in [`Message`] to associate it with an object id.
 //!
-//! # Enum
+//! [`Object`] can also be untyped, the interface is stored as runtime value [`Interface`]. This can
+//! be used to store object in generic collection. In this case, object cannot create message but
+//! still have the common property of an object.
 //!
 //! Wayland enum represented as regular enum. Bitfield enum represented as struct wrapper of `u32`.
 //!
-//! # Error
+//! # Decoding / Encoding
 //!
-//! All fallible operations returns `Result` with [`WlError`] as the error variant.
+//! This API use [`Bytes`] and [`Cmsg`] for memory management. It is a bytes buffer and fds storage.
+//! See its documentation for more details.
 //!
-//! # Traits
+//! [`Frame`] is used to decode a message. [`Frame::has_frame`] returns `true` if the buffer
+//! contains enough bytes for a frame. Then the buffer can be passed to `Frame` to decode the actual
+//! message using [`Decode`] implementation.
 //!
-//! This module also provide traits that can be used by high level APIs.
+//! To encode a message, use the [`Encode`] implementation for corresponding message.
 //!
-//! - [`FromObjectId`]: Constructs type with given object id.
+//! This crate have a convention where every interface definition have a method to construct its
+//! messages wrapped in a [`Message`] to associate it with an object id. With this, application can
+//! use [`EncodeMessage`] to encode a message directly without passing object id around.
+//!
+//! # Other Traits
+//!
+//! This module also provide traits that abstract objects and messages.
+//!
+//! The following traits describe associated property of a type:
+//!
 //! - [`AsObjectId`]: Type that is associated with an object id.
 //! - [`AsInterface`]: Type that is associated with an interface.
 //! - [`AsOpCode`]: Type that is associated with an opcode.
-//! - [`AsGlobal`]: Type that is a singleton global object.
-//! - [`WlObject`]: Type that represent a wayland object.
-//! - [`ObjectData`] Arbitrary type that is associated to an object.
-//! - [`Operation`]: Typa that represent a wayland operation
-//! - [`OpCode`]: Request/event opcode
+//!
+//! The following traits describe a whole instance:
+//!
+//! - [`WlObject`]: Type that is a wayland object.
+//! - [`WlGlobal`]: Type that is a singleton global object.
+//! - [`WlMessage`]: Type that is a wayland message
+//! - [`OpCode`]: Type that is a request/event opcode
 //!
 //! These traits are not meant to be implemented by application.
-//!
-//! # Interface
-//!
-//! Interface definitions are provided in the module with the same name of the interface. All
-//! respective types implements all traits mentioned previously.
-//!
-//! Every interface module follows a convention, with some exception for `wl_display`.
-//!
-//! - Object definitions is the UpperCamelCase of the interface name.
-//! - `RequestOp` and `EventOp` representing requests and events of the interface.
-//! - Operation definition are regular struct.
-//! - Interface object contains constructor methods for its operations.
-//!
-//! For example with `wl_registry`:
-//! - Interface object: `wl_registry::WlRegistry`
-//! - Request opcodes: `wl_registry::RequestOp`
-//! - Event opcodes: `wl_registry::EventOp`
-//! - `wl_registry::bind` request: `wl_registry::Bind`
-//! - `wl_registry::global` event: `wl_registry::Global`
-//! - `wl_registry::bind` constructor: `wl_registry::WlRegistry::bind`
-//! - `wl_registry::global` constructor: `wl_registry::WlRegistry::global`
+
+// `ObjectData` and `display` are not documented currently
+
+// ===== core components =====
 
 pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
 pub use types::{Fixed, Version};
-pub use object::{Any, Global, Object, ObjectError};
-pub use error::WlError;
-pub use traits::{AsGlobal, AsInterface, AsOpCode, OpCode, Operation};
-pub use traits::{AsObjectData, ObjectData, WlEnum, WlObject};
-pub use message::{Frame, MessageError};
+pub use interface::AsInterface;
+pub use opcode::{AsOpCode, OpCode};
+pub use object::{Any, Object, ObjectError, WlObject};
+pub use message::{Message, WlMessage};
+pub use enums::WlEnum;
 
+// ===== properties =====
+
+pub use global::{WlGlobal, Global};
+pub use data::{AsObjectData, ObjectData};
+pub use error::WlError;
+
+// ===== decode/encode =====
+
+pub use frame::{Frame, FrameError};
 pub use decode::{Decode, DecodeError};
-pub use encode::{Encodable, Encode, EncodeMessage};
+pub use encode::{Encode, EncodeMessage};
 
 macro_rules! roundup4 {
     ($e:expr) => {
@@ -98,10 +106,17 @@ macro_rules! roundup4 {
 
 mod object_id;
 mod types;
+mod interface;
+mod opcode;
 mod object;
-mod error;
-mod traits;
 mod message;
+
+mod global;
+mod data;
+mod enums;
+mod error;
+
+mod frame;
 mod decode;
 mod encode;
 
@@ -109,10 +124,10 @@ pub mod display;
 
 mod prelude {
     pub use super::{FromObjectId, AsObjectId, AsInterface, AsOpCode};
-    pub use super::{AsGlobal, AsObjectData, OpCode, Operation, WlEnum};
-    pub use super::{Fixed, Interface, NewId, Object, ObjectId, Version};
+    pub use super::{WlGlobal, AsObjectData, OpCode, WlMessage, WlEnum};
+    pub use super::{Fixed, Interface, Message, NewId, Object, ObjectId, Version};
     pub use super::decode::{Decode, Decoder, DecodeError};
-    pub use super::encode::{Encode, Encodable, Sized2, Writer};
+    pub use super::encode::{Encode, Sized2, Writer};
     pub use super::display;
 
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};

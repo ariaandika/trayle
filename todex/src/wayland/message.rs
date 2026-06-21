@@ -1,81 +1,56 @@
-use crate::sys::bytes::Bytes;
-use crate::sys::cmsg::Cmsg;
-use crate::wayland::ObjectId;
+use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Interface, ObjectId};
 
-use MessageError as E;
+// ===== trait =====
 
-/// Encoded message.
-pub struct Frame<'a> {
-    /// - guarantee to contains one valid length message
-    read_buf: &'a mut Bytes,
-    read_fd: &'a mut Cmsg,
+/// Type that represent wayland operation.
+///
+/// Wayland operation is either a request or event.
+pub trait WlMessage: AsInterface + AsOpCode {
+    const IS_REQUEST: bool;
+
+    const IS_EVENT: bool = !Self::IS_REQUEST;
+
+    const IS_DESTRUCTOR: bool = false;
 }
 
-impl<'a> Frame<'a> {
-    #[inline]
-    pub fn has_frame(read_buf: &Bytes) -> bool {
-        let Some(header) = read_buf.first_chunk::<8>() else {
-            return false;
-        };
-        let len = u16::from_ne_bytes(*header[6..8].as_array().unwrap()) as usize;
-        read_buf.len() >= len
-    }
+// ===== message =====
 
-    #[inline]
-    pub fn new(read_buf: &'a mut Bytes, read_fd: &'a mut Cmsg) -> Result<(ObjectId, u16, Self), MessageError> {
-        let Some(header) = read_buf.first_chunk::<8>() else {
-            return Err(E::InsufficientSize);
-        };
-        let Some(id) = ObjectId::new(u32::from_ne_bytes(*header.first_chunk().unwrap())) else {
-            return Err(E::ZeroId);
-        };
-        let hdr2 = u32::from_ne_bytes(*header.last_chunk().unwrap());
-        let len = hdr2 >> u16::BITS;
-        if len < 8 {
-            return Err(E::InsufficientSize);
-        }
-        if read_buf.len() < len as usize {
-            return Err(E::InsufficientSize);
-        }
-        Ok((id, hdr2 as u16, Self { read_buf, read_fd }))
-    }
+/// Associate object id with a message.
+#[derive(Debug)]
+pub struct Message<T> {
+    pub object_id: ObjectId,
+    pub payload: T,
+}
 
-    #[inline]
-    pub fn pop_fd(&mut self) -> Option<i32> {
-        self.read_fd.read_fd()
-    }
-
-    #[inline]
-    pub fn body(self) -> &'a [u8] {
-        let ptr = self.read_buf.as_ptr();
-        unsafe {
-            // SAFETY: invariant
-            let len = ptr.add(6).cast::<u16>().read_unaligned() as usize;
-            // SAFETY: invariant
-            self.read_buf.advance_unchecked(len);
-            std::slice::from_raw_parts(ptr.add(8), len - 8)
+impl<T> Message<T> {
+    /// Create new [`Message`].
+    pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
+        Self {
+            object_id: object.object_id(),
+            payload,
         }
     }
 }
 
-// ===== MessageError =====
-
-#[derive(Debug, Clone, Copy)]
-pub enum MessageError {
-    /// Insufficient message size.
-    InsufficientSize,
-    /// Excessive message size.
-    ExcessiveSize,
-    /// Invalid object id of `0`.
-    ZeroId,
-}
-
-impl MessageError {
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::InsufficientSize => "insufficient message size",
-            Self::ExcessiveSize => "excessize message size",
-            Self::ZeroId => "invalid object id of `0`",
-        }
+impl<T> AsObjectId for Message<T> {
+    #[inline]
+    fn object_id(&self) -> ObjectId {
+        self.object_id
     }
 }
+
+impl<T: AsInterface> AsInterface for Message<T> {
+    #[inline]
+    fn interface(&self) -> Interface {
+        self.payload.interface()
+    }
+}
+
+impl<T: AsOpCode> AsOpCode for Message<T> {
+    type OpCode = T::OpCode;
+
+    const OPCODE: Self::OpCode = T::OPCODE;
+
+    const OPNAME: &str = T::OPNAME;
+}
+

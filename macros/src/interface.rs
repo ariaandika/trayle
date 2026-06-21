@@ -9,7 +9,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let wl_name = Literal::string(&to_snake(name.as_str()));
     let global = match attrs.find_seq::<Global>("global")? {
         Some((_, Global { version })) => token_stream! {
-            impl AsGlobal for #name {
+            impl WlGlobal for #name {
                 const NAME: &str = #wl_name;
 
                 const VERSION: Version = Version::new(#version).unwrap();

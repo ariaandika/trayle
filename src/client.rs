@@ -92,10 +92,10 @@ pub struct ClientMut<'a> {
 impl<'a> ClientMut<'a> {
     /// Send a message.
     ///
-    /// Usually, object has a constructor for its message. The constructor returns the message
-    /// wrapped in [`Encodable`] to associate it with object id.
+    /// Usually, object have a constructor for its message. The constructor returns the message
+    /// wrapped in [`Message`] to associate it with object id, which implements [`EncodeMessage`].
     ///
-    /// [`Encodable`]: todex::wayland::Encodable
+    /// [`Message`]: todex::wayland::Message
     pub fn send<E: EncodeMessage + AsInterface + AsOpCode + display::AsDisplay>(
         &mut self,
         message: E,

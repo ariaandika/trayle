@@ -1,6 +1,6 @@
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, Operation, WlError};
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, WlMessage, WlError};
 use todex::wayland::{Frame, Global, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
 
@@ -102,7 +102,7 @@ fn route(
                 client,
             ) {
                 Ok(_) => {
-                    if <$iface::$req as Operation>::IS_DESTRUCTOR {
+                    if <$iface::$req as WlMessage>::IS_DESTRUCTOR {
                         client.delete_id(id);
                     }
                     Ok(true)

@@ -105,7 +105,7 @@ impl Metadata {
                 const OPNAME: &'static str = #wl_name;
             }
 
-            impl Operation for #name @lf_ph {
+            impl WlMessage for #name @lf_ph {
                 const IS_REQUEST: bool = #is_request;
                 @destructor
             }
@@ -144,8 +144,8 @@ impl GenConstructor {
         Some(generate! {
             impl #iface {
                 #[inline]
-                pub fn #mname@lf(&self @args) -> Encodable<#name @lf> {
-                    Encodable::new(self, #name { @construct })
+                pub fn #mname@lf(&self @args) -> Message<#name @lf> {
+                    Message::new(self, #name { @construct })
                 }
             }
         })

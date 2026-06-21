@@ -2,7 +2,7 @@ use std::os::fd::AsRawFd;
 
 use todex::sys::errno::Errno;
 use todex::sys::memfd::Memfd;
-use todex::wayland::{Encodable, wl_keyboard};
+use todex::wayland::{Message, wl_keyboard};
 use todex::wayland::wl_seat::Capability;
 
 // ===== Seat =====
@@ -57,7 +57,7 @@ impl Seat {
         &self,
         format: wl_keyboard::KeymapFormat,
         wl_keyboard: &wl_keyboard::WlKeyboard,
-    ) -> Encodable<wl_keyboard::Keymap> {
+    ) -> Message<wl_keyboard::Keymap> {
         wl_keyboard.keymap(format, self.memfd.as_raw_fd(), self.keymap_size())
     }
 }

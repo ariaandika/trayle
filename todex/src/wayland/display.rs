@@ -1,4 +1,4 @@
-use crate::wayland::{AsObjectId, Encodable, Fixed, NewId, Object, ObjectId, Version};
+use crate::wayland::{AsObjectId, Message, Fixed, NewId, Object, ObjectId, Version};
 
 #[inline]
 pub fn fmt_me<D: Display2>(value: &D, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -9,7 +9,7 @@ pub trait AsDisplay {
     fn display(&self) -> impl std::fmt::Display;
 }
 
-impl<T: AsDisplay> AsDisplay for Encodable<T> {
+impl<T: AsDisplay> AsDisplay for Message<T> {
     fn display(&self) -> impl std::fmt::Display {
         self.payload.display()
     }

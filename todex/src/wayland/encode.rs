@@ -1,7 +1,7 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
-use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Object, OpCode, Version, WlEnum};
-use crate::wayland::{Fixed, Interface, NewId, ObjectId};
+use crate::wayland::{AsObjectId, AsOpCode, Object, OpCode, WlEnum};
+use crate::wayland::{Fixed, Message, NewId, ObjectId, Version};
 
 // ===== Encode =====
 
@@ -56,51 +56,7 @@ impl<E: Encode + AsObjectId> EncodeMessage for E {
     }
 }
 
-// ===== Encodable =====
-
-/// Associate object id with a message payload.
-///
-/// Encoding a message, requires its interface object id, thus message payload alone cannot
-/// implement the encoding trait. This struct wraps the payload and its associated object id, and is
-/// the one implement the encoding trait.
-#[derive(Debug)]
-pub struct Encodable<T> {
-    pub object_id: ObjectId,
-    pub payload: T,
-}
-
-impl<T> Encodable<T> {
-    pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
-        Self {
-            object_id: object.object_id(),
-            payload,
-        }
-    }
-}
-
-impl<T> AsObjectId for Encodable<T> {
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.object_id
-    }
-}
-
-impl<T: AsInterface> AsInterface for Encodable<T> {
-    #[inline]
-    fn interface(&self) -> Interface {
-        self.payload.interface()
-    }
-}
-
-impl<T: AsOpCode> AsOpCode for Encodable<T> {
-    type OpCode = T::OpCode;
-
-    const OPCODE: Self::OpCode = T::OPCODE;
-
-    const OPNAME: &str = T::OPNAME;
-}
-
-impl<T: Encode> Encode for Encodable<T> {
+impl<T: Encode> Encode for Message<T> {
     #[inline]
     fn size(&self) -> u16 {
         self.payload.size()

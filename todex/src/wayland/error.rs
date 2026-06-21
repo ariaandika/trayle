@@ -1,13 +1,13 @@
 use crate::wayland::wl_display::WlDisplayError;
 use crate::wayland::wl_registry::BindError;
-use crate::wayland::{DecodeError, MessageError, ObjectError};
+use crate::wayland::{DecodeError, FrameError, ObjectError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
     /// Not yet implemented.
     NotYetImplemented,
-    /// Message error.
-    Message(MessageError),
+    /// Frame error.
+    Frame(FrameError),
     /// Decode error.
     Decode(DecodeError),
     /// Object error.
@@ -25,7 +25,7 @@ impl WlError {
     pub fn message(&self) -> &'static str {
         match self {
             Self::NotYetImplemented => "not yet implemented",
-            Self::Message(e) => e.message(),
+            Self::Frame(e) => e.message(),
             Self::Decode(e) => e.message(),
             Self::Object(e) => e.message(),
             Self::Bind(e) => e.message(),
@@ -36,7 +36,7 @@ impl WlError {
     pub fn code(&self) -> u32 {
         match self {
             WlError::NotYetImplemented => IMPLEMENTATION,
-            WlError::Message(_) => MALFORMED,
+            WlError::Frame(_) => MALFORMED,
             WlError::Decode(_) => MALFORMED,
             WlError::Object(_) => SEMANTIC,
             WlError::Bind(_) => MALFORMED,
@@ -52,10 +52,10 @@ impl std::fmt::Display for WlError {
     }
 }
 
-impl From<MessageError> for WlError {
+impl From<FrameError> for WlError {
     #[inline]
-    fn from(v: MessageError) -> Self {
-        Self::Message(v)
+    fn from(v: FrameError) -> Self {
+        Self::Frame(v)
     }
 }
 

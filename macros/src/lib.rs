@@ -48,7 +48,7 @@ pub fn opcode(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, opcode::process)
 }
 
-/// Implement `Decode`, `Encode`, `AsInterface`, `Operator` and add constructor of the message in
+/// Implement `Decode`, `Encode`, `AsInterface`, `WlMessage` and add constructor of the message in
 /// the interface object.
 ///
 /// Attribute `#[request(..)]` or `#[event(..)]` is required, with interface struct as the input.

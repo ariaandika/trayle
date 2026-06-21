@@ -1,11 +1,19 @@
-use crate::wayland::{AsGlobal, AsInterface, AsObjectId, FromObjectId, WlObject};
-use crate::wayland::{Interface, ObjectId, Version};
+use crate::wayland::{AsInterface, AsObjectId, FromObjectId, Interface, ObjectId};
+
+// ===== trait =====
+
+/// Type that represent a wayland object.
+pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
+
+impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
+
+// ===== object =====
 
 /// A wayland object.
 ///
 /// This struct can represent type safe or runtime value object.
-pub struct Object<T = Any> {
-    object: T,
+pub struct Object<I = Any> {
+    object: I,
 }
 
 /// A runtime value wayland object.
@@ -16,6 +24,7 @@ pub struct Any {
 }
 
 impl Object<Any> {
+    #[inline]
     pub fn any(object_id: ObjectId, interface: Interface) -> Self {
         Self {
             object: Any {
@@ -25,6 +34,7 @@ impl Object<Any> {
         }
     }
 
+    #[inline]
     pub fn any_from<O: WlObject>(object: O) -> Self {
         Self {
             object: Any {
@@ -35,14 +45,16 @@ impl Object<Any> {
     }
 }
 
-impl<T> Object<T> {
-    pub fn new(object: T) -> Object<T> {
+impl<I> Object<I> {
+    #[inline]
+    pub fn new(object: I) -> Object<I> {
         Object { object }
     }
 
+    #[inline]
     pub fn into_any(self) -> Object<Any>
     where
-        T: WlObject,
+        I: WlObject,
     {
         Object::any_from(self.object)
     }
@@ -90,27 +102,6 @@ impl<T: std::fmt::Debug> std::fmt::Debug for Object<T> {
     #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         self.object.fmt(f)
-    }
-}
-
-// ===== Global =====
-
-/// A runtime value global object.
-#[derive(Debug)]
-pub struct Global {
-    pub name: &'static str,
-    pub version: Version,
-    pub interface: Interface,
-}
-
-impl Global {
-    /// Create global from [`AsGlobal`] implementation.
-    pub const fn of<G: AsGlobal>() -> Self {
-        Self {
-            name: G::NAME,
-            version: G::VERSION,
-            interface: G::INTERFACE,
-        }
     }
 }
 
