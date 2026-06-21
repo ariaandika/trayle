@@ -69,14 +69,10 @@ pub struct Modifiers {
 }
 
 #[derive(Message, Debug)]
-#[message(event = WlKeyboard)]
+#[message(event = WlKeyboard, since = 4)]
 pub struct RepeatInfo {
     pub rate: i32,
     pub delay: i32,
-}
-
-impl RepeatInfo {
-    pub const SINCE: u32 = 4;
 }
 
 #[derive(WlEnum, Debug, Clone, Copy)]

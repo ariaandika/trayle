@@ -1,3 +1,4 @@
+use wayland::WlMessage;
 use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
 use wayland::wl_seat::{self, GetKeyboard, GetPointer, GetTouch};
 

@@ -12,26 +12,26 @@ pub trait AsObjectData {
 /// The data is usually an id referencing global resource.
 pub trait ObjectData: Copy {
     /// Restore data from raw integer.
-    fn from_raw(raw: usize) -> Self;
+    fn from_raw(raw: u32) -> Self;
 
     /// Convert data to raw integer.
-    fn to_raw(self) -> usize;
+    fn to_raw(self) -> u32;
 }
 
 impl ObjectData for () {
-    fn from_raw(_: usize) -> Self {}
+    fn from_raw(_: u32) -> Self {}
 
-    fn to_raw(self) -> usize {
+    fn to_raw(self) -> u32 {
         0
     }
 }
 
 impl ObjectData for Version {
-    fn from_raw(raw: usize) -> Self {
-        Version::new(raw as u32).expect("internal error: raw object data mutated")
+    fn from_raw(raw: u32) -> Self {
+        Version::new(raw).expect("internal error: raw object data mutated")
     }
 
-    fn to_raw(self) -> usize {
-        self.to_u32() as usize
+    fn to_raw(self) -> u32 {
+        self.to_u32()
     }
 }

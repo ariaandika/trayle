@@ -1,10 +1,40 @@
 use crate::collections::slots::Slots;
 use crate::wayland::{AsInterface, AsObjectId, Interface, NewId, ObjectData};
-use crate::wayland::{Object, ObjectError, ObjectId, WlObject};
+use crate::wayland::{Object, ObjectError, ObjectId, WlObject, Version};
 
 use ObjectError as E;
 
 const INITIAL_CAP: usize = 32;
+
+#[derive(Debug, Copy, Clone)]
+pub struct ObjectEntry {
+    interface: Interface,
+    version: Version,
+    data: u32,
+}
+
+impl AsInterface for ObjectEntry {
+    fn interface(&self) -> Interface {
+        self.interface
+    }
+}
+
+impl ObjectEntry {
+    const WL_DISPLAY: Self = Self {
+        interface: Interface::WlDisplay,
+        version: Version::new(1).unwrap(),
+        data: 0,
+    };
+
+    #[inline]
+    pub fn version(&self) -> Version {
+        self.version
+    }
+
+    pub fn data<D: ObjectData>(&self) -> D {
+        D::from_raw(self.data)
+    }
+}
 
 /// A list of wayland objects.
 ///
@@ -13,7 +43,7 @@ const INITIAL_CAP: usize = 32;
 /// Client can only append one index after the last used object slot. An attempt to insert past it
 /// will result in an error.
 pub struct Objects {
-    slots: Slots<(Interface, usize)>,
+    slots: Slots<ObjectEntry>,
 }
 
 impl Objects {
@@ -42,23 +72,42 @@ impl Objects {
     ///
     /// The data can be retrieved in lookup operation.
     #[inline]
-    pub fn insert_with<O: WlObject>(&mut self, object: &O, data: usize) -> Result<(), ObjectError> {
-        self.insert_inner(object.object_id(), (object.interface(), data))
+    pub fn insert_with<O: WlObject>(&mut self, object: &O, data: u32) -> Result<(), ObjectError> {
+        self.insert_inner(
+            object.object_id(),
+            ObjectEntry {
+                interface: object.interface(),
+                version: Version::ONE,
+                data,
+            },
+        )
     }
 
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
     #[inline]
-    pub fn insert_parts<D: ObjectData>(&mut self, object_id: ObjectId, interface: Interface, data: D) -> Result<(), ObjectError> {
-        self.insert_inner(object_id, (interface, data.to_raw()))
+    pub fn insert_parts<D: ObjectData>(
+        &mut self,
+        object_id: ObjectId,
+        interface: Interface,
+        data: D,
+    ) -> Result<(), ObjectError> {
+        self.insert_inner(
+            object_id,
+            ObjectEntry {
+                interface,
+                version: Version::ONE,
+                data: data.to_raw(),
+            },
+        )
     }
 
-    fn insert_inner(&mut self, id: ObjectId, object: (Interface, usize)) -> Result<(), ObjectError> {
+    fn insert_inner(&mut self, id: ObjectId, entry: ObjectEntry) -> Result<(), ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2).map(|e|e as usize) else {
             return Err(E::InvalidNewId);
         };
-        match self.slots.insert(idx, object) {
+        match self.slots.insert(idx, entry) {
             Ok(()) => Ok(()),
             // NOTE: can be out of bounds error
             Err(_) => Err(E::OccupiedNewId),
@@ -84,41 +133,35 @@ impl Objects {
     ///
     /// Object data usually is an index referencing other resource. Object data are provided in
     /// object insertion.
-    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Result<I::Output, ObjectError> {
+    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Result<ObjectEntry, ObjectError> {
         ObjectIndex::get_object_mut(idx, self)
     }
 
-    fn entry(&self, id: ObjectId) -> Result<&(Interface, usize), ObjectError> {
+    fn entry(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Ok(&(Interface::WlDisplay, 0));
+            return Ok(ObjectEntry::WL_DISPLAY);
         };
-        self.slots.get(idx as usize).ok_or(E::UnknownId)
+        self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
     }
 }
 
 pub trait ObjectIndex {
-    type Output;
-
-    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, ObjectError>;
+    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;
 }
 
 impl ObjectIndex for ObjectId {
-    type Output = (Interface, usize);
-
     #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, ObjectError> {
-        objects.entry(self).copied()
+    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
+        objects.entry(self)
     }
 }
 
 impl<I: WlObject> ObjectIndex for Object<I> {
-    type Output = usize;
-
     #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Result<Self::Output, ObjectError> {
+    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         let object = objects.entry(self.object_id())?;
-        if object.0 == self.interface() {
-            Ok(object.1)
+        if object.interface == self.interface() {
+            Ok(object)
         } else {
             Err(E::InvalidId)
         }

@@ -44,7 +44,7 @@ impl std::fmt::Display for Fixed {
 /// An operation version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
-pub struct Version(std::num::NonZeroU32);
+pub struct Version(std::num::NonZeroU16);
 
 impl Version {
     /// Create new [`Version`].
@@ -52,30 +52,20 @@ impl Version {
     /// Returns `None` if version is `0`.
     #[inline]
     pub const fn new(version: u32) -> Option<Self> {
-        match std::num::NonZeroU32::new(version) {
+        // perhaps reducing `u32` to `u16` is premature optimization, but its mentally better to
+        // know that if its stored in a list, it does not force alignment 4
+        match std::num::NonZeroU16::new(version as u16) {
             Some(ok) => Some(Self(ok)),
             None => None,
         }
     }
 
+    pub const ONE: Self = Self(std::num::NonZeroU16::new(1).unwrap());
+
     /// Returns `Version` as `u32`.
     #[inline]
     pub const fn to_u32(self) -> u32 {
-        self.0.get()
-    }
-}
-
-impl std::cmp::PartialEq<u32> for Version {
-    #[inline]
-    fn eq(&self, other: &u32) -> bool {
-        self.0.get().eq(other)
-    }
-}
-
-impl std::cmp::PartialOrd<u32> for Version {
-    #[inline]
-    fn partial_cmp(&self, other: &u32) -> Option<std::cmp::Ordering> {
-        self.0.get().partial_cmp(other)
+        self.0.get() as u32
     }
 }
 

@@ -81,13 +81,13 @@ fn route(
     use wayland::interfaces::*;
 
     let (id, op, frame) = Frame::new(read_buf, read_fd)?;
-    let (interface, _) = client.objects.get_mut(id)?;
+    let object = client.objects.get_mut(id)?;
 
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $($call:ident)?),* $(, $(.. $fb:ident)? $(,)? )? }) => {
             match <_>::from_op(op).ok_or(DecodeError::UnknownOpCode)? {
                 $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $($call)?),)*
-                $($(op => return Err(compositor.$fb(interface, op, client)),)?)?
+                $($(op => return Err(compositor.$fb(object.interface(), op, client)),)?)?
             }
         };
         (@CALL $iface:ident $req:ident) => {{
@@ -108,14 +108,14 @@ fn route(
                     Ok(true)
                 }
                 Err(err) => {
-                    log::handler_error(interface, op, err, client);
+                    log::handler_error(object.interface(), op, err, client);
                     client.send(GlobalError::new(id, err.code(), err.message()));
                     Ok(false)
                 }
             }
         };
         ($($iface:ident {$($tt:tt)*})*) => {
-            match interface {
+            match object.interface() {
                 $(Interface::$iface => handle_me!(@OP $iface {$($tt)*}),)*
                 iface => return Err(compositor.todo_interface(iface, op, client)),
             }
