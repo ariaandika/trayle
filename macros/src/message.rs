@@ -97,7 +97,7 @@ impl MessageAttr {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
         let since = self.since.map_stream(|since| generate! {
-            const SINCE: u32 = #since;
+            const SINCE: Version = Version::new(#since).unwrap();
         });
         generate! {
             impl AsInterface for #name @lf_ph {

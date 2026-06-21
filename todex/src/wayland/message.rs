@@ -1,10 +1,8 @@
-use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Interface, ObjectId};
+use crate::wayland::{AsInterface, AsObjectId, AsOpCode, Interface, ObjectId, Version};
 
 // ===== trait =====
 
-/// Type that represent wayland operation.
-///
-/// Wayland operation is either a request or event.
+/// Type that represent wayland message.
 pub trait WlMessage: AsInterface + AsOpCode {
     const IS_REQUEST: bool;
 
@@ -12,7 +10,7 @@ pub trait WlMessage: AsInterface + AsOpCode {
 
     const IS_DESTRUCTOR: bool = false;
 
-    const SINCE: u32 = 1;
+    const SINCE: Version = Version::new(1).unwrap();
 }
 
 // ===== message =====
@@ -56,3 +54,12 @@ impl<T: AsOpCode> AsOpCode for Message<T> {
     const OPNAME: &str = T::OPNAME;
 }
 
+impl<T: WlMessage> WlMessage for Message<T> {
+    const IS_REQUEST: bool = T::IS_REQUEST;
+
+    const IS_EVENT: bool = T::IS_EVENT;
+
+    const IS_DESTRUCTOR: bool = T::IS_DESTRUCTOR;
+
+    const SINCE: Version = T::SINCE;
+}

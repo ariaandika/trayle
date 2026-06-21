@@ -44,11 +44,11 @@ pub trait Encode: Sized + AsOpCode {
 /// Encode wayland message associated with object id.
 ///
 /// Applications may accept this trait instead of [`Encode`].
-pub trait EncodeMessage: AsObjectId {
+pub trait EncodeMessage: AsObjectId + Encode {
     fn encode_message(self, write_buf: &mut Bytes, write_fd: &mut Cmsg);
 }
 
-impl<E: Encode + AsObjectId> EncodeMessage for E {
+impl<E: AsObjectId + Encode> EncodeMessage for E {
     #[inline]
     fn encode_message(self, write_buf: &mut Bytes, write_fd: &mut Cmsg) {
         let id = self.object_id();

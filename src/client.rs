@@ -6,7 +6,7 @@ use todex::collections::slab::Slab;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
 use todex::wayland::wl_registry::BindData;
-use todex::wayland::{AsInterface, AsObjectId, AsOpCode, EncodeMessage};
+use todex::wayland::{AsObjectId, EncodeMessage, WlMessage};
 use todex::compositor::objects::Objects;
 
 use crate::log;
@@ -96,11 +96,15 @@ impl<'a> ClientMut<'a> {
     /// wrapped in [`Message`] to associate it with object id, which implements [`EncodeMessage`].
     ///
     /// [`Message`]: todex::wayland::Message
-    pub fn send<E: EncodeMessage + AsInterface + AsOpCode + display::AsDisplay>(
-        &mut self,
-        message: E,
-    ) {
-        log::send_message(message, self).encode_message(self.write_buf, self.write_fd);
+    ///
+    /// Note that automatic version checking is unlikely to be added. Caller must ensure that the
+    /// client support following message.
+    pub fn send<E: EncodeMessage + WlMessage + display::AsDisplay>(&mut self, message: E) {
+        EncodeMessage::encode_message(
+            log::send_message(message, self),
+            self.write_buf,
+            self.write_fd,
+        );
     }
 
     /// Send [`DeleteId`] event.
