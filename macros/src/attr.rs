@@ -123,13 +123,20 @@ impl SequenceAttr {
     }
 
     fn check_leftover(&mut self) -> Result<(), Error> {
-        let leftover = self.parser.next_if_map(|tree| match tree {
-            TokenTree::Punct(p) if p.as_char() == ',' => Err(p.into()),
-            tree => Ok(tree)
-        });
-        match leftover {
+        match self.parser.next() {
+            Some(t) => match t {
+                TokenTree::Punct(p) if p.as_char() == ',' => Ok(()),
+                t => Err(Error::spanned("unexpected leftover token", t.span())),
+            }
             None => Ok(()),
-            Some(t) => Err(Error::spanned("unexpected leftover token", t.span())),
+        }
+    }
+
+    pub fn check_empty(mut self) -> Result<(), Error> {
+        match self.parser.next() {
+            None => Ok(()),
+            // the span is terrible here
+            Some(t) => Err(Error::spanned("unexpected attr", t.span())),
         }
     }
 }

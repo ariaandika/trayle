@@ -40,10 +40,10 @@ struct InterfaceAttr {
 impl Parse for InterfaceAttr {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let mut seq = SequenceAttr::parse_attrs_opt("interface", parser)?;
-        Ok(Self {
-            global: seq.next_named_of("global")?,
-            data: seq.next_named_of("data")?,
-        })
+        let global = seq.next_named_of("global")?;
+        let data = seq.next_named_of("data")?;
+        seq.check_empty()?;
+        Ok(Self { global, data })
     }
 }
 

@@ -72,6 +72,7 @@ impl Parse for MessageAttr {
             )),
         };
         let is_destructor = seq.next_flag_of("destructor")?;
+        seq.check_empty()?;
         Ok(Self {
             iface,
             is_request,
