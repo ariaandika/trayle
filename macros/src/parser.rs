@@ -114,6 +114,13 @@ impl Parser {
         })
     }
 
+    pub fn is_punct_or_eof(&mut self, punct: char) -> bool {
+        match self.peek() {
+            Some(e) => matches!(e, Tree::Punct(p) if p.as_char() == punct),
+            None => true,
+        }
+    }
+
     pub fn next_ident_of(&mut self, expect: &str) -> Option<Ident> {
         self.next_if_map(|e| match e {
             TokenTree::Ident(ok) if ok.to_string() == expect => Ok(ok),

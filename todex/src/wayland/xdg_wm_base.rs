@@ -4,7 +4,7 @@ use crate::wayland::xdg_positioner::XdgPositioner;
 use crate::wayland::xdg_surface::XdgSurface;
 
 #[derive(Interface, Debug)]
-#[global(7)]
+#[interface(global = 7)]
 pub struct XdgWmBase {
     id: ObjectId,
 }
@@ -18,25 +18,24 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgWmBase)]
-#[destructor]
+#[message(request = XdgWmBase, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(XdgWmBase)]
+#[message(request = XdgWmBase)]
 pub struct CreatePositioner {
     pub positioner: NewId<XdgPositioner>,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgWmBase)]
+#[message(request = XdgWmBase)]
 pub struct GetXdgSurface {
     pub xdg_surface: NewId<XdgSurface>,
     pub wl_surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgWmBase)]
+#[message(request = XdgWmBase)]
 pub struct Pong {
     pub serial_unit: u32,
 }
@@ -47,7 +46,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(XdgWmBase)]
+#[message(event = XdgWmBase)]
 pub struct Ping {
     pub serial_unit: u32,
 }

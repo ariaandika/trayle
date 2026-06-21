@@ -12,8 +12,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlKeyboard)]
-#[destructor]
+#[message(request = WlKeyboard, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -27,7 +26,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct Keymap {
     pub format: KeymapFormat,
     #[fd]
@@ -36,7 +35,7 @@ pub struct Keymap {
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct Enter<'a> {
     pub serial: u32,
     pub surface: Object<WlSurface>,
@@ -44,14 +43,14 @@ pub struct Enter<'a> {
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct Leave {
     pub serial: u32,
     pub surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct Key {
     pub serial: u32,
     pub time: u32,
@@ -60,7 +59,7 @@ pub struct Key {
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct Modifiers {
     pub serial: u32,
     pub mods_depressed: u32,
@@ -70,7 +69,7 @@ pub struct Modifiers {
 }
 
 #[derive(Message, Debug)]
-#[event(WlKeyboard)]
+#[message(event = WlKeyboard)]
 pub struct RepeatInfo {
     pub rate: i32,
     pub delay: i32,

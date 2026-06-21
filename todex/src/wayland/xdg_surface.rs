@@ -18,18 +18,17 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgSurface)]
-#[destructor]
+#[message(request = XdgSurface, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(XdgSurface)]
+#[message(request = XdgSurface)]
 pub struct GetToplevel {
     pub toplevel: NewId<XdgToplevel>,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgSurface)]
+#[message(request = XdgSurface)]
 pub struct GetPopup {
     pub popup: NewId<XdgPopup>,
     pub parent: Option<Object<XdgSurface>>,
@@ -37,7 +36,7 @@ pub struct GetPopup {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgSurface)]
+#[message(request = XdgSurface)]
 pub struct SetWindowGeometry {
     pub x: i32,
     pub y: i32,
@@ -46,7 +45,7 @@ pub struct SetWindowGeometry {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgSurface)]
+#[message(request = XdgSurface)]
 pub struct AckConfigure {
     pub serial: u32,
 }
@@ -57,7 +56,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(XdgSurface)]
+#[message(event = XdgSurface)]
 pub struct Configure {
     pub serial: u32,
 }

@@ -15,7 +15,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlShmPool)]
+#[message(request = WlShmPool)]
 pub struct CreateBuffer {
     pub wl_buffer: NewId<WlBuffer>,
     pub offset: u32,
@@ -26,12 +26,11 @@ pub struct CreateBuffer {
 }
 
 #[derive(Message, Debug)]
-#[request(WlShmPool)]
-#[destructor]
+#[message(request = WlShmPool, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlShmPool)]
+#[message(request = WlShmPool)]
 pub struct Resize {
     pub size: u32,
 }

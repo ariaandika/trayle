@@ -20,19 +20,18 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
-#[destructor]
+#[message(request = XdgPositioner, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetSize {
     pub width: i32,
     pub height: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetAnchorRect {
     pub x: i32,
     pub y: i32,
@@ -41,43 +40,43 @@ pub struct SetAnchorRect {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetAnchor {
     pub anchor: Anchor,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetGravity {
     pub gravity: Gravity,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetConstraintAdjustment {
     pub adjust: ConstraintAdjustment,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetOffset {
     pub x: i32,
     pub y: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetReactive;
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetParentSize {
     pub parent_width: i32,
     pub parent_height: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPositioner)]
+#[message(request = XdgPositioner)]
 pub struct SetParentConfigure {
     pub serial: u32,
 }

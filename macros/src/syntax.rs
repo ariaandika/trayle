@@ -12,6 +12,12 @@ impl Parse for Ident {
     }
 }
 
+impl Parse for Literal {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        parser.lit()
+    }
+}
+
 // ===== Vis =====
 
 #[derive(Clone)]
@@ -202,7 +208,6 @@ impl Parse for FieldNamed {
                 let mut depth = 0u32;
                 let mut may_arrow = false;
                 loop {
-                    assert!(!may_arrow);
                     let tree = parser.next_if_map(|tree| match tree {
                         TokenTree::Punct(p) => {
                             use Spacing as S;

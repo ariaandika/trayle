@@ -11,8 +11,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[request(WlOutput)]
-#[destructor]
+#[message(request = WlOutput, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -26,7 +25,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Geometry<'a> {
     pub x: i32,
     pub y: i32,
@@ -39,7 +38,7 @@ pub struct Geometry<'a> {
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Mode {
     pub flags: ModeFlag,
     pub width: i32,
@@ -48,23 +47,23 @@ pub struct Mode {
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Done;
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Scale {
     pub factor: i32,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Name<'a> {
     pub name: &'a str,
 }
 
 #[derive(Message, Debug, Clone, Copy)]
-#[event(WlOutput)]
+#[message(event = WlOutput)]
 pub struct Description<'a> {
     pub name: &'a str,
 }

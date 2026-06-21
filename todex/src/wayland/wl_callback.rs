@@ -11,8 +11,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlCallback)]
-#[destructor]
+#[message(event = WlCallback, destructor)]
 pub struct Done {
     pub callback_data: u32,
 }

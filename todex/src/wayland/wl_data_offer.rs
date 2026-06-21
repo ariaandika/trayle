@@ -16,14 +16,14 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataOffer)]
+#[message(request = WlDataOffer)]
 pub struct Accept<'a> {
     pub serial: u32,
     pub mime_type: Option<&'a str>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataOffer)]
+#[message(request = WlDataOffer)]
 pub struct Receive<'a> {
     pub mime_type: &'a str,
     #[fd]
@@ -31,16 +31,15 @@ pub struct Receive<'a> {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataOffer)]
-#[destructor]
+#[message(request = WlDataOffer, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlDataOffer)]
+#[message(request = WlDataOffer)]
 pub struct Finish;
 
 #[derive(Message, Debug)]
-#[request(WlDataOffer)]
+#[message(request = WlDataOffer)]
 pub struct SetActions {
     pub dnd_actions: DndAction,
     pub preferred_action: DndAction,
@@ -54,19 +53,19 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataOffer)]
+#[message(event = WlDataOffer)]
 pub struct Offer<'a> {
     pub mime_type: &'a str,
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataOffer)]
+#[message(event = WlDataOffer)]
 pub struct SourceActions {
     pub source_actions: DndAction,
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataOffer)]
+#[message(event = WlDataOffer)]
 pub struct Action {
     pub dnd_action: DndAction,
 }

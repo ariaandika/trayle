@@ -11,8 +11,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlBuffer)]
-#[destructor]
+#[message(request = WlBuffer, destructor)]
 pub struct Destroy;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -21,5 +20,5 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlBuffer)]
+#[message(event = WlBuffer)]
 pub struct Release;

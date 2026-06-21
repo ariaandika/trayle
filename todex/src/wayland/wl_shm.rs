@@ -2,7 +2,7 @@ use crate::wayland::prelude::*;
 use crate::wayland::wl_shm_pool::WlShmPool;
 
 #[derive(Interface, Debug)]
-#[global(2)]
+#[interface(global = 2)]
 pub struct WlShm {
     id: ObjectId,
 }
@@ -14,7 +14,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlShm)]
+#[message(request = WlShm)]
 pub struct CreatePool {
     pub id: NewId<WlShmPool>,
     #[fd]
@@ -23,8 +23,7 @@ pub struct CreatePool {
 }
 
 #[derive(Message, Debug)]
-#[request(WlShm)]
-#[destructor]
+#[message(request = WlShm, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -33,7 +32,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlShm)]
+#[message(event = WlShm)]
 pub struct Format {
     pub format: PixelFormat,
 }

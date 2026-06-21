@@ -26,12 +26,11 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
-#[destructor]
+#[message(request = WlSurface, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct Attach {
     pub buffer: Option<Object<WlBuffer>>,
     pub x: i32,
@@ -39,7 +38,7 @@ pub struct Attach {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct Damage {
     pub x: i32,
     pub y: i32,
@@ -48,41 +47,41 @@ pub struct Damage {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct Frame {
     pub callback: NewId<WlCallback>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct SetOpaqueRegion {
     pub region: Option<Object<WlRegion>>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct SetInputRegion {
     pub region: Option<Object<WlRegion>>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct Commit;
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct SetBufferTransform {
     pub transform: Transform,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct SetBufferScale {
     pub scale: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct DamageBuffer {
     pub x: i32,
     pub y: i32,
@@ -91,38 +90,38 @@ pub struct DamageBuffer {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct Offset {
     pub x: i32,
     pub y: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSurface)]
+#[message(request = WlSurface)]
 pub struct GetRelease {
     pub callback: NewId<WlCallback>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlSurface)]
+#[message(event = WlSurface)]
 pub struct Enter {
     pub output: Object<WlOutput>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlSurface)]
+#[message(event = WlSurface)]
 pub struct Leave {
     pub output: Object<WlOutput>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlSurface)]
+#[message(event = WlSurface)]
 pub struct PreferredBufferScale {
     pub factor: i32,
 }
 
 #[derive(Message, Debug)]
-#[event(WlSurface)]
+#[message(event = WlSurface)]
 pub struct PreferredBufferTransform {
     pub transform: Transform,
 }

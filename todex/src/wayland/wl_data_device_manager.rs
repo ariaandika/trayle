@@ -4,7 +4,7 @@ use crate::wayland::wl_data_source::WlDataSource;
 use crate::wayland::wl_seat::WlSeat;
 
 #[derive(Interface, Debug)]
-#[global(4)]
+#[interface(global = 4)]
 pub struct WlDataDeviceManager {
     id: ObjectId,
 }
@@ -17,21 +17,20 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDeviceManager)]
+#[message(request = WlDataDeviceManager)]
 pub struct CreateDataSource {
     pub data_source: NewId<WlDataSource>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDeviceManager)]
+#[message(request = WlDataDeviceManager)]
 pub struct GetDataDevice {
     pub data_device: NewId<WlDataDevice>,
     pub seat: Object<WlSeat>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDeviceManager)]
-#[destructor]
+#[message(request = WlDataDeviceManager, destructor)]
 pub struct Release;
 
 #[derive(Debug, Clone, Copy)]

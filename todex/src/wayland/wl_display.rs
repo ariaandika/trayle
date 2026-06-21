@@ -23,13 +23,13 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDisplay)]
+#[message(request = WlDisplay)]
 pub struct Sync {
     pub callback: NewId<WlCallback>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDisplay)]
+#[message(request = WlDisplay)]
 pub struct GetRegistry {
     pub registry: NewId<WlRegistry>,
 }
@@ -41,7 +41,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDisplay)]
+#[message(event = WlDisplay)]
 pub struct Error<'a> {
     pub object_id: ObjectId,
     pub code: u32,
@@ -49,7 +49,7 @@ pub struct Error<'a> {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDisplay)]
+#[message(event = WlDisplay)]
 pub struct DeleteId {
     pub id: ObjectId,
 }

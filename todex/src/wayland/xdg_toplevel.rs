@@ -26,30 +26,29 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
-#[destructor]
+#[message(request = XdgToplevel, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetParent {
     pub parent: Option<Object<XdgToplevel>>,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetTitle<'a> {
     pub title: &'a str,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetAppId<'a> {
     pub app_id: &'a str,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct ShowWindowMenu {
     pub seat: Object<WlSeat>,
     pub serial: u32,
@@ -58,14 +57,14 @@ pub struct ShowWindowMenu {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct Move {
     pub seat: Object<WlSeat>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct Resize {
     pub seat: Object<WlSeat>,
     pub serial: u32,
@@ -73,39 +72,39 @@ pub struct Resize {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetMaxSize {
     pub width: i32,
     pub height: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetMinSize {
     pub width: i32,
     pub height: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetMaximized;
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct UnsetMaximized;
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetFullscreen {
     pub output: Option<Object<WlOutput>>,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct UnsetFullscreen;
 
 #[derive(Message, Debug)]
-#[request(XdgToplevel)]
+#[message(request = XdgToplevel)]
 pub struct SetMinimized;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -117,24 +116,24 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(XdgToplevel)]
+#[message(event = XdgToplevel)]
 pub struct Configure {
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
-#[event(XdgToplevel)]
+#[message(event = XdgToplevel)]
 pub struct Close;
 
 #[derive(Message, Debug)]
-#[event(XdgToplevel)]
+#[message(event = XdgToplevel)]
 pub struct ConfigureBounds {
     pub width: i32,
     pub height: i32,
 }
 
 #[derive(Message, Debug)]
-#[event(XdgToplevel)]
+#[message(event = XdgToplevel)]
 pub struct WmCapabilities<'a> {
     pub capabilities: &'a [u8],
 }

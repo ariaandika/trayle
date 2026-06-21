@@ -38,6 +38,102 @@ impl ToTokens for Meta {
     }
 }
 
+// ===== NamedSequence =====
+
+/// `#[ident(values)]`.
+pub struct SequenceAttr {
+    pub ident: Ident,
+    pub parser: Parser,
+}
+
+impl SequenceAttr {
+    fn parse_attrs_inner(name: &str, parser: &mut Parser) -> Result<Option<Self>, Error> {
+        while let Some(_hash) = parser.next_punct_of('#') {
+            let _style = parser.next_punct_of('!');
+            let group = parser.group_of(Delimiter::Bracket)?;
+            let mut input = group.body_parser();
+            let ident = input.parse::<Ident>()?;
+            if ident.as_str() != name {
+                continue;
+            }
+            let input = input.group_of(Delimiter::Parenthesis)?;
+            return Ok(Some(Self {
+                ident,
+                parser: input.body_parser(),
+            }));
+        }
+        Ok(None)
+    }
+
+    /// This will drain and filter all attributes with ident of `name`.
+    pub fn parse_attrs(name: &str, parser: &mut Parser) -> Result<Self, Error> {
+        match Self::parse_attrs_inner(name, parser)? {
+            Some(ok) => Ok(ok),
+            None => Err(Error::spanned(
+                format!("attribute `{name}` required"),
+                parser.span(),
+            )),
+        }
+    }
+
+    /// This will drain and filter all attributes with ident of `name`.
+    ///
+    /// If there is no specified attribute, returned sequence will be empty.
+    pub fn parse_attrs_opt(name: &str, parser: &mut Parser) -> Result<Self, Error> {
+        match Self::parse_attrs_inner(name, parser)? {
+            Some(ok) => Ok(ok),
+            None => Ok(Self {
+                ident: Ident::new(name, Span::call_site()),
+                parser: Parser::new(TokenStream::new()),
+            }),
+        }
+    }
+
+    pub fn next_flag_of(&mut self, flag: &str) -> Result<bool, Error> {
+        let ok = self.parser.next_if_map(|tree| match tree {
+            TokenTree::Ident(id) if id.as_str() == flag => Ok(id),
+            tree => Err(tree),
+        });
+        if ok.is_some() {
+            self.check_leftover()?;
+        }
+        Ok(ok.is_some())
+    }
+
+    pub fn try_next_named<T: Parse>(&mut self) -> Result<(Ident, T), Error> {
+        let ident = self.parser.ident()?;
+        self.parser.punct_of('=')?;
+        let token = self.parser.parse()?;
+        self.check_leftover()?;
+        Ok((ident, token))
+    }
+
+    pub fn next_named_of<T: Parse>(&mut self, name: &str) -> Result<Option<T>, Error> {
+        let peek = self.parser.next_if_map(|tree| match tree {
+            TokenTree::Ident(id) if id.as_str() == name => Ok(id),
+            tree => Err(tree)
+        });
+        let Some(_) = peek else {
+            return Ok(None);
+        };
+        self.parser.punct_of('=')?;
+        let token = self.parser.parse().map(Some)?;
+        self.check_leftover()?;
+        Ok(token)
+    }
+
+    fn check_leftover(&mut self) -> Result<(), Error> {
+        let leftover = self.parser.next_if_map(|tree| match tree {
+            TokenTree::Punct(p) if p.as_char() == ',' => Err(p.into()),
+            tree => Ok(tree)
+        });
+        match leftover {
+            None => Ok(()),
+            Some(t) => Err(Error::spanned("unexpected leftover token", t.span())),
+        }
+    }
+}
+
 // ===== Attribute =====
 
 /// Outer attribute.
@@ -116,38 +212,6 @@ impl IntoIterator for Attribute {
 #[derive(Clone)]
 pub struct Attributes {
     pub attrs: Vec<Attribute>,
-}
-
-impl Attributes {
-    pub fn contains(&self, name: &str) -> bool {
-        self.attrs.iter().any(|e|e.ident.as_str() == name)
-    }
-
-    pub fn find_seq<T: Parse>(&self, name: &str) -> Result<Option<(Ident, T)>, Error> {
-        for attr in &self.attrs {
-            if attr.ident.as_str() != name {
-                continue;
-            }
-            let Meta::Seq(seq) = &attr.meta else {
-                continue;
-            };
-            return Ok(Some((attr.ident.clone(), Parser::new(seq.stream()).parse()?)));
-        }
-        Ok(None)
-    }
-
-    pub fn find_seq_with<T: Parse, F: Fn(&str) -> bool>(&self, f: F) -> Result<Option<(Ident, T)>, Error> {
-        for attr in &self.attrs {
-            if !f(attr.ident.as_str()) {
-                continue;
-            }
-            let Meta::Seq(seq) = &attr.meta else {
-                continue;
-            };
-            return Ok(Some((attr.ident.clone(), Parser::new(seq.stream()).parse()?)));
-        }
-        Ok(None)
-    }
 }
 
 impl Parse for Attributes {

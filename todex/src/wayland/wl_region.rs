@@ -13,12 +13,11 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlRegion)]
-#[destructor]
+#[message(request = WlRegion, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlRegion)]
+#[message(request = WlRegion)]
 pub struct Add {
     pub x: i32,
     pub y: i32,
@@ -27,7 +26,7 @@ pub struct Add {
 }
 
 #[derive(Message, Debug)]
-#[request(WlRegion)]
+#[message(request = WlRegion)]
 pub struct Subtract {
     pub x: i32,
     pub y: i32,

@@ -15,19 +15,18 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPopup)]
-#[destructor]
+#[message(request = XdgPopup, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(XdgPopup)]
+#[message(request = XdgPopup)]
 pub struct Grab {
     pub seat: Object<WlSeat>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
-#[request(XdgPopup)]
+#[message(request = XdgPopup)]
 pub struct Reposition {
     pub positioner: Object<XdgPositioner>,
     pub token: u32,
@@ -41,17 +40,17 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(XdgPopup)]
+#[message(event = XdgPopup)]
 pub struct Configure {
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
-#[event(XdgPopup)]
+#[message(event = XdgPopup)]
 pub struct PopupDone;
 
 #[derive(Message, Debug)]
-#[event(XdgPopup)]
+#[message(event = XdgPopup)]
 pub struct Repositioned {
     pub token: u32,
 }

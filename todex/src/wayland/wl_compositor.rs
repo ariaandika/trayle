@@ -3,7 +3,7 @@ use crate::wayland::wl_region::WlRegion;
 use crate::wayland::wl_surface::WlSurface;
 
 #[derive(Interface, Debug)]
-#[global(7)]
+#[interface(global = 7)]
 pub struct WlCompositor {
     id: ObjectId,
 }
@@ -16,18 +16,17 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlCompositor)]
+#[message(request = WlCompositor)]
 pub struct CreateSurface {
     pub surface: NewId<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlCompositor)]
+#[message(request = WlCompositor)]
 pub struct CreateRegion {
     pub region: NewId<WlRegion>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlCompositor)]
-#[destructor]
+#[message(request = WlCompositor, destructor)]
 pub struct Release;

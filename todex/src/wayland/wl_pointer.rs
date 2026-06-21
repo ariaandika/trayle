@@ -13,7 +13,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlPointer)]
+#[message(request = WlPointer)]
 pub struct SetCursor {
     pub serial: u32,
     pub surface: Object<WlSurface>,
@@ -22,8 +22,7 @@ pub struct SetCursor {
 }
 
 #[derive(Message, Debug)]
-#[request(WlPointer)]
-#[destructor]
+#[message(request = WlPointer, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -42,7 +41,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Enter {
     pub serial: u32,
     pub surface: Object<WlSurface>,
@@ -51,14 +50,14 @@ pub struct Enter {
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Leave {
     pub serial: u32,
     pub surface: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Motion {
     pub time: u32,
     pub surface_x: Fixed,
@@ -66,7 +65,7 @@ pub struct Motion {
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Button {
     pub serial: u32,
     pub time: u32,
@@ -75,7 +74,7 @@ pub struct Button {
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Axis {
     pub time: u32,
     pub axis: AxisTypes,
@@ -83,38 +82,38 @@ pub struct Axis {
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct Frame;
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct AxisSource {
     pub axis_source: AxisSourceTypes,
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct AxisStop {
     pub time: u32,
     pub axis: AxisTypes,
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct AxisDiscrete {
     pub axis: AxisTypes,
     pub discrete: i32,
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct AxisValue120 {
     pub axis: AxisTypes,
     pub value120: i32,
 }
 
 #[derive(Message, Debug)]
-#[event(WlPointer)]
+#[message(event = WlPointer)]
 pub struct AxisRelativeDirection {
     pub axis: AxisTypes,
     pub direction: AxisRelativeDirectionEnum,

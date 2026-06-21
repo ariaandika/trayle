@@ -4,7 +4,7 @@ use crate::wayland::wl_pointer::WlPointer;
 use crate::wayland::wl_touch::WlTouch;
 
 #[derive(Interface, Debug)]
-#[global(10)]
+#[interface(global = 10)]
 pub struct WlSeat {
     id: ObjectId,
 }
@@ -18,26 +18,25 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSeat)]
+#[message(request = WlSeat)]
 pub struct GetPointer {
     pub pointer: NewId<WlPointer>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSeat)]
+#[message(request = WlSeat)]
 pub struct GetKeyboard {
     pub keyboard: NewId<WlKeyboard>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSeat)]
+#[message(request = WlSeat)]
 pub struct GetTouch {
     pub touch: NewId<WlTouch>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSeat)]
-#[destructor]
+#[message(request = WlSeat, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -47,13 +46,13 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlSeat)]
+#[message(event = WlSeat)]
 pub struct Capabilities {
     pub capabilities: Capability,
 }
 
 #[derive(Message, Debug)]
-#[event(WlSeat)]
+#[message(event = WlSeat)]
 pub struct Name<'a> {
     pub name: &'a str,
 }

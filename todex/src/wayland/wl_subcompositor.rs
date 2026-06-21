@@ -14,12 +14,11 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSubcompositor)]
-#[destructor]
+#[message(request = WlSubcompositor, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlSubcompositor)]
+#[message(request = WlSubcompositor)]
 pub struct GetSubsurface {
     pub wl_subsurface: NewId<WlSubsurface>,
     pub surface: Object<WlSurface>,

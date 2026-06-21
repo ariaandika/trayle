@@ -37,7 +37,11 @@ mod protocol;
 // ===== definitions =====
 
 /// Implement `FromObjectId`, `AsObjectId` and `AsInterface`.
-#[proc_macro_derive(Interface, attributes(global, data))]
+///
+/// Attributes: `#[interface(global = <Ident>, data = <Ident>)]`.
+///
+/// Both attribute are optional.
+#[proc_macro_derive(Interface, attributes(interface))]
 pub fn interface(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, interface::process)
 }
@@ -51,11 +55,13 @@ pub fn opcode(tokens: p::TokenStream) -> p::TokenStream {
 /// Implement `Decode`, `Encode`, `AsInterface`, `WlMessage` and add constructor of the message in
 /// the interface object.
 ///
-/// Attribute `#[request(..)]` or `#[event(..)]` is required, with interface struct as the input.
+/// Attributes: `#[message(request = <Ident>, event = <Ident>, destructor)]`
 ///
-/// Add `#[destructor]` to mark operation as `type=destructor`, it will set
+/// Either `request` or `event` are required.
+///
+/// Optionally, add `destructor` to mark operation as `type=destructor`, it will set
 /// `Operator::IS_DESTRUCTOR`  to `true`.
-#[proc_macro_derive(Message, attributes(request, event, fd, destructor))]
+#[proc_macro_derive(Message, attributes(message, fd))]
 pub fn message(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, message::process)
 }
@@ -66,6 +72,27 @@ pub fn message(tokens: p::TokenStream) -> p::TokenStream {
 #[proc_macro_derive(WlEnum)]
 pub fn wl_enum(tokens:p::TokenStream) -> p::TokenStream {
     call(tokens, wl_enum::process)
+}
+
+/// Implement `WlEnum`, `Display`, `Bit{And, Or, Xor}` and define constant for each entries.
+///
+/// Target struct must be a single field struct of `u32`.
+///
+/// Currently, the `WlEnum` implementation ignore unknown bits.
+///
+/// ```ignore
+/// bitfield! {
+///     DndAction;
+///
+///     None = 0,
+///     Copy = 1,
+///     Move = 2,
+///     Ask = 4,
+/// }
+/// ```
+#[proc_macro]
+pub fn bitfield(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, bitfield::process)
 }
 
 /// Define an enum containing all implemented interfaces.
@@ -99,27 +126,6 @@ pub fn wl_enum(tokens:p::TokenStream) -> p::TokenStream {
 #[proc_macro]
 pub fn protocol(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, protocol::process)
-}
-
-/// Implement `WlEnum`, `Display`, `Bit{And, Or, Xor}` and define constant for each entries.
-///
-/// Target struct must be a single field struct of `u32`.
-///
-/// Currently, the `WlEnum` implementation ignore unknown bits.
-///
-/// ```ignore
-/// bitfield! {
-///     DndAction;
-///
-///     None = 0,
-///     Copy = 1,
-///     Move = 2,
-///     Ask = 4,
-/// }
-/// ```
-#[proc_macro]
-pub fn bitfield(tokens: p::TokenStream) -> p::TokenStream {
-    call(tokens, bitfield::process)
 }
 
 fn call(tokens: p::TokenStream, f: fn(Parser) -> Result<TokenStream, Error>) -> p::TokenStream {

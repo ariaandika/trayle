@@ -1,7 +1,7 @@
 use crate::wayland::prelude::*;
 
 #[derive(Interface, Debug)]
-#[data(Version)]
+#[interface(data = Version)]
 pub struct WlRegistry {
     id: ObjectId,
 }
@@ -12,7 +12,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlRegistry)]
+#[message(request = WlRegistry)]
 pub struct Bind<'a> {
     pub name: u32,
     pub id_name: &'a str,
@@ -27,7 +27,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlRegistry)]
+#[message(event = WlRegistry)]
 pub struct Global<'a> {
     pub name: u32,
     pub interface: &'a str,
@@ -35,7 +35,7 @@ pub struct Global<'a> {
 }
 
 #[derive(Message, Debug)]
-#[event(WlRegistry)]
+#[message(event = WlRegistry)]
 pub struct GlobalRemove {
     pub name: u32,
 }

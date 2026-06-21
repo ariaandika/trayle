@@ -12,8 +12,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlTouch)]
-#[destructor]
+#[message(request = WlTouch, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -28,7 +27,7 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Down {
     pub serial: u32,
     pub time: u32,
@@ -39,7 +38,7 @@ pub struct Down {
 }
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Up {
     pub serial: u32,
     pub time: u32,
@@ -47,7 +46,7 @@ pub struct Up {
 }
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Motion {
     pub time: u32,
     pub id: i32,
@@ -56,15 +55,15 @@ pub struct Motion {
 }
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Frame;
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Cancel;
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Shape {
     pub id: i32,
     pub major: Fixed,
@@ -72,7 +71,7 @@ pub struct Shape {
 }
 
 #[derive(Message, Debug)]
-#[event(WlTouch)]
+#[message(event = WlTouch)]
 pub struct Orientation {
     pub id: i32,
     pub orientation: Fixed,

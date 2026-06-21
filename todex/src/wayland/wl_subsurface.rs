@@ -17,35 +17,34 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
-#[destructor]
+#[message(request = WlSubsurface, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
+#[message(request = WlSubsurface)]
 pub struct SetPosition {
     pub x: i32,
     pub y: i32,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
+#[message(request = WlSubsurface)]
 pub struct PlaceAbove {
     pub sibling: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
+#[message(request = WlSubsurface)]
 pub struct PlaceBelow {
     pub sibling: Object<WlSurface>,
 }
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
+#[message(request = WlSubsurface)]
 pub struct SetSync;
 
 #[derive(Message, Debug)]
-#[request(WlSubsurface)]
+#[message(request = WlSubsurface)]
 pub struct SetDesync;
 
 #[derive(WlEnum, Debug, Clone, Copy)]

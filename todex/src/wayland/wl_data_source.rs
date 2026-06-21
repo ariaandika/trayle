@@ -14,18 +14,17 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataSource)]
+#[message(request = WlDataSource)]
 pub struct Offer<'a> {
     pub mime_type: &'a str,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataSource)]
-#[destructor]
+#[message(request = WlDataSource, destructor)]
 pub struct Destroy;
 
 #[derive(Message, Debug)]
-#[request(WlDataSource)]
+#[message(request = WlDataSource)]
 pub struct SetActions {
     pub dnd_actions: DndAction,
 }
@@ -41,13 +40,13 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct Target<'a> {
     pub mime_type: Option<&'a str>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct Send<'a> {
     pub mime_type: &'a str,
     #[fd]
@@ -55,19 +54,19 @@ pub struct Send<'a> {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct Cancelled;
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct DndDropPerformed;
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct DndFinished;
 
 #[derive(Message, Debug)]
-#[event(WlDataSource)]
+#[message(event = WlDataSource)]
 pub struct Action {
     pub dnd_action: DndAction,
 }

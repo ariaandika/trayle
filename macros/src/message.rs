@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
-    let attrs = parser.parse::<Attributes>()?;
+    let attrs = parser.parse::<MessageAttr>()?;
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("struct")?;
     let name = parser.ident()?;
@@ -11,7 +11,6 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         .map(|e| e.stream())
         .unwrap_or_default();
 
-    let meta = Metadata::new(&name, attrs)?;
     let lf_ph = if lf.lfs.is_empty() {
         token_stream!()
     } else {
@@ -41,9 +40,11 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
         len += 1;
     }
 
-    Ok(meta
+    let iface = attrs.iface.clone();
+
+    Ok(attrs
         .generate(&name, &lf_ph)
-        .chain(constructor.generate(len, &name, &lf, &meta.iface))
+        .chain(constructor.generate(len, &name, &lf, &iface))
         .chain(decode.generate(len, encodable, &name, &lf, &lf_ph))
         .chain(encode.generate(&name, &lf_ph))
         .chain(display.generate(&name, &lf_ph))
@@ -52,30 +53,34 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
 
 // ===== impl =====
 
-struct Metadata {
+struct MessageAttr {
     iface: Ident,
     is_request: bool,
     is_destructor: bool,
 }
 
-impl Metadata {
-    fn new(name: &Ident, attrs: Attributes) -> Result<Self, Error> {
-        let Some((attr_id, iface)) = attrs.find_seq_with(|e| matches!(e, "request" | "event"))?
-        else {
-            return Err(Error::spanned(
-                "`request` or `event` attribute is required",
-                name.span(),
-            ));
+impl Parse for MessageAttr {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        let mut seq = SequenceAttr::parse_attrs("message", parser)?;
+        let (kind, iface) = seq.try_next_named()?;
+        let is_request = match kind.as_str() {
+            "request" => true,
+            "event" => false,
+            n => return Err(Error::spanned(
+                format!("`request` or `event` attribute is required, found `{n}`"),
+                seq.ident.span(),
+            )),
         };
-        let is_request = matches!(attr_id.as_str(), "request");
-        let is_destructor = attrs.contains("destructor");
+        let is_destructor = seq.next_flag_of("destructor")?;
         Ok(Self {
             iface,
             is_request,
             is_destructor,
         })
     }
+}
 
+impl MessageAttr {
     fn generate(&self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
         let Self { is_request, iface, .. } = self;
         let opkind = Ident::new(

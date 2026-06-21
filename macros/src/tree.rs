@@ -276,3 +276,22 @@ impl std::fmt::Display for Ident {
         self.as_str().fmt(f)
     }
 }
+
+// ===== OptionExt =====
+
+pub trait OptionExt<T> {
+    fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
+        self,
+        f: F,
+    ) -> impl Iterator<Item = TokenTree>;
+}
+
+impl<T> OptionExt<T> for Option<T> {
+    fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
+        self,
+        f: F,
+    ) -> impl Iterator<Item = TokenTree> {
+        self.map(f).into_iter().flatten()
+    }
+}
+

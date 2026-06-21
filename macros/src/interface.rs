@@ -1,30 +1,12 @@
 use crate::prelude::*;
 
 pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
-    let attrs = parser.parse::<Attributes>()?;
+    let attr = parser.parse::<InterfaceAttr>()?;
     let _ = parser.ident_of("pub")?;
     let _ = parser.ident_of("struct")?;
     let name = parser.ident()?;
 
-    let wl_name = Literal::string(&to_snake(name.as_str()));
-    let global = match attrs.find_seq::<Global>("global")? {
-        Some((_, Global { version })) => token_stream! {
-            impl WlGlobal for #name {
-                const NAME: &str = #wl_name;
-
-                const VERSION: Version = Version::new(#version).unwrap();
-
-                const INTERFACE: Interface = Interface::#name;
-            }
-        },
-        None => token_stream!(),
-    };
-    let data = match attrs.find_seq::<Ident>("data")? {
-        Some(ok) => TokenTree::from(ok.1),
-        None => Group::new(Delimiter::Parenthesis, token_stream!()).into(),
-    };
-
-    Ok(generate! {
+    let base = generate! {
         impl FromObjectId for #name {
             #[inline]
             fn from_object_id(id: ObjectId) -> Self {
@@ -45,21 +27,44 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
                 Interface::#name
             }
         }
+    };
 
-        impl AsObjectData for #name {
-            type Data = #data;
-        }
-
-        @global
-    }.collect())
+    Ok(attr.generate(&name).chain(base).collect())
 }
 
-struct Global {
-    version: Literal,
+struct InterfaceAttr {
+    global: Option<Literal>,
+    data: Option<Ident>,
 }
 
-impl Parse for Global {
+impl Parse for InterfaceAttr {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        Ok(Self { version: parser.lit()? })
+        let mut seq = SequenceAttr::parse_attrs_opt("interface", parser)?;
+        Ok(Self {
+            global: seq.next_named_of("global")?,
+            data: seq.next_named_of("data")?,
+        })
+    }
+}
+
+impl InterfaceAttr {
+    fn generate(self, name: &Ident) -> impl Iterator<Item = TokenTree> {
+        let Self { global, data } = self;
+        let wl_name = Literal::string(&to_snake(name.as_str()));
+
+        let global = global.map_stream(move |version| generate! {
+            impl WlGlobal for #name {
+                const NAME: &str = #wl_name;
+                const VERSION: Version = Version::new(#version).unwrap();
+                const INTERFACE: Interface = Interface::#name;
+            }
+        });
+        let data = data.map_stream(|data| generate! {
+            impl AsObjectData for #name {
+                type Data = #data;
+            }
+        });
+
+        global.chain(data)
     }
 }

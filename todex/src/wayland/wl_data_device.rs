@@ -16,7 +16,7 @@ pub enum RequestOp {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDevice)]
+#[message(request = WlDataDevice)]
 pub struct StartDrag {
     pub source: Option<Object<WlDataSource>>,
     pub origin: Object<WlSurface>,
@@ -25,15 +25,14 @@ pub struct StartDrag {
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDevice)]
+#[message(request = WlDataDevice)]
 pub struct SetSelection {
     pub source: Option<Object<WlDataSource>>,
     pub serial: u32,
 }
 
 #[derive(Message, Debug)]
-#[request(WlDataDevice)]
-#[destructor]
+#[message(request = WlDataDevice, destructor)]
 pub struct Release;
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -47,13 +46,13 @@ pub enum EventOp {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct DataOffer {
     pub wl_data_offer: NewId<WlDataOffer>,
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct Enter {
     pub serial: u32,
     pub surface: Object<WlSurface>,
@@ -63,11 +62,11 @@ pub struct Enter {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct Leave;
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct Motion {
     pub time: u32,
     pub x: Fixed,
@@ -75,11 +74,11 @@ pub struct Motion {
 }
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct Drop;
 
 #[derive(Message, Debug)]
-#[event(WlDataDevice)]
+#[message(event = WlDataDevice)]
 pub struct Selection {
     pub id: Option<Object<WlDataOffer>>,
 }
