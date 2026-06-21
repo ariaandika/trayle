@@ -32,7 +32,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             .attrs
             .into_iter()
             .any(|e| e.ident.as_str() == "fd");
-        constructor.add_field(&ident, ty);
+        constructor.add_field(&ident, ty)?;
         decode.add_field(is_fd, encodable, &ident);
         encode.add_field(is_fd, encodable, &ident);
         display.add_field(len, is_fd, &ident);
@@ -128,12 +128,28 @@ impl MessageAttr {
 struct GenConstructor {
     args: TokenStream,
     construct: TokenStream,
+    new_id: Option<(Ident, Ident)>,
 }
 
 impl GenConstructor {
-    fn add_field(&mut self, ident: &Ident, ty: TokenStream) {
+    fn add_field(&mut self, ident: &Ident, ty: TokenStream) -> Result<(), Error> {
         self.args.extend(generate!(, #ident: @ty));
         self.construct.extend(generate!(#ident,));
+
+        let mut ty = ty.into_iter();
+        if let (Some(TokenTree::Ident(ty_name)), Some(TokenTree::Ident(iface))) =
+            (ty.next(), ty.nth(1))
+            && ty_name.as_str() == "NewId"
+        {
+            if self.new_id.is_some() {
+                return Err(Error::spanned(
+                    "multiple NewId, cannot implement AsNewId",
+                    ty_name.span(),
+                ));
+            }
+            self.new_id = Some((ident.clone(), iface));
+        }
+        Ok(())
     }
 
     fn generate(
@@ -143,25 +159,36 @@ impl GenConstructor {
         lf: &Lifetimes,
         iface: &Ident,
     ) -> impl Iterator<Item = TokenTree> {
-        if len > 6 {
-            return None.into_iter().flatten();
-        }
+        let Self { args, construct, new_id, .. } = self;
         let mname = to_snake(name.as_str());
-        if KEYWORDS.contains(&mname.as_str()) {
-            return None.into_iter().flatten();
-        }
-        let mname = Ident::new(&mname, Span::call_site());
-        let Self { args, construct, .. } = self;
-        Some(generate! {
-            impl #iface {
-                #[inline]
-                pub fn #mname@lf(&self @args) -> Message<#name @lf> {
-                    Message::new(self, #name { @construct })
+
+        let is_ctor = len <= 6 && !KEYWORDS.contains(&mname.as_str());
+        let ctor = is_ctor.then_some(()).map_stream(|()|{
+            let mname = Ident::new(&mname, Span::call_site());
+            generate! {
+                impl #iface {
+                    #[inline]
+                    pub fn #mname@lf(&self @args) -> Message<#name @lf> {
+                        Message::new(self, #name { @construct })
+                    }
                 }
             }
-        })
-        .into_iter()
-        .flatten()
+        });
+
+        let new_id = new_id.map_stream(|(field, new_iface)|{
+            generate! {
+                impl AsNewId for #name {
+                    type Interface = #new_iface;
+
+                    #[inline]
+                    fn new_id(&self) -> NewId<Self::Interface> {
+                        self.#field
+                    }
+                }
+            }
+        });
+
+        ctor.chain(new_id)
     }
 }
 

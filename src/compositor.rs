@@ -1,8 +1,8 @@
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, DecodeError, OpCode, WlMessage, WlError};
-use todex::wayland::{Frame, Global, Interface, ObjectId};
 use todex::wayland::wl_display::Error as GlobalError;
+use todex::wayland::{self, AsInterface, AsOpCode, Decode, OpCode, WlError, WlMessage};
+use todex::wayland::{DecodeError, Frame, Global, Interface, ObjectId, Operation};
 
 use crate::error::FatalError;
 use crate::seat::Seat;
@@ -10,9 +10,9 @@ use crate::client::ClientMut;
 use crate::log;
 
 mod prelude {
-    pub(super) use todex::wayland::{self, Interface, WlError};
+    pub(super) use todex::wayland::{self, Interface, WlError, Operation};
     pub(super) use crate::client::ClientMut;
-    pub(super) use super::{Compositor, RequestHandler};
+    pub(super) use super::{Compositor, RequestHandler, RequestHandler2};
 }
 
 mod wl_display;
@@ -22,9 +22,23 @@ mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
 
+// ===== traits =====
+
 trait RequestHandler<Request>: Sized {
     fn handle(&mut self, request: Request, client: &mut ClientMut) -> Result<(), WlError>;
 }
+
+trait RequestHandler2<Request>: Sized {
+    fn handle(&mut self, request: Operation<Request>, client: &mut ClientMut) -> Result<(), WlError>;
+}
+
+impl<R, H: RequestHandler<R>> RequestHandler2<R> for H {
+    fn handle(&mut self, request: Operation<R>, client: &mut ClientMut) -> Result<(), WlError> {
+        RequestHandler::handle(self, request.into_message(), client)
+    }
+}
+
+// ===== impl =====
 
 static GLOBALS: [Global; 5] = {
     use wayland::interfaces::*;
@@ -95,10 +109,11 @@ fn route(
             client.send(GlobalError::new(id, err.code(), err.message()));
             Ok(false)
         }};
-        (@CALL $iface:ident $req:ident $call:ident) => {
-            match RequestHandler::$call(
+        (@CALL $iface:ident $req:ident $call:ident) => {{
+            let message = log::recv_message($iface::$req::decode_with(frame)?, client);
+            match RequestHandler2::$call(
                 compositor,
-                log::recv_message($iface::$req::decode_with(frame)?, client),
+                Operation::new(id, message, object.version()),
                 client,
             ) {
                 Ok(_) => {
@@ -113,7 +128,7 @@ fn route(
                     Ok(false)
                 }
             }
-        };
+        }};
         ($($iface:ident {$($tt:tt)*})*) => {
             match object.interface() {
                 $(Interface::$iface => handle_me!(@OP $iface {$($tt)*}),)*

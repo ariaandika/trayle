@@ -13,16 +13,16 @@ impl RequestHandler<GetPointer> for Compositor {
     }
 }
 
-impl RequestHandler<GetKeyboard> for Compositor {
-    fn handle(&mut self, req: GetKeyboard, client: &mut ClientMut) -> Result<(), WlError> {
-        let wl_keyboard = client.objects.create(req.keyboard)?;
+impl RequestHandler2<GetKeyboard> for Compositor {
+    fn handle(
+        &mut self,
+        req: Operation<GetKeyboard>,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError> {
+        let version = req.version();
+        let wl_keyboard = client.objects.create2(req)?;
         client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
-        if let Some(bind) = client
-            .binds
-            .iter()
-            .find(|e| e.interface == Interface::WlSeat)
-            && bind.version >= RepeatInfo::SINCE
-        {
+        if version >= RepeatInfo::SINCE {
             client.send(wl_keyboard.repeat_info(50, 160));
         }
         Ok(())

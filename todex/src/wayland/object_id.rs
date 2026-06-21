@@ -14,6 +14,14 @@ pub trait AsObjectId {
     fn object_id(&self) -> ObjectId;
 }
 
+/// Type that is associated with a new id.
+pub trait AsNewId {
+    type Interface;
+
+    /// Returns the new id.
+    fn new_id(&self) -> NewId<Self::Interface>;
+}
+
 // ===== ObjectId =====
 
 /// Object ID.
@@ -139,6 +147,15 @@ impl<T> AsObjectId for NewId<T> {
     #[inline]
     fn object_id(&self) -> ObjectId {
         self.id
+    }
+}
+
+impl<I> AsNewId for NewId<I> {
+    type Interface = I;
+
+    #[inline]
+    fn new_id(&self) -> NewId<Self::Interface> {
+        *self
     }
 }
 

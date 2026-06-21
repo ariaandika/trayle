@@ -1,6 +1,6 @@
 use crate::collections::slots::Slots;
-use crate::wayland::{AsInterface, AsObjectId, Interface, NewId, ObjectData};
-use crate::wayland::{Object, ObjectError, ObjectId, WlObject, Version};
+use crate::wayland::{AsInterface, AsObjectId, Constructor, Interface, NewId, ObjectData};
+use crate::wayland::{Object, ObjectError, ObjectId, Version, WlObject};
 
 use ObjectError as E;
 
@@ -55,15 +55,26 @@ impl Objects {
     }
 
     /// Create and insert new object from [`NewId`].
-    #[inline]
     pub fn create<O: WlObject>(&mut self, new_id: NewId<O>) -> Result<O, ObjectError> {
         let object = new_id.create();
-        self.insert_with(&object, 0)?;
+        self.insert_parts(object.object_id(), object.interface(), Version::ONE, ())?;
+        Ok(object)
+    }
+
+    /// Create and insert new object from [`NewId`].
+    pub fn create2<C>(&mut self, constructor: C) -> Result<C::Interface, ObjectError>
+    where
+        C: Constructor,
+        C::Interface: WlObject,
+    {
+        let new_id = constructor.new_id();
+        let object = new_id.create();
+        let version = constructor.new_version();
+        self.insert_parts(object.object_id(), object.interface(), version, ())?;
         Ok(object)
     }
 
     /// Insert new object.
-    #[inline]
     pub fn insert<O: WlObject>(&mut self, object: &O) -> Result<(), ObjectError> {
         self.insert_with(object, 0)
     }
@@ -71,7 +82,6 @@ impl Objects {
     /// Insert new object with a data.
     ///
     /// The data can be retrieved in lookup operation.
-    #[inline]
     pub fn insert_with<O: WlObject>(&mut self, object: &O, data: u32) -> Result<(), ObjectError> {
         self.insert_inner(
             object.object_id(),
@@ -86,18 +96,18 @@ impl Objects {
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    #[inline]
     pub fn insert_parts<D: ObjectData>(
         &mut self,
         object_id: ObjectId,
         interface: Interface,
+        version: Version,
         data: D,
     ) -> Result<(), ObjectError> {
         self.insert_inner(
             object_id,
             ObjectEntry {
                 interface,
-                version: Version::ONE,
+                version,
                 data: data.to_raw(),
             },
         )
@@ -156,7 +166,7 @@ impl ObjectIndex for ObjectId {
     }
 }
 
-impl<I: WlObject> ObjectIndex for Object<I> {
+impl<I: WlObject> ObjectIndex for &Object<I> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         let object = objects.entry(self.object_id())?;
@@ -165,5 +175,12 @@ impl<I: WlObject> ObjectIndex for Object<I> {
         } else {
             Err(E::InvalidId)
         }
+    }
+}
+
+impl<I: WlObject> ObjectIndex for Object<I> {
+    #[inline]
+    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
+        <&Self>::get_object_mut(&self, objects)
     }
 }

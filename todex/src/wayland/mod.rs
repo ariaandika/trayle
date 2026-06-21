@@ -78,7 +78,7 @@
 
 // ===== core components =====
 
-pub use object_id::{AsObjectId, FromObjectId, NewId, ObjectId};
+pub use object_id::{AsNewId, AsObjectId, FromObjectId, NewId, ObjectId};
 pub use types::{Fixed, Version};
 pub use interface::AsInterface;
 pub use opcode::{AsOpCode, OpCode};
@@ -89,6 +89,8 @@ pub use enums::WlEnum;
 // ===== properties =====
 
 pub use global::{WlGlobal, Global};
+pub use constructor::Constructor;
+pub use operation::Operation;
 pub use data::{AsObjectData, ObjectData};
 pub use error::WlError;
 
@@ -112,6 +114,8 @@ mod object;
 mod message;
 
 mod global;
+mod constructor;
+mod operation;
 mod data;
 mod enums;
 mod error;
@@ -123,7 +127,7 @@ mod encode;
 pub mod display;
 
 mod prelude {
-    pub use super::{FromObjectId, AsObjectId, AsInterface, AsOpCode};
+    pub use super::{FromObjectId, AsObjectId, AsNewId, AsInterface, AsOpCode};
     pub use super::{WlGlobal, AsObjectData, OpCode, WlMessage, WlEnum};
     pub use super::{Fixed, Interface, Message, NewId, Object, ObjectId, Version};
     pub use super::decode::{Decode, Decoder, DecodeError};

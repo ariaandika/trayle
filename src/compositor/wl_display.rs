@@ -19,8 +19,8 @@ impl RequestHandler<Sync> for Compositor {
 }
 
 impl RequestHandler<GetRegistry> for Compositor {
-    fn handle(&mut self, request: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
-        let wl_registry = client.objects.create(request.registry)?;
+    fn handle(&mut self, req: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
+        let wl_registry = client.objects.create(req.registry)?;
 
         for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
             client.send(wl_registry.global(i, name, version.to_u32()));
@@ -41,7 +41,7 @@ impl RequestHandler<Bind<'_>> for Compositor {
         if bind.id_version > global.version {
             return Err(BindError::UnsupportedVersion.into());
         }
-        client.objects.insert_parts(bind.id, global.interface, bind.id_version)?;
+        client.objects.insert_parts(bind.id, global.interface, bind.id_version, ())?;
         client.binds.push(bind.data(global.interface));
 
         // some interface has side-effect after binding
