@@ -9,7 +9,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut body = body.body_parser();
     let mut names_arm = TokenStream::new();
 
-    while let Some(Variant { ident, discr, .. }) = body.separated(',')? {
+    while let Some(Variant { ident, discr, .. }) = body.punctuated(',')? {
         if discr.is_some() {
             return Err(Error::spanned(
                 "opcode enum cannot have discriminant",

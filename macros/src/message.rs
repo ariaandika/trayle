@@ -27,7 +27,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut encode = GenEncode::default();
     let mut display = GenDisplay::default();
 
-    while let Some(field) = body.separated(',')? {
+    while let Some(field) = body.punctuated(',')? {
         let FieldNamed { attrs, ident, ty, .. } = field;
         let is_fd = attrs
             .attrs

@@ -59,7 +59,7 @@ impl Parse for Attribute {
         let delim = group.delimiter();
         let mut input = Parser::new(group.stream());
         let ident = input.parse()?;
-        let meta = input.parse()?;
+        let meta = input.parse_full()?;
         Ok(Self { hash, style, delim, ident, meta })
     }
 }

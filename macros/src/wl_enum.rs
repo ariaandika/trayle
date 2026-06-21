@@ -10,7 +10,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut name_getter = GenNameGetter::new(&name);
     let mut wl_enum = GenWlEnum::new(&name);
 
-    while let Some(Variant { ident, discr, .. }) = body.separated(',')? {
+    while let Some(Variant { ident, discr, .. }) = body.punctuated(',')? {
         let discr = match discr {
             Some(ok) => {
                 if has_discr.is_none() {

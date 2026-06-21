@@ -78,7 +78,15 @@ impl Parser {
         T::parse(self)
     }
 
-    pub fn separated<T: Parse>(&mut self, sep: char) -> Result<Option<T>, Error> {
+    pub fn parse_full<T: Parse>(&mut self) -> Result<T, Error> {
+        let token = T::parse(self)?;
+        match self.next() {
+            None => Ok(token),
+            Some(t) => Err(Error::spanned("unexpected token", t.span()))
+        }
+    }
+
+    pub fn punctuated<T: Parse>(&mut self, sep: char) -> Result<Option<T>, Error> {
         if self.peek().is_none() {
             return Ok(None);
         }

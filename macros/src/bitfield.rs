@@ -7,7 +7,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let mut consts = GenConsts::default();
     let mut display = GenDisplay::default();
 
-    while let Some(Variant { attrs, ident, discr, .. }) = parser.separated(',')? {
+    while let Some(Variant { attrs, ident, discr, .. }) = parser.punctuated(',')? {
         let Some(Discriminant { expr, .. }) = discr else {
             return Err(Error::spanned("bitfield require explicit discriminant", ident.span()));
         };
