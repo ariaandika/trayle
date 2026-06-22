@@ -5,7 +5,6 @@ use todex::sys::cmsg::{Cmsg, WriteError};
 use todex::collections::slab::Slab;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
-use todex::wayland::wl_registry::BindData;
 use todex::wayland::{AsObjectId, EncodeMessage, WlMessage};
 use todex::compositor::objects::Objects;
 
@@ -68,7 +67,6 @@ impl ClientId {
 pub struct ClientState {
     pub socket: OwnedFd,
     pub objects: Objects,
-    pub binds: Vec<BindData>,
 }
 
 impl AsRawFd for ClientState {
@@ -160,7 +158,6 @@ impl Clients {
         let (id, client) = self.buf.insert(ClientState {
             socket,
             objects: Objects::new(),
-            binds: Vec::with_capacity(8),
         });
         assert!(id as u64 & MSB == 0, "client id exhausted");
         (ClientId(id as u64), client)

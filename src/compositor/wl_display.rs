@@ -3,7 +3,7 @@ use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::{PixelFormat, WlShm};
 use wayland::wl_compositor::CreateSurface;
-use wayland::Global;
+use wayland::{FromObjectId, Global};
 
 use crate::compositor::GLOBALS;
 use crate::compositor::prelude::*;
@@ -39,24 +39,23 @@ impl RequestHandler<Bind<'_>> for Compositor {
         let Some(global) = GLOBALS.get(bind.name as usize) else {
             return Err(BindError::UnknownName.into());
         };
-        if bind.id_name != global.name {
+        if bind.new_id_name != global.name {
             return Err(BindError::MissmatchName.into());
         }
-        if bind.id_version > global.version {
+        if bind.new_id_version > global.version {
             return Err(BindError::UnsupportedVersion.into());
         }
-        client.objects.insert_parts(bind.id, global.interface, bind.id_version, ())?;
-        client.binds.push(bind.data(global.interface));
+        client.objects.insert_parts(bind.new_id, global.interface, bind.new_id_version, ())?;
 
         // some interface has side-effect after binding
         match global.interface {
             Interface::WlSeat => {
-                let wl_seat = bind.message.create::<WlSeat>();
+                let wl_seat = WlSeat::from_object_id(bind.new_id);
                 client.send(wl_seat.name(self.seat.name()));
                 client.send(wl_seat.capabilities(self.seat.capability()));
             }
             Interface::WlShm => {
-                let wl_shm = bind.message.create::<WlShm>();
+                let wl_shm = WlShm::from_object_id(bind.new_id);
                 client.send(wl_shm.format(PixelFormat::Argb8888));
                 client.send(wl_shm.format(PixelFormat::Xrgb8888));
             }

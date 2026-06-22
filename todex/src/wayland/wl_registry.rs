@@ -15,9 +15,9 @@ pub enum RequestOp {
 #[message(request = WlRegistry)]
 pub struct Bind<'a> {
     pub name: u32,
-    pub id_name: &'a str,
-    pub id_version: Version,
-    pub id: ObjectId,
+    pub new_id_name: &'a str,
+    pub new_id_version: Version,
+    pub new_id: ObjectId,
 }
 
 #[derive(OpCode, Debug, Clone, Copy)]
@@ -38,34 +38,6 @@ pub struct Global<'a> {
 #[message(event = WlRegistry)]
 pub struct GlobalRemove {
     pub name: u32,
-}
-
-// ===== impls =====
-
-impl<'a> Bind<'a> {
-    /// Create object from current bind id.
-    ///
-    /// Note that this does not check for matching interface.
-    pub fn create<O: FromObjectId>(self) -> O {
-        O::from_object_id(self.id)
-    }
-
-    /// Create [`BindData`] from current bind request.
-    #[inline]
-    pub fn data(&self, interface: Interface) -> BindData {
-        BindData {
-            interface,
-            version: self.id_version,
-        }
-    }
-}
-
-// ===== BindData =====
-
-#[derive(Debug)]
-pub struct BindData {
-    pub interface: Interface,
-    pub version: Version,
 }
 
 // ===== BindError =====
