@@ -72,3 +72,11 @@ pub enum Error {
     /// get_pointer, get_keyboard or get_touch called on seat without the matching capability
     MissingCapability,
 }
+
+impl Error {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Error::MissingCapability => "missing seat capability",
+        }
+    }
+}

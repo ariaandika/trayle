@@ -1,11 +1,14 @@
 use crate::wayland::wl_display::WlDisplayError;
 use crate::wayland::wl_registry::BindError;
+use crate::wayland::wl_seat;
 use crate::wayland::{DecodeError, FrameError, ObjectError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
     /// Not yet implemented.
     NotYetImplemented,
+    /// Seat error.
+    Seat(wl_seat::Error),
     /// Frame error.
     Frame(FrameError),
     /// Decode error.
@@ -25,6 +28,7 @@ impl WlError {
     pub fn message(&self) -> &'static str {
         match self {
             Self::NotYetImplemented => "not yet implemented",
+            Self::Seat(e) => e.message(),
             Self::Frame(e) => e.message(),
             Self::Decode(e) => e.message(),
             Self::Object(e) => e.message(),
@@ -36,6 +40,7 @@ impl WlError {
     pub fn code(&self) -> u32 {
         match self {
             WlError::NotYetImplemented => IMPLEMENTATION,
+            WlError::Seat(_) => IMPLEMENTATION,
             WlError::Frame(_) => MALFORMED,
             WlError::Decode(_) => MALFORMED,
             WlError::Object(_) => SEMANTIC,
@@ -49,6 +54,13 @@ impl std::error::Error for WlError { }
 impl std::fmt::Display for WlError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(f, "{}", self.message())
+    }
+}
+
+impl From<wl_seat::Error> for WlError {
+    #[inline]
+    fn from(v: wl_seat::Error) -> Self {
+        Self::Seat(v)
     }
 }
 
