@@ -1,10 +1,10 @@
+use todex::bitflags::Flags;
+
 use wayland::WlMessage;
 use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
-use wayland::wl_seat::{self, GetKeyboard, GetPointer, GetTouch};
+use wayland::wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch};
 
 use crate::compositor::prelude::*;
-
-// TODO: blocker: interface error, checks for seat capability
 
 impl RequestHandler<GetPointer> for Compositor {
     fn handle(
@@ -12,6 +12,9 @@ impl RequestHandler<GetPointer> for Compositor {
         req: Operation<GetPointer>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
+        if !self.seat.capability().contains(Capability::POINTER) {
+            return Err(wl_seat::Error::MissingCapability.into());
+        }
         let _ = client.objects.create(req)?;
         Ok(())
     }
@@ -23,6 +26,9 @@ impl RequestHandler<GetKeyboard> for Compositor {
         req: Operation<GetKeyboard>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
+        if !self.seat.capability().contains(Capability::KEYBOARD) {
+            return Err(wl_seat::Error::MissingCapability.into());
+        }
         let version = req.version;
         let wl_keyboard = client.objects.create(req)?;
         client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
@@ -35,6 +41,9 @@ impl RequestHandler<GetKeyboard> for Compositor {
 
 impl RequestHandler<GetTouch> for Compositor {
     fn handle(&mut self, req: Operation<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
+        if !self.seat.capability().contains(Capability::TOUCH) {
+            return Err(wl_seat::Error::MissingCapability.into());
+        }
         let _ = client.objects.create(req)?;
         Ok(())
     }

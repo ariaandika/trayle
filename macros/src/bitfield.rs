@@ -4,7 +4,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
     let name = parser.ident()?;
     let _ = parser.punct_of(';')?;
 
-    let mut consts = GenConsts::default();
+    let mut consts = GenBitflag::default();
     let mut display = GenDisplay::default();
 
     while let Some(Variant { attrs, ident, discr, .. }) = parser.punctuated(',')? {
@@ -56,21 +56,41 @@ fn gen_bitops(name: &Ident, trait_: &str, fn_: &str, op: char) -> impl Iterator<
 // ===== impls =====
 
 #[derive(Default)]
-struct GenConsts {
-    tokens: TokenStream,
+struct GenBitflag {
+    has_none: bool,
+    consts: TokenStream,
 }
 
-impl GenConsts {
+impl GenBitflag {
     fn add_variant(&mut self, wl_name: &str, attrs: Attributes, expr: &TokenStream) {
-        let const_entry = Ident::new(&wl_name.to_uppercase(), Span::call_site());
-        self.tokens.extend(generate! {
+        let const_entry = Ident::new_string(wl_name.to_uppercase(), Span::call_site());
+        if const_entry.as_str() == "NONE" {
+            self.has_none = true;
+        }
+        self.consts.extend(generate! {
             @attrs
             pub const #const_entry: Self = Self(@expr);
         });
     }
 
     fn generate(self, name: &Ident) -> impl Iterator<Item = TokenTree> {
-        generate!(impl #name).chain(Some(Group::new(Delimiter::Brace, self.tokens).into()))
+        let Self { has_none, consts } = self;
+        let none_const = stream_if(!has_none, || {
+            generate! {
+                pub const NONE: Self = Self(#ZERO);
+            }
+        });
+        generate! {
+            impl crate::bitflags::Flags for #name {
+                fn bits(self) -> u32 {
+                    self.#ZERO
+                }
+            }
+            impl #name {
+                @consts
+                @none_const
+            }
+        }
     }
 }
 

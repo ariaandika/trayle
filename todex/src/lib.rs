@@ -27,6 +27,8 @@
 //! generic data structures.
 #![allow(clippy::new_without_default)]
 
+pub mod bitflags;
+
 pub mod sys;
 pub mod alloc;
 pub mod collections;
