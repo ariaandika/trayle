@@ -3,9 +3,10 @@ use std::task::Poll;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::{Cmsg, WriteError};
 use todex::collections::slab::Slab;
+use todex::wayland::primitives::AsObjectId;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
-use todex::wayland::{AsObjectId, EncodeMessage, WlMessage};
+use todex::wayland::{EncodeMessage, WlMessage};
 use todex::compositor::objects::Objects;
 
 use crate::log;

@@ -1,4 +1,5 @@
-use crate::wayland::{AsInterface, AsNewId, AsObjectId, FromObjectId, Interface, ObjectId};
+use crate::wayland::primitives::{AsNewId, AsObjectId, FromObjectId, NewId, ObjectId};
+use crate::wayland::{AsInterface, Interface};
 
 // ===== trait =====
 
@@ -95,7 +96,7 @@ impl<T: AsNewId> AsNewId for Object<T> {
     type Interface = T::Interface;
 
     #[inline]
-    fn new_id(&self) -> super::NewId<Self::Interface> {
+    fn new_id(&self) -> NewId<Self::Interface> {
         self.object.new_id()
     }
 }

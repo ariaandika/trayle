@@ -1,4 +1,5 @@
-use crate::wayland::{Fixed, Frame, FromObjectId, NewId, Object, ObjectId, Version, WlEnum};
+use crate::wayland::primitives::{Fixed, FromObjectId, NewId, ObjectId, Version, WlEnum};
+use crate::wayland::{Frame, Object};
 
 use DecodeError as E;
 

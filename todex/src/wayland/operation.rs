@@ -1,5 +1,5 @@
-use crate::wayland::{AsInterface, AsNewId, AsObjectId, AsOpCode, WlGlobal, WlMessage};
-use crate::wayland::{Constructor, Interface, NewId, ObjectId, Version};
+use crate::wayland::primitives::{AsNewId, AsObjectId, NewId, ObjectId, Version};
+use crate::wayland::{AsInterface, AsOpCode, Constructor, Interface, WlGlobal, WlMessage};
 
 /// Associate message with object id and version.
 #[derive(Debug, Clone, Copy)]

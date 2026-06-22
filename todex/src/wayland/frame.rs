@@ -1,6 +1,6 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
-use crate::wayland::ObjectId;
+use crate::wayland::primitives::ObjectId;
 
 use FrameError as E;
 

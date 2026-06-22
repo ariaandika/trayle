@@ -1,4 +1,5 @@
-use crate::wayland::{AsObjectId, Message, Fixed, NewId, Object, ObjectId, Version};
+use crate::wayland::primitives::{AsObjectId, Fixed, NewId, ObjectId, Version};
+use crate::wayland::{Message, Object};
 
 #[inline]
 pub fn fmt_me<D: Display2>(value: &D, f: &mut std::fmt::Formatter) -> std::fmt::Result {

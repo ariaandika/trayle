@@ -1,11 +1,11 @@
-use todex::wayland::{AsInterface, AsOpCode, Interface, WlError};
 use todex::wayland::display;
+use todex::wayland::{Interface, WlError, WlMessage};
 
 use crate::client::ClientMut;
 
 pub use todex::log::*;
 
-pub fn send_message<R: AsInterface + AsOpCode + display::AsDisplay>(
+pub fn send_message<R: WlMessage + display::AsDisplay>(
     msg: R,
     client: &ClientMut,
 ) -> R {
@@ -19,7 +19,7 @@ pub fn send_message<R: AsInterface + AsOpCode + display::AsDisplay>(
     msg
 }
 
-pub fn recv_message<R: AsInterface + AsOpCode + display::AsDisplay>(
+pub fn recv_message<R: WlMessage + display::AsDisplay>(
     msg: R,
     client: &ClientMut,
 ) -> R {
@@ -40,7 +40,7 @@ pub fn todo_interface<Op: std::fmt::Display>(interface: Interface, op: Op, clien
     );
 }
 
-pub fn todo_operation<R: AsOpCode + AsInterface>(req: R, client: &ClientMut) {
+pub fn todo_operation<R: WlMessage>(req: R, client: &ClientMut) {
     error!(
         "client#{} {}::{} is not yet implemented",
         client.id,

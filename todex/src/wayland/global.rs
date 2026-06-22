@@ -1,4 +1,5 @@
-use crate::wayland::{Interface, Version};
+use crate::wayland::primitives::Version;
+use crate::wayland::Interface;
 
 // ===== trait =====
 

@@ -1,4 +1,4 @@
-use crate::wayland::{NewId, Version};
+use crate::wayland::primitives::{NewId, Version};
 
 /// Type that creates new object.
 pub trait Constructor {

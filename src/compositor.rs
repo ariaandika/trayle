@@ -1,9 +1,10 @@
 use todex::collections::slab::Slab;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
+use todex::wayland::primitives::ObjectId;
 use todex::wayland::wl_display::Error as GlobalError;
-use todex::wayland::{self, AsInterface, AsOpCode, Decode, OpCode, WlError, WlMessage};
-use todex::wayland::{DecodeError, Frame, Global, Interface, ObjectId, Operation};
+use todex::wayland::{self, AsInterface, OpCode, Decode, WlError, WlMessage};
+use todex::wayland::{DecodeError, Frame, Global, Interface, Operation};
 
 use crate::error::FatalError;
 use crate::seat::Seat;
@@ -221,7 +222,7 @@ impl Compositor {
         WlError::NotYetImplemented
     }
 
-    pub fn todo<R: AsOpCode + AsInterface>(
+    pub fn todo<R: WlMessage>(
         &mut self,
         req: R,
         client: &mut ClientMut,

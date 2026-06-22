@@ -3,28 +3,6 @@
 //! This module provide wayland primitive, object abstraction, interface definitions, message decoding and
 //! encoding.
 //!
-//! # Primitives
-//!
-//! Most wayland primitives represented by rust primitive:
-//!
-//! - `int` `uint` -> `i32` `u32`
-//! - `fixed` -> [`Fixed`]
-//! - `string` -> `&str`
-//! - `array` -> `&[u8]`
-//! - `fd` -> `i32`
-//!
-//! [`ObjectId`] represent wayland object id. Object id cannot be `0`.
-//!
-//! [`NewId<I>`] wraps object id with type safe interface, representing new id for new object that
-//! implement associated interface. Note that implicit interface for new id is not supported, its
-//! embedded as field in the message. Its massively increase complexity while in practice only
-//! **one** message uses it.
-//!
-//! `object` in wayland represented as type safe [`Object<I>`] with associated interface. It can
-//! also represent untyped object where the interface stored as runtime value [`Interface`].
-//!
-//! The `fd` are pulled from ancillary data.
-//!
 //! # Object / Interface
 //!
 //! Wayland is an object-oriented protocol. Each object follows exactly one interface. An interface
@@ -45,6 +23,9 @@
 //! This API use [`Bytes`] and [`Cmsg`] for memory management. It is a bytes buffer and fds storage.
 //! See its documentation for more details.
 //!
+//! [`Bytes`]: crate::sys::bytes::Bytes
+//! [`Cmsg`]: crate::sys::cmsg::Cmsg
+//!
 //! [`Frame`] is used to decode a message. [`Frame::has_frame`] returns `true` if the buffer
 //! contains enough bytes for a frame. Then the buffer can be passed to `Frame` to decode the actual
 //! message using [`Decode`] implementation.
@@ -59,11 +40,7 @@
 //!
 //! This module also provide traits that abstract objects and messages.
 //!
-//! The following traits describe associated property of a type:
-//!
-//! - [`AsObjectId`]: Type that is associated with an object id.
-//! - [`AsInterface`]: Type that is associated with an interface.
-//! - [`AsOpCode`]: Type that is associated with an opcode.
+//! [`AsOpCode`] represent type that is associated with an opcode.
 //!
 //! The following traits describe a whole instance:
 //!
@@ -74,15 +51,8 @@
 //!
 //! These traits are not meant to be implemented by application.
 
-// `ObjectData` and `display` are not documented currently
-
 // ===== core components =====
 
-pub use object_id::{AsNewId, AsObjectId, FromObjectId, NewId, ObjectId};
-pub use types::{Fixed, Version};
-pub use interface::AsInterface;
-pub use opcode::{AsOpCode, OpCode};
-pub use enums::WlEnum;
 pub use object::{Any, Object, ObjectError, WlObject};
 pub use message::{Message, WlMessage};
 
@@ -105,11 +75,8 @@ macro_rules! roundup4 {
     };
 }
 
-mod object_id;
-mod types;
-mod interface;
-mod opcode;
-mod enums;
+pub mod primitives;
+
 mod object;
 mod message;
 
@@ -126,14 +93,47 @@ pub mod handle;
 pub mod display;
 
 mod prelude {
-    pub use super::{FromObjectId, AsObjectId, AsNewId, AsInterface, AsOpCode};
-    pub use super::{WlGlobal, OpCode, WlMessage, WlEnum};
-    pub use super::{Fixed, Interface, Message, NewId, Object, ObjectId, Version};
+    pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
+    pub use super::primitives::*;
+    pub use super::{AsInterface, AsOpCode, Interface, Message, Object, OpCode, WlGlobal, WlMessage};
     pub use super::decode::{Decode, Decoder, DecodeError};
     pub use super::encode::{Encode, Sized2, Writer};
     pub use super::display;
+}
 
-    pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
+// ===== Interface =====
+
+/// Type that is associated with an interface.
+pub trait AsInterface {
+    /// Returns the interface that this type associated with.
+    fn interface(&self) -> Interface;
+}
+
+// ===== OpCode =====
+
+/// Request/event opcode.
+///
+/// This type is the exhaustive list of the valid opcodes.
+pub trait OpCode: Sized {
+    /// Creates this type from raw opcode.
+    ///
+    /// Returns `None` if raw value is invalid for this type.
+    fn from_op(op: u16) -> Option<Self>;
+
+    /// Converts to raw opcode.
+    fn to_op(self) -> u16;
+}
+
+/// Type that is associated with an opcode.
+pub trait AsOpCode {
+    /// The opcode type.
+    type OpCode: OpCode;
+
+    /// The opcode value.
+    const OPCODE: Self::OpCode;
+
+    /// The opcode wayland name.
+    const OPNAME: &str;
 }
 
 macros::protocol! {

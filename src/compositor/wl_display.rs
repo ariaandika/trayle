@@ -4,7 +4,8 @@ use wayland::wl_display::{GetRegistry, Sync};
 use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::WlShm;
-use wayland::{FromObjectId, Global};
+use wayland::primitives::FromObjectId;
+use wayland::Global;
 
 use crate::compositor::prelude::*;
 use crate::compositor::{BindEffect, GLOBALS};

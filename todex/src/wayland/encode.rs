@@ -1,7 +1,7 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
-use crate::wayland::{AsObjectId, AsOpCode, Object, OpCode, WlEnum};
-use crate::wayland::{Fixed, Message, NewId, ObjectId, Version};
+use crate::wayland::primitives::{AsObjectId, Fixed, NewId, ObjectId, Version, WlEnum};
+use crate::wayland::{AsOpCode, Message, Object, OpCode};
 
 // ===== Encode =====
 
