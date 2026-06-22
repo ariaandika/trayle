@@ -1,39 +1,33 @@
 use crate::wayland::{AsInterface, AsNewId, AsObjectId, AsOpCode, WlGlobal, WlMessage};
 use crate::wayland::{Constructor, Interface, NewId, ObjectId, Version};
 
+/// Associate message with object id and version.
 #[derive(Debug, Clone, Copy)]
 pub struct Operation<M> {
-    object_id: ObjectId,
-    message: M,
-    version: Version,
+    pub object_id: ObjectId,
+    pub version: Version,
+    pub message: M,
 }
 
 impl<M> Operation<M> {
+    /// Create new [`Operation`].
     #[inline]
-    pub fn new(object_id: ObjectId, message: M, version: Version) -> Self {
-        Self { object_id, message, version }
-    }
-
-    #[inline]
-    pub fn version(&self) -> Version {
-        self.version
-    }
-
-    #[inline]
-    pub fn into_message(self) -> M {
-        self.message
+    pub fn new(object_id: ObjectId, version: Version, message: M) -> Self {
+        Self { object_id, version, message }
     }
 }
 
 impl<M> std::ops::Deref for Operation<M> {
     type Target = M;
 
+    #[inline]
     fn deref(&self) -> &Self::Target {
         &self.message
     }
 }
 
 impl<M> std::ops::DerefMut for Operation<M> {
+    #[inline]
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.message
     }

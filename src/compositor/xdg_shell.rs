@@ -7,7 +7,7 @@ use crate::compositor::prelude::*;
 macro_rules! ignore {
     ($req:ty) => {
         impl RequestHandler<$req> for Compositor {
-            fn handle(&mut self, _: $req, _: &mut ClientMut) -> Result<(), WlError> {
+            fn handle(&mut self, _: Operation<$req>, _: &mut ClientMut) -> Result<(), WlError> {
                 Ok(())
             }
         }
@@ -17,7 +17,7 @@ macro_rules! ignore {
 macro_rules! insert {
     ($req:ty,$field:ident) => {
         impl RequestHandler<$req> for Compositor {
-            fn handle(&mut self, req: $req, client: &mut ClientMut) -> Result<(), WlError> {
+            fn handle(&mut self, req: Operation<$req>, client: &mut ClientMut) -> Result<(), WlError> {
                 let _ = client.objects.create(req.$field)?;
                 Ok(())
             }

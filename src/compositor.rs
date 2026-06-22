@@ -12,7 +12,7 @@ use crate::log;
 mod prelude {
     pub(super) use todex::wayland::{self, Interface, WlError, Operation};
     pub(super) use crate::client::ClientMut;
-    pub(super) use super::{Compositor, RequestHandler, RequestHandler2};
+    pub(super) use super::{Compositor, RequestHandler};
 }
 
 mod wl_display;
@@ -25,17 +25,7 @@ mod xdg_shell;
 // ===== traits =====
 
 trait RequestHandler<Request>: Sized {
-    fn handle(&mut self, request: Request, client: &mut ClientMut) -> Result<(), WlError>;
-}
-
-trait RequestHandler2<Request>: Sized {
     fn handle(&mut self, request: Operation<Request>, client: &mut ClientMut) -> Result<(), WlError>;
-}
-
-impl<R, H: RequestHandler<R>> RequestHandler2<R> for H {
-    fn handle(&mut self, request: Operation<R>, client: &mut ClientMut) -> Result<(), WlError> {
-        RequestHandler::handle(self, request.into_message(), client)
-    }
 }
 
 // ===== impl =====
@@ -111,9 +101,9 @@ fn route(
         }};
         (@CALL $iface:ident $req:ident $call:ident) => {{
             let message = log::recv_message($iface::$req::decode_with(frame)?, client);
-            match RequestHandler2::$call(
+            match RequestHandler::$call(
                 compositor,
-                Operation::new(id, message, object.version()),
+                Operation::new(id, object.version(), message),
                 client,
             ) {
                 Ok(_) => {

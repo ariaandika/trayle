@@ -9,7 +9,7 @@ use crate::compositor::GLOBALS;
 use crate::compositor::prelude::*;
 
 impl RequestHandler<Sync> for Compositor {
-    fn handle(&mut self, sync: Sync, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(&mut self, sync: Operation<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_callback = sync.callback.create();
         client.objects.use_one(&wl_callback);
         client.send(wl_callback.done(0));
@@ -19,7 +19,11 @@ impl RequestHandler<Sync> for Compositor {
 }
 
 impl RequestHandler<GetRegistry> for Compositor {
-    fn handle(&mut self, req: GetRegistry, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(
+        &mut self,
+        req: Operation<GetRegistry>,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError> {
         let wl_registry = client.objects.create(req.registry)?;
 
         for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
@@ -31,7 +35,7 @@ impl RequestHandler<GetRegistry> for Compositor {
 }
 
 impl RequestHandler<Bind<'_>> for Compositor {
-    fn handle(&mut self, bind: Bind<'_>, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(&mut self, bind: Operation<Bind<'_>>, client: &mut ClientMut) -> Result<(), WlError> {
         let Some(global) = GLOBALS.get(bind.name as usize) else {
             return Err(BindError::UnknownName.into());
         };
@@ -47,12 +51,12 @@ impl RequestHandler<Bind<'_>> for Compositor {
         // some interface has side-effect after binding
         match global.interface {
             Interface::WlSeat => {
-                let wl_seat = bind.create::<WlSeat>();
+                let wl_seat = bind.message.create::<WlSeat>();
                 client.send(wl_seat.name(self.seat.name()));
                 client.send(wl_seat.capabilities(self.seat.capability()));
             }
             Interface::WlShm => {
-                let wl_shm = bind.create::<WlShm>();
+                let wl_shm = bind.message.create::<WlShm>();
                 client.send(wl_shm.format(PixelFormat::Argb8888));
                 client.send(wl_shm.format(PixelFormat::Xrgb8888));
             }
@@ -64,9 +68,12 @@ impl RequestHandler<Bind<'_>> for Compositor {
 }
 
 impl RequestHandler<CreateSurface> for Compositor {
-    fn handle(&mut self, req: CreateSurface, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(
+        &mut self,
+        req: Operation<CreateSurface>,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError> {
         let _ = client.objects.create(req.surface)?;
         Ok(())
     }
 }
-
