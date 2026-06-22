@@ -1,3 +1,4 @@
+use wayland::handle::Handle;
 use wayland::wl_compositor::CreateSurface;
 use wayland::wl_display::{GetRegistry, Sync};
 use wayland::wl_registry::{Bind, BindError};
@@ -5,8 +6,9 @@ use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::WlShm;
 use wayland::{FromObjectId, Global};
 
-use crate::compositor::{BindEffect, GLOBALS};
 use crate::compositor::prelude::*;
+use crate::compositor::{BindEffect, GLOBALS};
+use crate::wayland::surface::Surface;
 
 impl RequestHandler<Sync> for Compositor {
     fn handle(&mut self, sync: Operation<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -45,7 +47,12 @@ impl RequestHandler<Bind<'_>> for Compositor {
         if bind.new_id_version > global.version {
             return Err(BindError::UnsupportedVersion.into());
         }
-        client.objects.insert_parts(bind.new_id, global.interface, bind.new_id_version, ())?;
+        client.objects.insert_parts(
+            bind.new_id,
+            global.interface,
+            bind.new_id_version,
+            Handle::default(),
+        )?;
 
         // some interface has side-effect after binding
         macro_rules! bind_effect {
@@ -69,7 +76,9 @@ impl RequestHandler<CreateSurface> for Compositor {
         req: Operation<CreateSurface>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let _ = client.objects.create(req)?;
+        let (id, _) = self.surfaces.insert(Surface::None);
+        let handle = Handle::from_idx(id);
+        let _ = client.objects.create_handle(req, handle)?;
         Ok(())
     }
 }

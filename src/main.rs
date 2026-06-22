@@ -13,12 +13,13 @@ use service::listener::ListenerService;
 use service::clients::ClientService;
 use error::FatalError;
 
+mod wayland;
+
 mod buffer;
 mod seat;
 mod client;
 
 mod compositor;
-
 mod service;
 
 mod log;

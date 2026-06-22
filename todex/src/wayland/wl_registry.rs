@@ -1,7 +1,6 @@
 use crate::wayland::prelude::*;
 
 #[derive(Interface, Debug)]
-#[interface(data = Version)]
 pub struct WlRegistry {
     id: ObjectId,
 }

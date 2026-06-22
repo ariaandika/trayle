@@ -1,5 +1,6 @@
 use crate::collections::slots::Slots;
-use crate::wayland::{AsInterface, AsObjectId, Constructor, Interface, ObjectData};
+use crate::wayland::handle::{AsHandle, Handle};
+use crate::wayland::{AsInterface, AsObjectId, Constructor, Interface};
 use crate::wayland::{Object, ObjectError, ObjectId, Version, WlObject};
 
 // ===== ObjectEntry =====
@@ -10,10 +11,11 @@ use crate::wayland::{Object, ObjectError, ObjectId, Version, WlObject};
 pub struct ObjectEntry {
     interface: Interface,
     version: Version,
-    data: u32,
+    handle: Handle,
 }
 
 impl AsInterface for ObjectEntry {
+    #[inline]
     fn interface(&self) -> Interface {
         self.interface
     }
@@ -23,7 +25,7 @@ impl ObjectEntry {
     const WL_DISPLAY: Self = Self {
         interface: Interface::WlDisplay,
         version: Version::new(1).unwrap(),
-        data: 0,
+        handle: Handle::from_raw(0),
     };
 
     #[inline]
@@ -31,8 +33,8 @@ impl ObjectEntry {
         self.version
     }
 
-    pub fn data<D: ObjectData>(&self) -> D {
-        D::from_raw(self.data)
+    pub fn handle<H: AsHandle>(&self) -> H {
+        self.handle.to_handle()
     }
 }
 
@@ -66,29 +68,53 @@ impl Objects {
         C: Constructor,
         C::Interface: WlObject,
     {
-        let new_id = constructor.new_id();
-        let object = new_id.create();
-        let version = constructor.new_version();
-        self.insert_parts(object.object_id(), object.interface(), version, ())?;
+        let object = constructor.new_id().create();
+        self.insert_parts(
+            object.object_id(),
+            object.interface(),
+            constructor.new_version(),
+            Handle::default(),
+        )?;
+        Ok(object)
+    }
+
+    /// Create new object from constructor message.
+    pub fn create_handle<C, H>(
+        &mut self,
+        constructor: C,
+        handle: H,
+    ) -> Result<C::Interface, ObjectError>
+    where
+        C: Constructor,
+        C::Interface: WlObject,
+        H: AsHandle,
+    {
+        let object = constructor.new_id().create();
+        self.insert_parts(
+            object.object_id(),
+            object.interface(),
+            constructor.new_version(),
+            handle,
+        )?;
         Ok(object)
     }
 
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    pub fn insert_parts<D: ObjectData>(
+    pub fn insert_parts<H: AsHandle>(
         &mut self,
         object_id: ObjectId,
         interface: Interface,
         version: Version,
-        data: D,
+        handle: H,
     ) -> Result<(), ObjectError> {
         self.insert_inner(
             object_id,
             ObjectEntry {
                 interface,
                 version,
-                data: data.to_raw(),
+                handle: handle.to_handle(),
             },
         )
     }

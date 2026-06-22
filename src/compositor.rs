@@ -1,3 +1,4 @@
+use todex::collections::slab::Slab;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
 use todex::wayland::wl_display::Error as GlobalError;
@@ -8,6 +9,7 @@ use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
 use crate::log;
+use crate::wayland::surface::Surface;
 
 mod prelude {
     pub(super) use todex::wayland::{self, Interface, WlError, Operation};
@@ -52,11 +54,15 @@ static GLOBALS: [Global; 5] = {
 
 pub struct Compositor {
     seat: Seat,
+    surfaces: Slab<Surface>,
 }
 
 impl Compositor {
     pub fn new() -> Result<Self, FatalError> {
-        Ok(Self { seat: Seat::new()? })
+        Ok(Self {
+            seat: Seat::new()?,
+            surfaces: Slab::with_capacity(8),
+        })
     }
 
     pub fn has_frame(&self, read_buf: &Bytes) -> bool {
