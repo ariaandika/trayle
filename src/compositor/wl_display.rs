@@ -1,11 +1,11 @@
+use wayland::wl_compositor::CreateSurface;
 use wayland::wl_display::{GetRegistry, Sync};
 use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
-use wayland::wl_shm::{PixelFormat, WlShm};
-use wayland::wl_compositor::CreateSurface;
+use wayland::wl_shm::WlShm;
 use wayland::{FromObjectId, Global};
 
-use crate::compositor::GLOBALS;
+use crate::compositor::{BindEffect, GLOBALS};
 use crate::compositor::prelude::*;
 
 impl RequestHandler<Sync> for Compositor {
@@ -48,21 +48,18 @@ impl RequestHandler<Bind<'_>> for Compositor {
         client.objects.insert_parts(bind.new_id, global.interface, bind.new_id_version, ())?;
 
         // some interface has side-effect after binding
-        match global.interface {
-            Interface::WlSeat => {
-                let wl_seat = WlSeat::from_object_id(bind.new_id);
-                client.send(wl_seat.name(self.seat.name()));
-                client.send(wl_seat.capabilities(self.seat.capability()));
-            }
-            Interface::WlShm => {
-                let wl_shm = WlShm::from_object_id(bind.new_id);
-                client.send(wl_shm.format(PixelFormat::Argb8888));
-                client.send(wl_shm.format(PixelFormat::Xrgb8888));
-            }
-            _ => (),
+        macro_rules! bind_effect {
+            ($($iface:ident),*) => {
+                match global.interface {
+                    $(Interface::$iface => self.bind(
+                        $iface::from_object_id(bind.new_id),
+                        client
+                    ),)*
+                    _ => Ok(()),
+                }
+            };
         }
-
-        Ok(())
+        bind_effect!(WlSeat, WlShm)
     }
 }
 

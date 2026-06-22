@@ -2,9 +2,18 @@ use todex::bitflags::Flags;
 
 use wayland::WlMessage;
 use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
-use wayland::wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch};
+use wayland::wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};
 
+use crate::compositor::BindEffect;
 use crate::compositor::prelude::*;
+
+impl BindEffect<WlSeat> for Compositor {
+    fn bind(&mut self, wl_seat: WlSeat, client: &mut ClientMut) -> Result<(), WlError> {
+        client.send(wl_seat.name(self.seat.name()));
+        client.send(wl_seat.capabilities(self.seat.capability()));
+        Ok(())
+    }
+}
 
 impl RequestHandler<GetPointer> for Compositor {
     fn handle(

@@ -16,6 +16,7 @@ mod prelude {
 }
 
 mod wl_display;
+mod wl_shm;
 mod wl_seat;
 mod wl_data_source;
 mod wl_data_device_manager;
@@ -25,7 +26,15 @@ mod xdg_shell;
 // ===== traits =====
 
 trait RequestHandler<Request>: Sized {
-    fn handle(&mut self, request: Operation<Request>, client: &mut ClientMut) -> Result<(), WlError>;
+    fn handle(
+        &mut self,
+        request: Operation<Request>,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError>;
+}
+
+trait BindEffect<Interface> {
+    fn bind(&mut self, object: Interface, client: &mut ClientMut) -> Result<(), WlError>;
 }
 
 // ===== impl =====
