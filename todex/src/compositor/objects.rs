@@ -1,10 +1,10 @@
 use crate::collections::slots::Slots;
-use crate::wayland::{AsInterface, AsObjectId, Constructor, Interface, NewId, ObjectData};
+use crate::wayland::{AsInterface, AsObjectId, Constructor, Interface, ObjectData};
 use crate::wayland::{Object, ObjectError, ObjectId, Version, WlObject};
 
-use ObjectError as E;
+// ===== ObjectEntry =====
 
-const INITIAL_CAP: usize = 32;
+// hoping for new name for this
 
 #[derive(Debug, Copy, Clone)]
 pub struct ObjectEntry {
@@ -36,6 +36,12 @@ impl ObjectEntry {
     }
 }
 
+// ===== Objects =====
+
+use ObjectError as E;
+
+const INITIAL_CAP: usize = 32;
+
 /// A list of wayland objects.
 ///
 /// This is an array type where client can associate an index with given object.
@@ -54,15 +60,8 @@ impl Objects {
         }
     }
 
-    /// Create and insert new object from [`NewId`].
-    pub fn create<O: WlObject>(&mut self, new_id: NewId<O>) -> Result<O, ObjectError> {
-        let object = new_id.create();
-        self.insert_parts(object.object_id(), object.interface(), Version::ONE, ())?;
-        Ok(object)
-    }
-
-    /// Create and insert new object from [`NewId`].
-    pub fn create2<C>(&mut self, constructor: C) -> Result<C::Interface, ObjectError>
+    /// Create new object from constructor message.
+    pub fn create<C>(&mut self, constructor: C) -> Result<C::Interface, ObjectError>
     where
         C: Constructor,
         C::Interface: WlObject,
@@ -72,25 +71,6 @@ impl Objects {
         let version = constructor.new_version();
         self.insert_parts(object.object_id(), object.interface(), version, ())?;
         Ok(object)
-    }
-
-    /// Insert new object.
-    pub fn insert<O: WlObject>(&mut self, object: &O) -> Result<(), ObjectError> {
-        self.insert_with(object, 0)
-    }
-
-    /// Insert new object with a data.
-    ///
-    /// The data can be retrieved in lookup operation.
-    pub fn insert_with<O: WlObject>(&mut self, object: &O, data: u32) -> Result<(), ObjectError> {
-        self.insert_inner(
-            object.object_id(),
-            ObjectEntry {
-                interface: object.interface(),
-                version: Version::ONE,
-                data,
-            },
-        )
     }
 
     /// Insert new object from parts.

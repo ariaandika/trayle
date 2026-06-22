@@ -8,7 +8,7 @@ impl RequestHandler<CreateDataSource> for Compositor {
         req: Operation<CreateDataSource>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let _ = client.objects.create(req.data_source)?;
+        let _ = client.objects.create(req)?;
         Ok(())
     }
 }
@@ -20,7 +20,7 @@ impl RequestHandler<GetDataDevice> for Compositor {
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
         let _ = client.objects.get_mut(&req.seat)?;
-        let _ = client.objects.create(req.data_device)?;
+        let _ = client.objects.create(req)?;
         self.seat.set_data_device(client.id.to_raw());
         Ok(())
     }

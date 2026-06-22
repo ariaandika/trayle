@@ -15,10 +15,10 @@ macro_rules! ignore {
 }
 
 macro_rules! insert {
-    ($req:ty,$field:ident) => {
+    ($req:ty) => {
         impl RequestHandler<$req> for Compositor {
             fn handle(&mut self, req: Operation<$req>, client: &mut ClientMut) -> Result<(), WlError> {
-                let _ = client.objects.create(req.$field)?;
+                let _ = client.objects.create(req)?;
                 Ok(())
             }
         }
@@ -26,13 +26,13 @@ macro_rules! insert {
 }
 
 ignore!(xdg_wm_base::Destroy);
-insert!(CreatePositioner, positioner);
-insert!(GetXdgSurface, xdg_surface);
+insert!(CreatePositioner);
+insert!(GetXdgSurface);
 ignore!(Pong);
 
 ignore!(xdg_surface::Destroy);
-insert!(xdg_surface::GetToplevel, toplevel);
-insert!(xdg_surface::GetPopup, popup);
+insert!(xdg_surface::GetToplevel);
+insert!(xdg_surface::GetPopup);
 ignore!(xdg_surface::SetWindowGeometry);
 ignore!(xdg_surface::AckConfigure);
 

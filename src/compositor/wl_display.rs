@@ -24,7 +24,7 @@ impl RequestHandler<GetRegistry> for Compositor {
         req: Operation<GetRegistry>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let wl_registry = client.objects.create(req.registry)?;
+        let wl_registry = client.objects.create(req)?;
 
         for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
             client.send(wl_registry.global(i, name, version.to_u32()));
@@ -72,7 +72,7 @@ impl RequestHandler<CreateSurface> for Compositor {
         req: Operation<CreateSurface>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let _ = client.objects.create(req.surface)?;
+        let _ = client.objects.create(req)?;
         Ok(())
     }
 }

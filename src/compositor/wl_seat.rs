@@ -12,7 +12,7 @@ impl RequestHandler<GetPointer> for Compositor {
         req: Operation<GetPointer>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let _ = client.objects.create(req.pointer)?;
+        let _ = client.objects.create(req)?;
         Ok(())
     }
 }
@@ -24,7 +24,7 @@ impl RequestHandler<GetKeyboard> for Compositor {
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
         let version = req.version;
-        let wl_keyboard = client.objects.create2(req)?;
+        let wl_keyboard = client.objects.create(req)?;
         client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
         if version >= RepeatInfo::SINCE {
             client.send(wl_keyboard.repeat_info(50, 160));
@@ -35,7 +35,7 @@ impl RequestHandler<GetKeyboard> for Compositor {
 
 impl RequestHandler<GetTouch> for Compositor {
     fn handle(&mut self, req: Operation<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
-        let _ = client.objects.create(req.touch)?;
+        let _ = client.objects.create(req)?;
         Ok(())
     }
 }
