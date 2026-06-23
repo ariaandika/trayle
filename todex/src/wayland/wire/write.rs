@@ -18,7 +18,7 @@ impl Writer {
         }
     }
 
-    pub fn write<W: Write>(self, value: W) -> Writer {
+    pub fn write<W: Write>(self, value: W) -> Self {
         value.write(self)
     }
 }
@@ -175,10 +175,7 @@ impl Sized2 for &str {
 impl Sized2 for Option<&str> {
     #[inline]
     fn size(&self) -> u16 {
-        4 + match *self {
-            Some(s) => roundup4!(truncate_len(s.len()) as u16 + 1),
-            None => 0,
-        }
+        4 + self.map_or(0, |s| roundup4!(truncate_len(s.len()) as u16 + 1))
     }
 }
 
@@ -196,9 +193,6 @@ impl private::Sealed for &str {
 impl private::Sealed for Option<&str> {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
-        match self {
-            Some(s) => <_>::write(s, writer),
-            None => <_>::write(0, writer),
-        }
+        self.map_or_else(|| <_>::write(0, writer), |s| <_>::write(s, writer))
     }
 }

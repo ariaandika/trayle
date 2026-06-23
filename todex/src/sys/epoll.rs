@@ -111,24 +111,19 @@ impl Epoll {
     /// interupted by a signal handler, or `timeout` expires.
     pub fn wait(&self, events: &mut [MaybeUninit<EpollEvent>], timeout: Option<u32>) -> usize {
         unsafe {
-            let result = libc::epoll_wait(
+            libc::epoll_wait(
                 self.0.as_raw_fd(),
                 events.as_mut_ptr().cast(),
                 events.len() as i32,
-                match timeout {
-                    Some(ok) => (ok & i32::MAX as u32) as i32,
-                    None => -1,
-                },
-            );
-            match result.try_into() {
-                Ok(nfds) => nfds,
-                Err(_) => {
-                    if *libc::__errno_location() != libc::EINTR {
-                        epoll_wait_panic();
-                    }
-                    0
+                timeout.map_or(-1, |t| t as i32),
+            )
+            .try_into()
+            .inspect_err(|_| {
+                if *libc::__errno_location() != libc::EINTR {
+                    epoll_wait_panic();
                 }
-            }
+            })
+            .unwrap_or(0)
         }
     }
 }

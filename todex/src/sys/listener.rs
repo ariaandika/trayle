@@ -52,7 +52,7 @@ pub struct Listener {
 
 impl Drop for Listener {
     fn drop(&mut self) {
-        let _ = unsafe { libc::unlink(self.path) };
+        let _: i32 = unsafe { libc::unlink(self.path) };
     }
 }
 
@@ -69,10 +69,7 @@ pub fn e(int: i32) -> Option<i32> {
 impl Listener {
     pub fn new(path: SocketPath) -> Result<Self, BindError> {
         let path_ptr = path.path;
-        match Self::bind(path) {
-            Some(ok) => Ok(ok),
-            None => Err(BindError { path_ptr }),
-        }
+        Self::bind(path).ok_or(BindError { path_ptr })
     }
 
     fn bind(path: SocketPath) -> Option<Self> {

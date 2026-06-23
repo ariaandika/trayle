@@ -1,4 +1,3 @@
-// this is binary crate, compatibility is not a problem
 #![allow(refining_impl_trait)]
 use std::process::ExitCode;
 use todex::sys::epoll::Epoll;

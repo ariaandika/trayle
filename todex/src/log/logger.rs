@@ -28,7 +28,6 @@ pub fn log_me(level: Level, target: impl std::fmt::Display, args: std::fmt::Argu
     let _ = writeln!(b, "{} {target}{args}", level.to_fmt(),);
 }
 
-#[allow(unused, reason = "debugging")]
 pub fn lossy(bytes: &[u8]) {
     let b = buffer::get_mut();
     b.extend_from_slice(Level::Debug.to_fmt().as_bytes());
@@ -49,8 +48,8 @@ pub fn flush() {
         return;
     }
     let mut stdout = std::io::stdout().lock();
-    let _ = stdout.write_all(b);
-    let _ = stdout.flush();
+    let _: Result<_, _> = stdout.write_all(b);
+    let _: Result<_, _> = stdout.flush();
     b.clear();
 }
 

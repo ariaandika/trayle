@@ -35,10 +35,7 @@ impl<'a> Decoder<'a> {
     /// Removes the first `fd` and returns it.
     #[inline]
     pub fn pop_fd(&mut self) -> Result<i32, DecodeError> {
-        match self.message.pop_fd() {
-            Some(ok) => Ok(ok),
-            None => Err(DecodeError::MissingFd),
-        }
+        self.message.pop_fd().ok_or(DecodeError::MissingFd)
     }
 
     /// Read single primitive value.

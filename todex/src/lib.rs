@@ -25,7 +25,13 @@
 //! Application usually does not interact with data structures or allocation directly, instead uses
 //! high level APIs mentioned previously. But for simple cases, [`collections`] module provide
 //! generic data structures.
-#![allow(clippy::new_without_default)]
+#![allow(clippy::new_without_default, clippy::module_inception)]
+#![warn(
+    clippy::allow_attributes/* _without_reason */,
+    clippy::option_if_let_else,
+    clippy::equatable_if_let,
+    clippy::let_underscore_untyped,
+)]
 
 pub mod bitflags;
 
