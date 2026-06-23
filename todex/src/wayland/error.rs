@@ -1,7 +1,8 @@
+use crate::wayland::ObjectError;
+use crate::wayland::wire::DecodeError;
 use crate::wayland::wl_display::WlDisplayError;
 use crate::wayland::wl_registry::BindError;
 use crate::wayland::wl_seat;
-use crate::wayland::{DecodeError, FrameError, ObjectError};
 
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
@@ -9,8 +10,6 @@ pub enum WlError {
     NotYetImplemented,
     /// Seat error.
     Seat(wl_seat::Error),
-    /// Frame error.
-    Frame(FrameError),
     /// Decode error.
     Decode(DecodeError),
     /// Object error.
@@ -29,7 +28,6 @@ impl WlError {
         match self {
             Self::NotYetImplemented => "not yet implemented",
             Self::Seat(e) => e.message(),
-            Self::Frame(e) => e.message(),
             Self::Decode(e) => e.message(),
             Self::Object(e) => e.message(),
             Self::Bind(e) => e.message(),
@@ -41,7 +39,6 @@ impl WlError {
         match self {
             WlError::NotYetImplemented => IMPLEMENTATION,
             WlError::Seat(_) => IMPLEMENTATION,
-            WlError::Frame(_) => MALFORMED,
             WlError::Decode(_) => MALFORMED,
             WlError::Object(_) => SEMANTIC,
             WlError::Bind(_) => MALFORMED,
@@ -57,37 +54,21 @@ impl std::fmt::Display for WlError {
     }
 }
 
-impl From<wl_seat::Error> for WlError {
-    #[inline]
-    fn from(v: wl_seat::Error) -> Self {
-        Self::Seat(v)
-    }
+macro_rules! from {
+    ($($v:ident($e:ty)),* $(,)?) => {
+        $(
+            impl From<$e> for WlError {
+                #[inline]
+                fn from(v: $e) -> Self {
+                    Self::$v(v)
+                }
+            }
+        )*
+    };
 }
-
-impl From<FrameError> for WlError {
-    #[inline]
-    fn from(v: FrameError) -> Self {
-        Self::Frame(v)
-    }
+from! {
+    Seat(wl_seat::Error),
+    Decode(DecodeError),
+    Object(ObjectError),
+    Bind(BindError),
 }
-
-impl From<DecodeError> for WlError {
-    #[inline]
-    fn from(v: DecodeError) -> Self {
-        Self::Decode(v)
-    }
-}
-
-impl From<ObjectError> for WlError {
-    #[inline]
-    fn from(v: ObjectError) -> Self {
-        Self::Object(v)
-    }
-}
-impl From<BindError> for WlError {
-    #[inline]
-    fn from(v: BindError) -> Self {
-        Self::Bind(v)
-    }
-}
-

@@ -13,8 +13,8 @@
 //!
 //! # Wayland
 //!
-//! [`wayland`] module provide protocol definition, decoding, encoding, and wayland primitive types.
-//! See its documentation for more details.
+//! [`wayland`] module provide protocol definition, message wire format, and wayland primitive
+//! types. See its documentation for more details.
 //!
 //! # State Management
 //!

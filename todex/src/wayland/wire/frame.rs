@@ -1,10 +1,11 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
 use crate::wayland::primitives::ObjectId;
+use crate::wayland::wire::{Decode, DecodeError};
 
-use FrameError as E;
+use DecodeError as E;
 
-/// Encoded message.
+/// Raw bytes that contains a message.
 pub struct Frame<'a> {
     /// - guarantee to contains one valid length message
     read_buf: &'a mut Bytes,
@@ -22,7 +23,7 @@ impl<'a> Frame<'a> {
     }
 
     #[inline]
-    pub fn new(read_buf: &'a mut Bytes, read_fd: &'a mut Cmsg) -> Result<(ObjectId, u16, Self), FrameError> {
+    pub fn new(read_buf: &'a mut Bytes, read_fd: &'a mut Cmsg) -> Result<(ObjectId, u16, Self), DecodeError> {
         let Some(header) = read_buf.first_chunk::<8>() else {
             return Err(E::InsufficientSize);
         };
@@ -55,6 +56,12 @@ impl<'a> Frame<'a> {
             self.read_buf.advance_unchecked(len);
             std::slice::from_raw_parts(ptr.add(8), len - 8)
         }
+    }
+
+    /// Decode message.
+    #[inline]
+    pub fn decode<D: Decode>(self) -> Result<D::Output<'a>, DecodeError> {
+        D::decode_frame(self)
     }
 }
 

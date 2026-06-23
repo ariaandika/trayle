@@ -6,7 +6,8 @@ use todex::collections::slab::Slab;
 use todex::wayland::primitives::AsObjectId;
 use todex::wayland::display;
 use todex::wayland::wl_display::DeleteId;
-use todex::wayland::{EncodeMessage, WlMessage};
+use todex::wayland::WlMessage;
+use todex::wayland::wire::Encode;
 use todex::compositor::objects::Objects;
 
 use crate::log;
@@ -91,16 +92,11 @@ pub struct ClientMut<'a> {
 impl<'a> ClientMut<'a> {
     /// Send a message.
     ///
-    /// Usually, object have a constructor for its message. The constructor returns the message
-    /// wrapped in [`Message`] to associate it with object id, which implements [`EncodeMessage`].
-    ///
-    /// [`Message`]: todex::wayland::Message
-    ///
     /// Note that automatic version checking is unlikely to be added. Caller must ensure that the
     /// client support following message.
-    pub fn send<E: EncodeMessage + WlMessage + display::AsDisplay>(&mut self, message: E) {
-        EncodeMessage::encode_message(
-            log::send_message(message, self),
+    pub fn send<E: Encode + WlMessage + display::AsDisplay>(&mut self, msg: E) {
+        Encode::encode_with(
+            log::send_message(msg, self),
             self.write_buf,
             self.write_fd,
         );

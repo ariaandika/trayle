@@ -279,11 +279,13 @@ impl std::fmt::Display for Ident {
 
 // ===== Extension =====
 
-pub fn stream_if<I: Iterator<Item = TokenTree>, F: FnOnce() -> I>(
+pub fn stream_if<I: IntoIterator<Item = TokenTree>, F: FnOnce() -> I>(
     cond: bool,
     f: F,
-) -> std::iter::Flatten<std::option::IntoIter<I>> {
-    if cond { Some(f()) } else { None }.into_iter().flatten()
+) -> std::iter::Flatten<std::option::IntoIter<I::IntoIter>> {
+    if cond { Some(f().into_iter()) } else { None }
+        .into_iter()
+        .flatten()
 }
 
 pub trait OptionExt<T> {

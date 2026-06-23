@@ -1,11 +1,11 @@
 use todex::collections::slab::Slab;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
+use todex::wayland::{self, AsInterface, Interface, Operation, WlError, WlMessage};
 use todex::wayland::primitives::ObjectId;
 use todex::wayland::global::{Global, global_of};
+use todex::wayland::wire::{Frame, OpCode};
 use todex::wayland::wl_display::Error as GlobalError;
-use todex::wayland::{self, AsInterface, OpCode, Decode, WlError, WlMessage};
-use todex::wayland::{DecodeError, Frame, Interface, Operation};
 
 use crate::error::FatalError;
 use crate::seat::Seat;
@@ -106,18 +106,18 @@ fn route(
 
     macro_rules! handle_me {
         (@OP $iface:ident { $($req:ident $($call:ident)?),* $(, $(.. $fb:ident)? $(,)? )? }) => {
-            match <_>::from_op(op).ok_or(DecodeError::UnknownOpCode)? {
+            match <_>::try_from_op(op)? {
                 $($iface::RequestOp::$req => handle_me!(@CALL $iface $req $($call)?),)*
                 $($(op => return Err(compositor.$fb(object.interface(), op, client)),)?)?
             }
         };
         (@CALL $iface:ident $req:ident) => {{
-            let err = compositor.todo($iface::$req::decode_with(frame)?, client);
+            let err = compositor.todo(frame.decode::<$iface::$req>()?, client);
             client.send(GlobalError::new(id, err.code(), err.message()));
             Ok(false)
         }};
         (@CALL $iface:ident $req:ident $call:ident) => {{
-            let message = log::recv_message($iface::$req::decode_with(frame)?, client);
+            let message = log::recv_message(frame.decode::<$iface::$req>()?, client);
             match RequestHandler::$call(
                 compositor,
                 Operation::new(id, object.version(), message),

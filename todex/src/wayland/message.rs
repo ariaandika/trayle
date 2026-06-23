@@ -1,5 +1,6 @@
 use crate::wayland::primitives::{AsNewId, AsObjectId, NewId, ObjectId, Version};
-use crate::wayland::{AsInterface, AsOpCode, Interface};
+use crate::wayland::wire::AsOpCode;
+use crate::wayland::{AsInterface, Interface};
 
 // ===== trait =====
 

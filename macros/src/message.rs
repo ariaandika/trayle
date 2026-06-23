@@ -34,7 +34,7 @@ pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
             .any(|e| e.ident.as_str() == "fd");
         constructor.add_field(&ident, ty)?;
         decode.add_field(is_fd, encodable, &ident);
-        encode.add_field(is_fd, encodable, &ident);
+        encode.add_field(is_fd, encodable, &ident)?;
         display.add_field(len, is_fd, &ident);
         encodable += (!is_fd) as usize;
         len += 1;
@@ -253,60 +253,52 @@ impl GenDecode {
 #[derive(Default)]
 struct GenEncode {
     len: TokenStream,
-    fd: TokenStream,
+    fd: Option<Ident>,
     write: TokenStream,
 }
 
 impl GenEncode {
-    fn add_field(&mut self, is_fd: bool, encodable: usize, ident: &Ident) {
+    fn add_field(&mut self, is_fd: bool, encodable: usize, ident: &Ident) -> Result<(), Error> {
         if is_fd {
-            self.fd.extend(generate!(self.#ident,));
+            if self.fd.is_some() {
+                return Err(Error::spanned(
+                    "multiple fd message is not yet supported",
+                    ident.span(),
+                ));
+            }
+            self.fd = Some(ident.clone());
         } else {
-            let plus = if encodable == 0 {
-                None
-            } else {
-                gentoken!(+)
-            };
+            let plus = if encodable == 0 { None } else { gentoken!(+) };
             self.len.extend(generate!(?plus self.#ident.size()));
             self.write.extend(generate!(.write(self.#ident)));
         }
+        Ok(())
     }
 
     fn generate(self, name: &Ident, lf_ph: &TokenStream) -> impl Iterator<Item = TokenTree> {
         let Self { len, fd, write } = self;
-
         let len = if len.is_empty() {
             token_stream!(#ZERO)
         } else {
             len
         };
-
-        let fds = if fd.is_empty() {
-            None
-        } else {
-            Some(generate! {
-                #[inline]
-                fn fds(&self) -> impl IntoIterator<Item = i32> {
-                    [@fd]
-                }
-            })
-        }
-        .into_iter()
-        .flatten();
-
+        let fd = fd.map_stream(|fd|generate! {
+            #[inline]
+            fn fd(&self) -> Option<i32> {
+                Some(self.#fd)
+            }
+        });
         generate! {
-            impl Encode for #name @lf_ph {
+            impl EncodePayload for #name @lf_ph {
                 #[inline]
                 fn size(&self) -> u16 {
                     @len
                 }
-
                 #[inline]
-                fn encode(self, writer: Writer) {
+                fn encode_payload(self, writer: Writer) {
                     writer @write;
                 }
-
-                @fds
+                @fd
             }
         }
     }
