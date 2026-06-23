@@ -5,7 +5,7 @@ use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::WlShm;
 use wayland::primitives::FromObjectId;
-use wayland::Global;
+use wayland::AsInterface;
 
 use crate::compositor::prelude::*;
 use crate::compositor::{BindEffect, GLOBALS};
@@ -29,8 +29,8 @@ impl RequestHandler<GetRegistry> for Compositor {
     ) -> Result<(), WlError> {
         let wl_registry = client.objects.create(req)?;
 
-        for (Global { name, version, .. }, i) in GLOBALS.iter().zip(0..) {
-            client.send(wl_registry.global(i, name, version.to_u32()));
+        for (global, i) in GLOBALS.iter().zip(0..) {
+            client.send(wl_registry.global(i, global.name(), global.version().to_u32()));
         }
 
         Ok(())
@@ -42,15 +42,15 @@ impl RequestHandler<Bind<'_>> for Compositor {
         let Some(global) = GLOBALS.get(bind.name as usize) else {
             return Err(BindError::UnknownName.into());
         };
-        if bind.new_id_name != global.name {
+        if bind.new_id_name != global.name() {
             return Err(BindError::MissmatchName.into());
         }
-        if bind.new_id_version > global.version {
+        if bind.new_id_version > global.version() {
             return Err(BindError::UnsupportedVersion.into());
         }
         client.objects.insert_parts(
             bind.new_id,
-            global.interface,
+            global.interface(),
             bind.new_id_version,
             Handle::default(),
         )?;
@@ -58,7 +58,7 @@ impl RequestHandler<Bind<'_>> for Compositor {
         // some interface has side-effect after binding
         macro_rules! bind_effect {
             ($($iface:ident),*) => {
-                match global.interface {
+                match global.interface() {
                     $(Interface::$iface => self.bind(
                         $iface::from_object_id(bind.new_id),
                         client

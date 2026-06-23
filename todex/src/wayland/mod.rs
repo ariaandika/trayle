@@ -53,7 +53,7 @@
 
 // ===== core components =====
 
-pub use object::{Any, Object, ObjectError, WlObject};
+pub use object::{Noop, Object, ObjectError, WlObject};
 pub use message::{Message, WlMessage};
 
 // ===== properties =====
@@ -76,11 +76,11 @@ macro_rules! roundup4 {
 }
 
 pub mod primitives;
+pub mod global;
+pub mod object;
 
-mod object;
 mod message;
 
-mod global;
 mod constructor;
 mod operation;
 mod error;
@@ -107,6 +107,13 @@ mod prelude {
 pub trait AsInterface {
     /// Returns the interface that this type associated with.
     fn interface(&self) -> Interface;
+}
+
+impl AsInterface for Interface {
+    #[inline]
+    fn interface(&self) -> Interface {
+        *self
+    }
 }
 
 // ===== OpCode =====

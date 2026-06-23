@@ -2,9 +2,10 @@ use todex::collections::slab::Slab;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
 use todex::wayland::primitives::ObjectId;
+use todex::wayland::global::{Global, global_of};
 use todex::wayland::wl_display::Error as GlobalError;
 use todex::wayland::{self, AsInterface, OpCode, Decode, WlError, WlMessage};
-use todex::wayland::{DecodeError, Frame, Global, Interface, Operation};
+use todex::wayland::{DecodeError, Frame, Interface, Operation};
 
 use crate::error::FatalError;
 use crate::seat::Seat;
@@ -45,11 +46,11 @@ trait BindEffect<Interface> {
 static GLOBALS: [Global; 5] = {
     use wayland::interfaces::*;
     [
-        Global::of::<WlCompositor::WlCompositor>(),
-        Global::of::<WlShm::WlShm>(),
-        Global::of::<WlDataDeviceManager::WlDataDeviceManager>(),
-        Global::of::<WlSeat::WlSeat>(),
-        Global::of::<XdgWmBase::XdgWmBase>(),
+        global_of::<WlCompositor::WlCompositor>(),
+        global_of::<WlShm::WlShm>(),
+        global_of::<WlDataDeviceManager::WlDataDeviceManager>(),
+        global_of::<WlSeat::WlSeat>(),
+        global_of::<XdgWmBase::XdgWmBase>(),
     ]
 };
 

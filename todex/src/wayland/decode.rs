@@ -157,17 +157,19 @@ impl Read<'_> for Option<ObjectId> {
     }
 }
 
+// TODO: blocker: protocol definitions as marker
+
 impl<T: FromObjectId> Read<'_> for Object<T> {
     #[inline]
     fn decode(reader: &mut Reader) -> Result<Self, DecodeError> {
-        ObjectId::decode(reader).map(|id| Object::new(T::from_object_id(id)))
+        ObjectId::decode(reader).map(|id| Object::new(id).typed_with(T::from_object_id(id)))
     }
 }
 
 impl<T: FromObjectId> Read<'_> for Option<Object<T>> {
     #[inline]
     fn decode(reader: &mut Reader) -> Result<Self, DecodeError> {
-        <Option<_>>::decode(reader).map(|e| e.map(|id| Object::new(T::from_object_id(id))))
+        <Option<_>>::decode(reader).map(|e| e.map(|id| Object::new(id).typed_with(T::from_object_id(id))))
     }
 }
 

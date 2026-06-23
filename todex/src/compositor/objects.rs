@@ -3,44 +3,9 @@ use crate::wayland::handle::{AsHandle, Handle};
 use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
 use crate::wayland::{AsInterface, Constructor, Interface, Object, ObjectError, WlObject};
 
-// ===== ObjectEntry =====
-
-// hoping for new name for this
-
-#[derive(Debug, Copy, Clone)]
-pub struct ObjectEntry {
-    interface: Interface,
-    version: Version,
-    handle: Handle,
-}
-
-impl AsInterface for ObjectEntry {
-    #[inline]
-    fn interface(&self) -> Interface {
-        self.interface
-    }
-}
-
-impl ObjectEntry {
-    const WL_DISPLAY: Self = Self {
-        interface: Interface::WlDisplay,
-        version: Version::new(1).unwrap(),
-        handle: Handle::from_raw(0),
-    };
-
-    #[inline]
-    pub fn version(&self) -> Version {
-        self.version
-    }
-
-    pub fn handle<H: AsHandle>(&self) -> H {
-        self.handle.to_handle()
-    }
-}
-
-// ===== Objects =====
-
 use ObjectError as E;
+
+type ObjectEntry = Object<Interface, Version, Handle>;
 
 const INITIAL_CAP: usize = 32;
 
@@ -111,11 +76,7 @@ impl Objects {
     ) -> Result<(), ObjectError> {
         self.insert_inner(
             object_id,
-            ObjectEntry {
-                interface,
-                version,
-                handle: handle.to_handle(),
-            },
+            ObjectEntry::from_parts(interface, version, handle.to_handle()),
         )
     }
 
@@ -155,11 +116,14 @@ impl Objects {
 
     fn entry(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Ok(ObjectEntry::WL_DISPLAY);
+            return Ok(WL_DISPLAY);
         };
         self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
     }
 }
+
+const WL_DISPLAY: ObjectEntry =
+    ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::from_raw(0));
 
 pub trait ObjectIndex {
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;
@@ -176,7 +140,7 @@ impl<I: WlObject> ObjectIndex for &Object<I> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         let object = objects.entry(self.object_id())?;
-        if object.interface == self.interface() {
+        if object.interface() == self.interface() {
             Ok(object)
         } else {
             Err(E::InvalidId)
