@@ -1,8 +1,8 @@
 use todex::collections::slab::Slab;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
-use todex::wayland::{self, AsInterface, Interface, Operation, WlError, WlMessage};
-use todex::wayland::primitives::ObjectId;
+use todex::wayland::{self, AsInterface, Interface, WlError, WlMessage, Message};
+use todex::wayland::primitives::{ObjectId, Version};
 use todex::wayland::object::{Global, global_of};
 use todex::wayland::wire::{Frame, OpCode};
 use todex::wayland::wl_display::Error as GlobalError;
@@ -14,9 +14,16 @@ use crate::log;
 use crate::wayland::surface::Surface;
 
 mod prelude {
-    pub(super) use todex::wayland::{self, Interface, WlError, Operation};
+    use todex::wayland::primitives::Version;
+    use todex::wayland::message::Message;
+
+    pub(super) use todex::wayland::{self, Interface, WlError, WlMessage};
+
     pub(super) use crate::client::ClientMut;
     pub(super) use super::{Compositor, RequestHandler};
+
+    pub(super) type Op<I> = Message<I, Version>;
+    pub(super) type Operation<I> = Message<I, Version>;
 }
 
 mod wl_display;
@@ -32,7 +39,7 @@ mod xdg_shell;
 trait RequestHandler<Request>: Sized {
     fn handle(
         &mut self,
-        request: Operation<Request>,
+        request: Message<Request, Version>,
         client: &mut ClientMut,
     ) -> Result<(), WlError>;
 }
@@ -120,7 +127,7 @@ fn route(
             let message = log::recv_message(frame.decode::<$iface::$req>()?, client);
             match RequestHandler::$call(
                 compositor,
-                Operation::new(id, object.version(), message),
+                Message::new_versioned(id, message, object.version()),
                 client,
             ) {
                 Ok(_) => {

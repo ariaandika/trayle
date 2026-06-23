@@ -59,16 +59,16 @@ impl<T: EncodePayload + AsObjectId + AsOpCode> Encode for T {}
 impl<T: EncodePayload> EncodePayload for Message<T> {
     #[inline]
     fn size(&self) -> u16 {
-        T::size(&self.payload)
+        T::size(self.payload())
     }
 
     #[inline]
     fn encode_payload(self, writer: Writer) {
-        T::encode_payload(self.payload, writer)
+        T::encode_payload(self.into_payload(), writer)
     }
 
     #[inline]
     fn fd(&self) -> Option<i32> {
-        T::fd(&self.payload)
+        T::fd(self.payload())
     }
 }

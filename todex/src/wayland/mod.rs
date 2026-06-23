@@ -22,24 +22,16 @@
 //!
 //! This module also provide traits that abstract objects and messages.
 //!
-//! [`AsOpCode`] represent type that is associated with an opcode.
-//!
 //! The following traits describe a whole instance:
 //!
 //! - [`WlObject`]: Type that is a wayland object.
-//! - [`WlGlobal`]: Type that is a singleton global object.
 //! - [`WlMessage`]: Type that is a wayland message
 //!
 //! These traits are not meant to be implemented by application.
 
 pub use primitives::ObjectId;
-pub use object::Object;
+pub use object::{Object, WlObject};
 pub use message::{Message, WlMessage};
-
-// ===== properties =====
-
-pub use constructor::Constructor;
-pub use operation::Operation;
 pub use error::WlError;
 
 macro_rules! roundup4 {
@@ -50,14 +42,9 @@ macro_rules! roundup4 {
 
 pub mod primitives;
 pub mod object;
+pub mod message;
 pub mod wire;
-
-mod message;
-
-mod constructor;
-mod operation;
-mod error;
-
+pub mod error;
 pub mod display;
 
 mod prelude {
@@ -66,8 +53,9 @@ mod prelude {
     pub use super::wire::{AsOpCode, OpCode};
     pub use super::wire::{Decode, DecodeError, Decoder};
     pub use super::wire::{EncodePayload, Sized2, Writer};
+    pub use super::message::{Message, WlMessage};
     pub use super::display;
-    pub use super::{AsInterface, Interface, Message, WlMessage};
+    pub use super::{AsInterface, Interface};
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
 }
 

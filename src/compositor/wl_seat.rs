@@ -1,6 +1,5 @@
 use todex::bitflags::Flags;
 
-use wayland::WlMessage;
 use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
 use wayland::wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};
 
@@ -16,11 +15,7 @@ impl BindEffect<WlSeat> for Compositor {
 }
 
 impl RequestHandler<GetPointer> for Compositor {
-    fn handle(
-        &mut self,
-        req: Operation<GetPointer>,
-        client: &mut ClientMut,
-    ) -> Result<(), WlError> {
+    fn handle(&mut self, req: Op<GetPointer>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::POINTER) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
@@ -30,18 +25,13 @@ impl RequestHandler<GetPointer> for Compositor {
 }
 
 impl RequestHandler<GetKeyboard> for Compositor {
-    fn handle(
-        &mut self,
-        req: Operation<GetKeyboard>,
-        client: &mut ClientMut,
-    ) -> Result<(), WlError> {
+    fn handle(&mut self, req: Op<GetKeyboard>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::KEYBOARD) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
-        let version = req.version;
-        let wl_keyboard = client.objects.create(req)?;
+        let wl_keyboard = client.objects.create(&req)?;
         client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
-        if version >= RepeatInfo::SINCE {
+        if req.version() >= RepeatInfo::SINCE {
             client.send(wl_keyboard.repeat_info(50, 160));
         }
         Ok(())
@@ -49,7 +39,7 @@ impl RequestHandler<GetKeyboard> for Compositor {
 }
 
 impl RequestHandler<GetTouch> for Compositor {
-    fn handle(&mut self, req: Operation<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(&mut self, req: Op<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::TOUCH) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
@@ -59,7 +49,7 @@ impl RequestHandler<GetTouch> for Compositor {
 }
 
 impl RequestHandler<wl_seat::Release> for Compositor {
-    fn handle(&mut self, _: Operation<wl_seat::Release>, _: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(&mut self, _: Op<wl_seat::Release>, _: &mut ClientMut) -> Result<(), WlError> {
         // idk what need to do here, perhaps there can be ref count for the seat instance ?
         Ok(())
     }

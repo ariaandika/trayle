@@ -12,7 +12,7 @@ pub trait AsDisplay {
 
 impl<T: AsDisplay> AsDisplay for Message<T> {
     fn display(&self) -> impl std::fmt::Display {
-        self.payload.display()
+        self.payload().display()
     }
 }
 
