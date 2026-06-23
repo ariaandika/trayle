@@ -1,7 +1,7 @@
 use crate::collections::slots::Slots;
-use crate::wayland::handle::{AsHandle, Handle};
 use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
-use crate::wayland::{AsInterface, Constructor, Interface, Object, ObjectError, WlObject};
+use crate::wayland::object::{AsHandle, Handle, Object, ObjectError, WlObject};
+use crate::wayland::{AsInterface, Constructor, Interface};
 
 use ObjectError as E;
 

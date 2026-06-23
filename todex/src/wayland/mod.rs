@@ -32,14 +32,12 @@
 //!
 //! These traits are not meant to be implemented by application.
 
-// ===== core components =====
-
-pub use object::{Noop, Object, ObjectError, WlObject};
+pub use primitives::ObjectId;
+pub use object::Object;
 pub use message::{Message, WlMessage};
 
 // ===== properties =====
 
-pub use global::{WlGlobal, Global};
 pub use constructor::Constructor;
 pub use operation::Operation;
 pub use error::WlError;
@@ -52,8 +50,6 @@ macro_rules! roundup4 {
 
 pub mod primitives;
 pub mod object;
-pub mod global;
-
 pub mod wire;
 
 mod message;
@@ -62,15 +58,16 @@ mod constructor;
 mod operation;
 mod error;
 
-pub mod handle;
 pub mod display;
 
 mod prelude {
     pub use super::primitives::*;
-    pub use super::object::*;
-    pub use super::wire::*;
+    pub use super::object::{Object, WlGlobal};
+    pub use super::wire::{AsOpCode, OpCode};
+    pub use super::wire::{Decode, DecodeError, Decoder};
+    pub use super::wire::{EncodePayload, Sized2, Writer};
     pub use super::display;
-    pub use super::{AsInterface, Interface, Message, WlGlobal, WlMessage};
+    pub use super::{AsInterface, Interface, Message, WlMessage};
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
 }
 

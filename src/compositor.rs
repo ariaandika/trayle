@@ -3,7 +3,7 @@ use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::Cmsg;
 use todex::wayland::{self, AsInterface, Interface, Operation, WlError, WlMessage};
 use todex::wayland::primitives::ObjectId;
-use todex::wayland::global::{Global, global_of};
+use todex::wayland::object::{Global, global_of};
 use todex::wayland::wire::{Frame, OpCode};
 use todex::wayland::wl_display::Error as GlobalError;
 

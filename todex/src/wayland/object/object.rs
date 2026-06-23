@@ -1,15 +1,8 @@
-use crate::wayland::handle::Handle;
-use crate::wayland::primitives::{AsObjectId, FromObjectId, ObjectId, Version};
+use std::fmt;
+
+use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
+use crate::wayland::object::Handle;
 use crate::wayland::{AsInterface, Interface};
-
-// ===== trait =====
-
-/// Type that represent a wayland object.
-pub trait WlObject: FromObjectId + AsObjectId + AsInterface {}
-
-impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
-
-// ===== Object =====
 
 /// Wayland object.
 ///
@@ -52,7 +45,7 @@ impl<O: FromObjectId + AsObjectId + AsInterface> WlObject for O {}
 /// High level API should not accept this struct directly, instead it should accept a generic type
 /// that is composed from available traits.
 #[derive(Clone, Copy)]
-pub struct Object<I = Noop, M = Noop, D = ObjectId> {
+pub struct Object<I = (), M = (), D = ObjectId> {
     iface: I,
     marker: M,
     id: D,
@@ -63,8 +56,8 @@ impl Object {
     #[inline]
     pub fn new(object_id: ObjectId) -> Self {
         Self {
-            iface: Noop,
-            marker: Noop,
+            iface: (),
+            marker: (),
             id: object_id,
         }
     }
@@ -76,7 +69,7 @@ impl Object {
     pub fn typed<I: Default>(self) -> Object<I> {
         Object {
             iface: I::default(),
-            marker: Noop,
+            marker: (),
             id: self.id,
         }
     }
@@ -88,7 +81,7 @@ impl Object {
     pub fn typed_with<I>(self, interface: I) -> Object<I> {
         Object {
             iface: interface,
-            marker: Noop,
+            marker: (),
             id: self.id,
         }
     }
@@ -96,7 +89,7 @@ impl Object {
 
 impl<I, M, D> Object<I, M, D> {
     #[inline]
-    pub const fn from_parts(iface: I, marker: M, id: D) -> Object<I, M, D> {
+    pub const fn from_parts(iface: I, marker: M, id: D) -> Self {
         Self { iface, marker, id }
     }
 }
@@ -136,45 +129,11 @@ impl<I, M> Object<I, M, &'static str> {
     }
 }
 
-// ===== Markers =====
-
-/// Nothing.
-#[derive(Debug, Default, Clone, Copy)]
-pub struct Noop;
-
 // ===== std traits =====
 
-impl<I, M> std::fmt::Debug for Object<I, M> {
+impl<I, M> fmt::Debug for Object<I, M> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.id.fmt(f)
-    }
-}
-
-// ===== ObjectError =====
-
-#[derive(Debug, Clone, Copy)]
-pub enum ObjectError {
-    /// Unknown object id.
-    UnknownId,
-    /// Missmatch interface for given object id.
-    InvalidId,
-    /// Invalid new id of `1`.
-    InvalidNewId,
-    /// Out of bounds new id.
-    OutOfBoundsNewId,
-    /// Occupied new id.
-    OccupiedNewId,
-}
-
-impl ObjectError {
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::UnknownId => "unknown object id",
-            Self::InvalidId => "missmatch interface for given object id",
-            Self::InvalidNewId => "invalid new id",
-            Self::OutOfBoundsNewId => "out of bounds new id",
-            Self::OccupiedNewId => "occupied new id",
-        }
     }
 }

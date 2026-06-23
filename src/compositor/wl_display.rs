@@ -1,11 +1,11 @@
-use wayland::handle::Handle;
+use wayland::primitives::FromObjectId;
+use wayland::object::Handle;
+use wayland::AsInterface;
 use wayland::wl_compositor::CreateSurface;
 use wayland::wl_display::{GetRegistry, Sync};
 use wayland::wl_registry::{Bind, BindError};
 use wayland::wl_seat::WlSeat;
 use wayland::wl_shm::WlShm;
-use wayland::primitives::FromObjectId;
-use wayland::AsInterface;
 
 use crate::compositor::prelude::*;
 use crate::compositor::{BindEffect, GLOBALS};

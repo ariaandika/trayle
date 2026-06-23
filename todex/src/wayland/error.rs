@@ -1,4 +1,4 @@
-use crate::wayland::ObjectError;
+use crate::wayland::object::ObjectError;
 use crate::wayland::wire::DecodeError;
 use crate::wayland::wl_display::WlDisplayError;
 use crate::wayland::wl_registry::BindError;
