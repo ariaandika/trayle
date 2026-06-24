@@ -1,6 +1,7 @@
 use crate::collections::slots::Slots;
+use crate::wayland::interface::WlInterface;
 use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
-use crate::wayland::object::{AsHandle, Handle, Object, ObjectError, WlObject};
+use crate::wayland::object::{AsHandle, Handle, Object, ObjectError};
 use crate::wayland::message::Constructor;
 use crate::wayland::{AsInterface, Interface};
 
@@ -32,7 +33,7 @@ impl Objects {
     pub fn create<C>(&mut self, constructor: C) -> Result<C::Interface, ObjectError>
     where
         C: Constructor,
-        C::Interface: WlObject,
+        C::Interface: WlInterface,
     {
         let object = constructor.new_id().create();
         self.insert_parts(
@@ -52,7 +53,7 @@ impl Objects {
     ) -> Result<C::Interface, ObjectError>
     where
         C: Constructor,
-        C::Interface: WlObject,
+        C::Interface: WlInterface,
         H: AsHandle,
     {
         let object = constructor.new_id().create();
@@ -94,7 +95,7 @@ impl Objects {
 
     /// This has the same effect of inserting the id and immediately remove it.
     #[inline]
-    pub fn use_one<O: WlObject>(&mut self, object: &O) {
+    pub fn use_one<O: WlInterface>(&mut self, object: &O) {
         let Some(idx) = object.object_id().to_u32().checked_sub(2) else {
             return;
         };
@@ -137,7 +138,7 @@ impl ObjectIndex for ObjectId {
     }
 }
 
-impl<I: WlObject> ObjectIndex for &Object<I> {
+impl<I: WlInterface> ObjectIndex for &Object<I> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         let object = objects.entry(self.object_id())?;
@@ -149,7 +150,7 @@ impl<I: WlObject> ObjectIndex for &Object<I> {
     }
 }
 
-impl<I: WlObject> ObjectIndex for Object<I> {
+impl<I: WlInterface> ObjectIndex for Object<I> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         <&Self>::get_object_mut(&self, objects)

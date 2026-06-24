@@ -31,6 +31,7 @@
 
 pub use primitives::ObjectId;
 pub use object::{Object, WlObject};
+pub use interface::{AsInterface, WlInterface};
 pub use message::{Message, WlMessage};
 pub use error::WlError;
 
@@ -42,10 +43,11 @@ macro_rules! roundup4 {
 
 pub mod primitives;
 pub mod object;
+pub mod display;
+pub mod interface;
 pub mod message;
 pub mod wire;
 pub mod error;
-pub mod display;
 
 mod prelude {
     pub use super::primitives::*;
@@ -54,24 +56,10 @@ mod prelude {
     pub use super::wire::{Decode, DecodeError, Decoder};
     pub use super::wire::{EncodePayload, Sized2, Writer};
     pub use super::message::{Message, WlMessage};
+    pub use super::interface::AsInterface;
+    pub use super::Interface;
     pub use super::display;
-    pub use super::{AsInterface, Interface};
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
-}
-
-// ===== Interface =====
-
-/// Type that is associated with an interface.
-pub trait AsInterface {
-    /// Returns the interface that this type associated with.
-    fn interface(&self) -> Interface;
-}
-
-impl AsInterface for Interface {
-    #[inline]
-    fn interface(&self) -> Interface {
-        *self
-    }
 }
 
 macros::protocol! {
