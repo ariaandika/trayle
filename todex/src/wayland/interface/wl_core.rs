@@ -4,8 +4,8 @@ interface! {
     pub struct WlDisplay;
 
     impl Request {
-        // pub fn sync(callback: new_id<wl_callback>);
-        // pub fn get_registry(registry: new_id<wl_registry>);
+        pub fn sync(callback: new_id<wl_callback>);
+        pub fn get_registry(registry: new_id<wl_registry>);
     }
 
     impl Event {

@@ -30,14 +30,17 @@ impl<'a> Message<'a> {
 
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let fields = encodables(self.op).flat_map(|Arg { name, opt, ty, .. }| {
+        let fields = encodables(self.op).flat_map(|Arg { name, /* opt, */ ty, .. }| {
             let ty = ty.generate();
-            let ty = if *opt {
-                Either::Left(g!(Option<#ty>))
-            } else {
-                Either::Right(Some(ty).into_iter())
-            };
-            g!(pub #name: @ty,)
+            // FIX:
+            // - blocker: change impl Read for Option<Object>
+            // - blocker: remove the old wayland definition
+            // let ty = if *opt {
+            //     Either::Left(g!(Option<#ty>))
+            // } else {
+            //     Either::Right(Some(ty).into_iter())
+            // };
+            g!(pub #name: #ty,)
         });
         let lf = stream_if(self.has_lf, || g!(<'a>));
         g! {

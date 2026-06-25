@@ -41,7 +41,7 @@ impl Interface {
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> {
         let iface_name = &self.iface;
         g! {
-            #[derive(Debug, Clone, Copy)]
+            #[derive(Debug, Default, Clone, Copy)]
             pub struct #iface_name;
         }
     }

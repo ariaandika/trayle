@@ -98,6 +98,7 @@ impl Parse for Op {
 pub struct Arg {
     pub name: Ident,
     pub ty: Ty,
+    #[expect(dead_code)]
     pub opt: bool,
 }
 
@@ -133,7 +134,8 @@ impl Parse for Arg {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         fn iface(parser: &mut Parser) -> Result<Ident, Error> {
             parser.punct_of('<')?;
-            let name = parser.ident()?;
+            let wl_name = parser.ident()?;
+            let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
             parser.punct_of('>')?;
             Ok(name)
         }
@@ -141,9 +143,11 @@ impl Parse for Arg {
             let Some(_) = parser.next_punct_of('<') else {
                 return Ok(None);
             };
-            let name = parser.ident()?;
+            let wl_name = parser.ident()?;
+            let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
             parser.punct_of('.')?;
-            let subname = parser.ident()?;
+            let wl_subname = parser.ident()?;
+            let subname = Ident::new_string(to_camel(wl_subname.as_str()), wl_subname.span());
             parser.punct_of('>')?;
             Ok(Some((name, subname)))
         }
@@ -186,20 +190,11 @@ impl Ty {
         match self {
             Ty::Int => id!(i32),
             Ty::Uint(None) => id!(u32),
-            Ty::Uint(Some((n, s))) => {
-                let wl_en = Ident::new_string(to_camel(s.as_str()), s.span());
-                gr!(#n::#wl_en)
-            },
+            Ty::Uint(Some((n, s))) => gr!(#n::#s),
             Ty::Fixed => id!(Fixed),
             Ty::String => gr!(&'a str),
-            Ty::Object(i) => {
-                let wl_i = Ident::new_string(to_camel(i.as_str()), i.span());
-                gr!(Object<#wl_i>)
-            },
-            Ty::NewId(i) => {
-                let wl_i = Ident::new_string(to_camel(i.as_str()), i.span());
-                gr!(NewId<#wl_i>)
-            },
+            Ty::Object(i) => gr!(Object<#i>),
+            Ty::NewId(i) => gr!(NewId<#i>),
             Ty::Array => gr!(&'a [u8]),
             Ty::Fd => gr!(compile_error!("internal: fd should not be generated")),
         }
