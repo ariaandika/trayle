@@ -60,6 +60,7 @@ mod prelude {
     pub use super::Interface;
     pub use super::display;
     pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
+    pub use macros::interface;
 }
 
 macros::protocol! {

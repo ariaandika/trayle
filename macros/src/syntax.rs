@@ -18,6 +18,23 @@ impl Parse for Literal {
     }
 }
 
+#[derive(Clone)]
+pub enum Either<L, R> {
+    Left(L),
+    Right(R),
+}
+
+impl<L: Iterator, R: Iterator<Item = L::Item>> Iterator for Either<L, R> {
+    type Item = L::Item;
+
+    fn next(&mut self) -> Option<Self::Item> {
+        match self {
+            Either::Left(l) => l.next(),
+            Either::Right(r) => r.next(),
+        }
+    }
+}
+
 // ===== Vis =====
 
 #[derive(Clone)]

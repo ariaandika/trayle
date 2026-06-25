@@ -70,6 +70,16 @@ impl Parser {
         self.cache[0].as_ref()
     }
 
+    pub fn peek2(&mut self) -> Option<&Tree> {
+        if self.cache[0].is_none() {
+            self.cache[0] = self.iter.next();
+        }
+        if self.cache[1].is_none() {
+            self.cache[1] = self.iter.next();
+        }
+        self.cache[1].as_ref()
+    }
+
     pub fn span(&mut self) -> Span {
         self.peek().map(Tree::span).unwrap_or_else(Span::call_site)
     }
@@ -97,6 +107,13 @@ impl Parser {
 
     pub fn drain(&mut self) -> TokenStream {
         std::iter::from_fn(||self.next()).collect()
+    }
+
+    pub fn check_empty(&mut self) -> Result<(), Error> {
+        match self.next() {
+            None => Ok(()),
+            Some(t) => Err(Error::spanned(format!("leftover token: {t:?}"), t.span())),
+        }
     }
 }
 

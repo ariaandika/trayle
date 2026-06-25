@@ -1,3 +1,4 @@
+#![allow(clippy::module_inception)]
 use proc_macro::Span;
 use tree::{TokenStream, p};
 use error::Error;
@@ -42,8 +43,14 @@ mod protocol;
 ///
 /// Both attribute are optional.
 #[proc_macro_derive(Interface, attributes(interface))]
+pub fn interface_derive(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, interface::derive::process)
+}
+
+/// Create interface from protocol definition.
+#[proc_macro]
 pub fn interface(tokens: p::TokenStream) -> p::TokenStream {
-    call(tokens, interface::process)
+    call(tokens, interface::impl_interface)
 }
 
 /// Implement `OpCode` and `Display`.

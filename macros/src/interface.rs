@@ -1,70 +1,87 @@
 use crate::prelude::*;
 
-pub fn process(mut parser: Parser) -> Result<TokenStream, Error> {
-    let attr = parser.parse::<InterfaceAttr>()?;
-    let _ = parser.ident_of("pub")?;
-    let _ = parser.ident_of("struct")?;
-    let name = parser.ident()?;
+use interface::Interface;
+use op::{Arg, Op, OpKind};
+use ops::Ops;
+use opcode::OpCode;
+use message::Message;
+use enums::Enums;
 
-    let base = generate! {
-        impl FromObjectId for #name {
-            #[inline]
-            fn from_object_id(id: ObjectId) -> Self {
-                Self { id }
-            }
-        }
+pub mod derive;
 
-        impl AsObjectId for #name {
-            #[inline]
-            fn object_id(&self) -> ObjectId {
-                self.id
-            }
-        }
+macro_rules! g {
+    ($($tt:tt)*) => {
+        generate!($($tt)*)
+    };
+}
 
-        impl AsInterface for #name {
-            #[inline]
-            fn interface(&self) -> Interface {
-                Interface::#name
-            }
+mod interface;
+mod op;
+mod ops;
+mod opcode;
+mod message;
+mod enums;
+
+pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
+    let iface = parser.parse::<Interface>()?;
+    let rq = Ops::parse(OpKind::Request, &mut parser)?;
+    let ev = Ops::parse(OpKind::Event, &mut parser)?;
+    let en = Enums::parse(&mut parser)?;
+    let rqop = OpCode::new(&rq);
+    let evop = OpCode::new(&ev);
+
+    let module = {
+        let Interface { iface, wl_iface, .. } = &iface;
+        g! {
+            pub use #wl_iface::#iface;
+            pub mod #wl_iface
         }
     };
 
-    Ok(attr.generate(&name).chain(base).collect())
+    parser.check_empty()?;
+
+    Ok(g!(use super::*;)
+        .chain(iface.gen_struct())
+        .chain(iface.gen_as_interface())
+        .chain(iface.gen_wl_global())
+        .chain(rqop.gen_enum())
+        .chain(rqop.gen_display())
+        .chain(rqop.gen_opcode_trait())
+        .chain(evop.gen_enum())
+        .chain(evop.gen_display())
+        .chain(evop.gen_opcode_trait())
+        .chain(gen_messages(&iface.iface, &rqop))
+        .chain(gen_messages(&iface.iface, &evop))
+        .chain(
+            en.enums
+                .iter()
+                .flat_map(|e| e.gen_enum().chain(e.gen_wl_enum()).chain(e.gen_display())),
+        )
+        .map_group(Delimiter::Brace)
+        .chain_back(module)
+        .collect())
 }
 
-struct InterfaceAttr {
-    global: Option<Literal>,
-    data: Option<Ident>,
+fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTree> {
+    opcode
+        .ops
+        .iter()
+        .map(move |op| Message::new(opcode, op))
+        .flat_map(move |m| {
+            m.gen_struct()
+                .chain(m.gen_as_interface(iface))
+                .chain(m.gen_as_opcode())
+                .chain(m.gen_as_newid())
+                .chain(m.gen_wl_message())
+                .chain(m.gen_decode())
+                .chain(m.gen_encode_payload())
+                .chain(m.gen_display())
+        })
 }
 
-impl Parse for InterfaceAttr {
-    fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        let mut seq = SequenceAttr::parse_attrs_opt("interface", parser)?;
-        let global = seq.next_named_of("global")?;
-        let data = seq.next_named_of("data")?;
-        seq.check_empty()?;
-        Ok(Self { global, data })
-    }
-}
-
-impl InterfaceAttr {
-    fn generate(self, name: &Ident) -> impl Iterator<Item = TokenTree> {
-        let Self { global, data } = self;
-        let wl_name = Literal::string(&to_snake(name.as_str()));
-
-        let global = global.map_stream(move |version| generate! {
-            impl WlGlobal for #name {
-                const NAME: &str = #wl_name;
-                const VERSION: Version = Version::new(#version).unwrap();
-                const INTERFACE: Interface = Interface::#name;
-            }
-        });
-        let data = data.map_stream(|data| generate! {
-            impl AsObjectData for #name {
-                type Data = #data;
-            }
-        });
-
-        global.chain(data)
+fn attr(parser: &mut Parser) -> Result<Option<Parser>, Error> {
+    match parser.next_punct_of('#') {
+        Some(_) => Ok(Some(parser.group_of(Delimiter::Bracket)?.body_parser())),
+        None => Ok(None),
     }
 }

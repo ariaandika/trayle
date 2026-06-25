@@ -16,3 +16,11 @@ impl AsInterface for Interface {
 pub trait WlInterface: Sized + WlObject + AsInterface { }
 
 impl<O: WlObject + AsInterface> WlInterface for O { }
+
+// ===== protocols =====
+
+use crate::wayland::prelude::*;
+
+pub use wl_core::*;
+
+mod wl_core;

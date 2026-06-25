@@ -96,6 +96,10 @@ impl Ident {
         self.string.get_or_init(|| self.token.to_string())
     }
 
+    pub fn set_span(&mut self, span: Span) {
+        self.token.set_span(span);
+    }
+
     pub fn span(&self) -> Span {
         self.token.span()
     }
@@ -304,3 +308,17 @@ impl<T> OptionExt<T> for Option<T> {
     }
 }
 
+pub trait IteratorExt: Sized + Iterator<Item = TokenTree> {
+    fn map_group(self, delim: Delimiter) -> impl Iterator<Item = TokenTree> {
+        Some(Group::new(delim, self.collect()).into()).into_iter()
+    }
+
+    fn chain_back(
+        self,
+        other: impl Iterator<Item = TokenTree>,
+    ) -> impl Iterator<Item = TokenTree> {
+        other.chain(self)
+    }
+}
+
+impl<I: Iterator<Item = TokenTree>> IteratorExt for I {}

@@ -1,0 +1,207 @@
+use crate::interface::attr;
+use crate::prelude::*;
+
+pub enum OpKind {
+    Request,
+    Event,
+}
+
+// ```
+// #[destructor, since = 5]
+// delete_id(id: uint, parent: object<wl_registry>?)
+// ```
+pub struct Op {
+    pub wl_name: Ident,
+    pub name: Ident,
+    pub since: Option<Literal>,
+    pub is_destructor: bool,
+    pub args: Vec<Arg>,
+}
+
+impl Parse for Op {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        let mut since = None;
+        let mut is_destructor = false;
+
+        if let Some(mut parser) = attr(parser)? {
+            if parser.next_ident_of("since").is_some() {
+                parser.punct_of('=')?;
+                since = Some(parser.lit()?);
+                parser.next_punct_of(',');
+            }
+
+            if parser.next_ident_of("destructor").is_some() {
+                parser.next_punct_of(',');
+                is_destructor = true;
+            }
+
+            parser.check_empty()?;
+        }
+
+        parser.parse::<Vis>()?;
+        parser.ident_of("fn")?;
+
+        let wl_name = parser.ident()?;
+        let name = Ident::new_string(to_camel(wl_name.as_str()), Span::call_site());
+
+        let mut has_new_id = false;
+        let mut has_fd = false;
+
+        let mut args = vec![];
+        let mut arg_parser = parser.group_of(Delimiter::Parenthesis)?.body_parser();
+        while arg_parser.peek().is_some() {
+            let arg = arg_parser.parse::<Arg>()?;
+
+            if arg.ty.as_new_id().is_some() {
+                if has_new_id {
+                    return Err(Error::spanned("only one new_id is supported", arg.name.span()));
+                }
+                has_new_id = true;
+            }
+            if arg.ty.is_fd() {
+                if has_fd {
+                    return Err(Error::spanned("only one fd is supported", arg.name.span()));
+                }
+                has_fd = true;
+            }
+
+            args.push(arg);
+            arg_parser.next_punct_of(',');
+        }
+
+        parser.punct_of(';')?;
+
+        Ok(Self {
+            wl_name,
+            name,
+            since,
+            is_destructor,
+            args,
+        })
+    }
+}
+
+// `id: uint, parent: object<wl_registry>?`
+//
+// ```
+// int uint
+// fixed
+// string
+// object<iface>
+// new_id<iface>
+// array
+// fd
+// ```
+//
+// `<ty>?` allow null
+// `uint<iface.enum>?` enum arg
+pub struct Arg {
+    pub name: Ident,
+    pub ty: Ty,
+    pub opt: bool,
+}
+
+pub enum Ty {
+    Int,
+    Uint(Option<(Ident, Ident)>),
+    Fixed,
+    String,
+    Object(Ident),
+    NewId(Ident),
+    Array,
+    Fd,
+}
+
+impl Ty {
+    pub fn is_lf(&self) -> bool {
+        matches!(self, Ty::String | Ty::Array)
+    }
+
+    pub fn is_fd(&self) -> bool {
+        matches!(self, Ty::Fd)
+    }
+
+    pub fn as_new_id(&self) -> Option<&Ident> {
+        match self {
+            Ty::NewId(id) => Some(id),
+            _ => None,
+        }
+    }
+}
+
+impl Parse for Arg {
+    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+        fn iface(parser: &mut Parser) -> Result<Ident, Error> {
+            parser.punct_of('<')?;
+            let name = parser.ident()?;
+            parser.punct_of('>')?;
+            Ok(name)
+        }
+        fn arg_enum(parser: &mut Parser) -> Result<Option<(Ident, Ident)>, Error> {
+            let Some(_) = parser.next_punct_of('<') else {
+                return Ok(None);
+            };
+            let name = parser.ident()?;
+            parser.punct_of('.')?;
+            let subname = parser.ident()?;
+            parser.punct_of('>')?;
+            Ok(Some((name, subname)))
+        }
+
+        let name = parser.ident()?;
+        parser.punct_of(':')?;
+        let ty = parser.ident()?;
+        let ty = match ty.as_str() {
+            "int" => Ty::Int,
+            "uint" => Ty::Uint(arg_enum(parser)?),
+            "fixed" => Ty::Fixed,
+            "string" => Ty::String,
+            "object" => Ty::Object(iface(parser)?),
+            "new_id" => Ty::NewId(iface(parser)?),
+            "array" => Ty::Array,
+            "fd" => Ty::Fd,
+            _ => return Err(Error::spanned("unknown type", ty.span())),
+        };
+        let opt = parser.next_punct_of('?').is_some();
+        Ok(Self {
+            name,
+            ty,
+            opt,
+        })
+    }
+}
+
+impl Ty {
+    pub fn generate(&self) -> TokenTree {
+        macro_rules! id {
+            ($ty:ident) => {
+                Ident::new(stringify!($ty), Span::call_site()).into()
+            };
+        }
+        macro_rules! gr {
+            ($($tt:tt)*) => {
+                Group::new(Delimiter::None, token_stream!($($tt)*)).into()
+            };
+        }
+        match self {
+            Ty::Int => id!(i32),
+            Ty::Uint(None) => id!(u32),
+            Ty::Uint(Some((n, s))) => {
+                let wl_en = Ident::new_string(to_camel(s.as_str()), s.span());
+                gr!(#n::#wl_en)
+            },
+            Ty::Fixed => id!(Fixed),
+            Ty::String => gr!(&'a str),
+            Ty::Object(i) => {
+                let wl_i = Ident::new_string(to_camel(i.as_str()), i.span());
+                gr!(Object<#wl_i>)
+            },
+            Ty::NewId(i) => {
+                let wl_i = Ident::new_string(to_camel(i.as_str()), i.span());
+                gr!(NewId<#wl_i>)
+            },
+            Ty::Array => gr!(&'a [u8]),
+            Ty::Fd => gr!(compile_error!("internal: fd should not be generated")),
+        }
+    }
+}
