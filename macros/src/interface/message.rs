@@ -2,11 +2,10 @@ use crate::prelude::*;
 use crate::interface::*;
 
 pub struct Message<'a> {
-    has_lf: bool,
-    has_fd: Option<&'a Arg>,
-    is_request: bool,
-    opkind: Ident,
-    op: &'a Op,
+    pub is_request: bool,
+    pub opkind: Ident,
+    pub op: &'a Op,
+    pub fd: Option<&'a Arg>,
 }
 
 fn encodables(op: &Op) -> std::iter::Filter<std::slice::Iter<'_, Arg>, fn(&&Arg) -> bool> {
@@ -15,16 +14,14 @@ fn encodables(op: &Op) -> std::iter::Filter<std::slice::Iter<'_, Arg>, fn(&&Arg)
 
 impl<'a> Message<'a> {
     pub fn new(opcode: &OpCode, op: &'a Op) -> Self {
-        let has_lf = op.args.iter().any(|e| e.ty.is_lf());
-        let has_fd = op.args.iter().find(|e| e.ty.is_fd());
-        let opkind = opcode.name.clone();
         let is_request = matches!(opcode.ops.kind, OpKind::Request);
+        let opkind = opcode.name.clone();
+        let fd = op.fd_idx.map(|i|&op.args[i]);
         Self {
-            has_lf,
-            has_fd,
             is_request,
             opkind,
             op,
+            fd,
         }
     }
 
@@ -42,7 +39,7 @@ impl<'a> Message<'a> {
             // };
             g!(pub #name: #ty,)
         });
-        let lf = stream_if(self.has_lf, || g!(<'a>));
+        let lf = self.op.lf_ph.as_ref().map_stream(|_|g!(<'a>));
         g! {
             #[derive(Debug, Clone)]
             pub struct #name @lf {
@@ -53,7 +50,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_as_interface(&self, iface: &Ident) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
+        let lf_ph = &self.op.lf_ph;
         g! {
             impl AsInterface for #name @lf_ph {
                 #[inline]
@@ -87,7 +84,7 @@ impl<'a> Message<'a> {
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
         let opkind = &self.opkind;
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
+        let lf_ph = &self.op.lf_ph;
         let wl_string = Literal::string(self.op.wl_name.as_str());
         g! {
             impl AsOpCode for #name @lf_ph {
@@ -101,7 +98,7 @@ impl<'a> Message<'a> {
     pub fn gen_wl_message(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
         let is_request = Bool(self.is_request);
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
+        let lf_ph = &self.op.lf_ph;
         let destructor = stream_if(self.op.is_destructor, || g! {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
@@ -119,11 +116,11 @@ impl<'a> Message<'a> {
 
     pub fn gen_decode(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let cmut = stream_if(self.has_fd.is_some(), ||g!(mut));
-        let lf = stream_if(self.has_lf, || g!(<'a>));
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
+        let cmut = stream_if(self.op.fd_idx.is_some(), ||g!(mut));
+        let lf_ph = &self.op.lf_ph;
+        let lf = self.op.lf_ph.as_ref().map_stream(|_| g!(<'a>));
 
-        let fd = self.has_fd.as_ref().map_stream(|Arg { name, .. }|{
+        let fd = self.fd.map_stream(|Arg { name, .. }|{
             g!(let #name = dec.pop_fd()?;)
         });
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
@@ -147,7 +144,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_encode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
+        let lf_ph = &self.op.lf_ph;
 
         let sum = encodables(self.op).flat_map(|Arg { name, .. }|{
             g!(+ self.#name.size())
@@ -155,7 +152,7 @@ impl<'a> Message<'a> {
         let write = encodables(self.op).flat_map(|Arg { name, .. }|{
             g!(.write(self.#name))
         });
-        let fd = self.has_fd.map_stream(|Arg { name, .. }|g! {
+        let fd = self.fd.map_stream(|Arg { name, .. }|g! {
             #[inline]
             fn fd(&self) -> Option<i32> {
                 Some(self.#name)
@@ -179,8 +176,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let lf_ph = stream_if(self.has_lf, || g!(<'_>));
-
+        let lf_ph = &self.op.lf_ph;
         g! {
             impl display::AsDisplay for #name @lf_ph {
                 #[inline]

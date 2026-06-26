@@ -16,6 +16,8 @@ pub struct Op {
     pub since: Option<Literal>,
     pub is_destructor: bool,
     pub args: Vec<Arg>,
+    pub lf_ph: Option<TokenTree>,
+    pub fd_idx: Option<usize>,
 }
 
 impl Parse for Op {
@@ -44,14 +46,19 @@ impl Parse for Op {
         let wl_name = parser.ident()?;
         let name = Ident::new_string(to_camel(wl_name.as_str()), Span::call_site());
 
+        let mut lf_ph = None;
         let mut has_new_id = false;
-        let mut has_fd = false;
+        let mut fd_idx = None;
 
         let mut args = vec![];
         let mut arg_parser = parser.group_of(Delimiter::Parenthesis)?.body_parser();
+
         while arg_parser.peek().is_some() {
             let arg = arg_parser.parse::<Arg>()?;
 
+            if arg.is_lf() {
+                lf_ph = Some(Group::new(Delimiter::None, token_stream!(<'_>)).into())
+            }
             if arg.ty.as_new_id().is_some() {
                 if has_new_id {
                     return Err(Error::spanned("only one new_id is supported", arg.name.span()));
@@ -59,10 +66,10 @@ impl Parse for Op {
                 has_new_id = true;
             }
             if arg.ty.is_fd() {
-                if has_fd {
+                if fd_idx.is_some() {
                     return Err(Error::spanned("only one fd is supported", arg.name.span()));
                 }
-                has_fd = true;
+                fd_idx = Some(args.len());
             }
 
             args.push(arg);
@@ -77,6 +84,8 @@ impl Parse for Op {
             since,
             is_destructor,
             args,
+            lf_ph,
+            fd_idx,
         })
     }
 }
@@ -100,6 +109,14 @@ pub struct Arg {
     pub ty: Ty,
     #[expect(dead_code)]
     pub opt: bool,
+}
+
+impl std::ops::Deref for Arg {
+    type Target = Ty;
+
+    fn deref(&self) -> &Self::Target {
+        &self.ty
+    }
 }
 
 pub enum Ty {

@@ -4,6 +4,7 @@ use interface::Interface;
 use op::{Arg, Op, OpKind};
 use ops::Ops;
 use opcode::OpCode;
+use ext::ExtTrait;
 use message::Message;
 use enums::Enums;
 
@@ -19,6 +20,7 @@ mod interface;
 mod op;
 mod ops;
 mod opcode;
+mod ext;
 mod message;
 mod enums;
 
@@ -29,6 +31,7 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
     let en = Enums::parse(&mut parser)?;
     let rqop = OpCode::new(&rq);
     let evop = OpCode::new(&ev);
+    let ext = ExtTrait::new(&iface, &rq, &ev);
 
     let module = {
         let Interface { iface, wl_iface, .. } = &iface;
@@ -65,6 +68,7 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
         .chain(evop.gen_opcode_trait())
         .chain(gen_messages(&iface.iface, &rqop))
         .chain(gen_messages(&iface.iface, &evop))
+        .chain(ext.gen_ext_trait())
         .chain(
             en.enums
                 .iter()

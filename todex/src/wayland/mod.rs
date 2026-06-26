@@ -51,7 +51,7 @@ pub mod error;
 
 mod prelude {
     pub use super::primitives::*;
-    pub use super::object::{Object, WlGlobal};
+    pub use super::object::{AsObject, Object, WlGlobal};
     pub use super::wire::{AsOpCode, OpCode};
     pub use super::wire::{Decode, DecodeError, Decoder};
     pub use super::wire::{EncodePayload, Sized2, Writer};
