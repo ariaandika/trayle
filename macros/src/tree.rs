@@ -85,6 +85,13 @@ impl Ident {
         }
     }
 
+    pub fn new_raw(string: &str, span: Span) -> Ident {
+        Self {
+            token: p::Ident::new_raw(string, span),
+            string: OnceCell::new(),
+        }
+    }
+
     pub fn new_string(string: String, span: Span) -> Ident {
         Self {
             token: p::Ident::new(&string, span),
