@@ -152,6 +152,10 @@ pub enum Ty {
     NewId(Ident),
     Array,
     Fd,
+    /// only used by wl_registry::bind
+    ObjectId,
+    /// only used by wl_registry::bind
+    Version,
 }
 
 impl Ty {
@@ -212,6 +216,8 @@ impl Parse for Arg {
             "new_id" => Ty::NewId(iface(parser)?),
             "array" => Ty::Array,
             "fd" => Ty::Fd,
+            "object_id" => Ty::ObjectId,
+            "version" => Ty::Version,
             _ => return Err(Error::spanned("unknown type", ty.span())),
         };
         let opt = parser.next_punct_of('?').is_some();
@@ -244,7 +250,9 @@ impl Ty {
             Ty::Object(i) => gr!(Object<#i>),
             Ty::NewId(i) => gr!(NewId<#i>),
             Ty::Array => gr!(&'a [u8]),
-            Ty::Fd => gr!(RawFd),
+            Ty::Fd => id!(RawFd),
+            Ty::ObjectId => id!(ObjectId),
+            Ty::Version => id!(Version),
         }
     }
 }
