@@ -81,6 +81,7 @@ fn gen_enum(en: &Enum) -> impl Iterator<Item = TokenTree> {
         .chain(en.gen_wl_enum())
         .chain(en.gen_display())
         .chain(en.gen_consts())
+        .chain(en.gen_impl_flags())
         .chain(en.gen_bit_ops())
 }
 

@@ -208,6 +208,19 @@ impl Enum {
         })
     }
 
+    pub fn gen_impl_flags(&self) -> impl Iterator<Item = TokenTree> {
+        stream_if(self.is_bitfield, ||{
+            let name = &self.name;
+            g! {
+                impl crate::bitflags::Flags for #name {
+                    fn bits(self) -> u32 {
+                        self.#ZERO
+                    }
+                }
+            }
+        })
+    }
+
     pub fn gen_bit_ops(&self) -> impl Iterator<Item = TokenTree> {
         stream_if(self.is_bitfield, ||{
             let name = &self.name;
