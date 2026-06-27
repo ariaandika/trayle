@@ -119,9 +119,33 @@ impl std::ops::Deref for Arg {
     }
 }
 
+#[derive(Clone)]
+pub struct Path(Option<Ident>, Ident);
+
+impl From<Path> for TokenTree {
+    fn from(value: Path) -> Self {
+        Group::new(
+            Delimiter::None,
+            value
+                .0
+                .map(<_>::into)
+                .into_iter()
+                .chain(gentoken!(::))
+                .chain(Some(TokenTree::from(value.1)))
+                .collect(),
+        )
+        .into()
+    }
+}
+
 pub enum Ty {
     Int,
-    Uint(Option<(Ident, Ident)>),
+    Uint,
+    Enum {
+        #[expect(dead_code)]
+        is_signed: bool,
+        path: Path,
+    },
     Fixed,
     String,
     Object(Ident),
@@ -156,25 +180,32 @@ impl Parse for Arg {
             parser.punct_of('>')?;
             Ok(name)
         }
-        fn arg_enum(parser: &mut Parser) -> Result<Option<(Ident, Ident)>, Error> {
+        fn maybe_enum(is_signed: bool, parser: &mut Parser) -> Result<Ty, Error> {
             let Some(_) = parser.next_punct_of('<') else {
-                return Ok(None);
+                return Ok(if is_signed { Ty::Int } else { Ty::Uint });
             };
             let wl_name = parser.ident()?;
-            let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
-            parser.punct_of('.')?;
-            let wl_subname = parser.ident()?;
-            let subname = Ident::new_string(to_camel(wl_subname.as_str()), wl_subname.span());
+            let path = match parser.next_punct_of('.') {
+                Some(_) => {
+                    let wl_subname = parser.ident()?;
+                    let name = Ident::new_string(to_camel(wl_subname.as_str()), wl_subname.span());
+                    Path(Some(wl_name), name)
+                },
+                None => {
+                    let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
+                    Path(None, name)
+                },
+            };
             parser.punct_of('>')?;
-            Ok(Some((name, subname)))
+            Ok(Ty::Enum { is_signed, path })
         }
 
         let name = parser.ident()?;
         parser.punct_of(':')?;
         let ty = parser.ident()?;
         let ty = match ty.as_str() {
-            "int" => Ty::Int,
-            "uint" => Ty::Uint(arg_enum(parser)?),
+            "int" => maybe_enum(true, parser)?,
+            "uint" => maybe_enum(false, parser)?,
             "fixed" => Ty::Fixed,
             "string" => Ty::String,
             "object" => Ty::Object(iface(parser)?),
@@ -206,8 +237,8 @@ impl Ty {
         }
         match self {
             Ty::Int => id!(i32),
-            Ty::Uint(None) => id!(u32),
-            Ty::Uint(Some((n, s))) => gr!(#n::#s),
+            Ty::Uint => id!(u32),
+            Ty::Enum { path, .. } => path.clone().into(),
             Ty::Fixed => id!(Fixed),
             Ty::String => gr!(&'a str),
             Ty::Object(i) => gr!(Object<#i>),
