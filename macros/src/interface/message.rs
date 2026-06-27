@@ -27,7 +27,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let fields = encodables(self.op).flat_map(|Arg { name, /* opt, */ ty, .. }| {
+        let fields = self.op.args.iter().flat_map(|Arg { name, /* opt, */ ty, .. }| {
             let ty = ty.generate();
             // FIX:
             // - blocker: change impl Read for Option<Object>

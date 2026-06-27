@@ -244,7 +244,7 @@ impl Ty {
             Ty::Object(i) => gr!(Object<#i>),
             Ty::NewId(i) => gr!(NewId<#i>),
             Ty::Array => gr!(&'a [u8]),
-            Ty::Fd => gr!(compile_error!("internal: fd should not be generated")),
+            Ty::Fd => gr!(RawFd),
         }
     }
 }
