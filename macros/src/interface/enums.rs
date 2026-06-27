@@ -189,6 +189,8 @@ impl Enum {
         }
     }
 
+    // bitfield only
+
     pub fn gen_consts(&self) -> impl Iterator<Item = TokenTree> {
         stream_if(self.is_bitfield, ||{
             let name = &self.name;
@@ -204,5 +206,29 @@ impl Enum {
                 }
             }
         })
+    }
+
+    pub fn gen_bit_ops(&self) -> impl Iterator<Item = TokenTree> {
+        stream_if(self.is_bitfield, ||{
+            let name = &self.name;
+            gen_bitops(name, "BitAnd", "bitand", '&')
+                .chain(gen_bitops(name, "BitOr", "bitor", '|'))
+                .chain(gen_bitops(name, "BitXor", "bitxor", '^'))
+        })
+    }
+}
+
+fn gen_bitops(name: &Ident, trait_: &str, fn_: &str, op: char) -> impl Iterator<Item = TokenTree> {
+    let tr = Ident::new(trait_, Span::call_site());
+    let f = Ident::new(fn_, Span::call_site());
+    let op = Punct::new(op, Spacing::Alone);
+    generate! {
+        impl std::ops::#tr for #{name.clone()} {
+            type Output = Self;
+            #[inline]
+            fn #f(self, rhs: Self) -> Self::Output {
+                Self(self.#ZERO #op rhs.#ZERO)
+            }
+        }
     }
 }

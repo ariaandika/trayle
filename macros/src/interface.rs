@@ -78,9 +78,10 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
 
 fn gen_enum(en: &Enum) -> impl Iterator<Item = TokenTree> {
     en.gen_enum()
-        .chain(en.gen_consts())
         .chain(en.gen_wl_enum())
         .chain(en.gen_display())
+        .chain(en.gen_consts())
+        .chain(en.gen_bit_ops())
 }
 
 fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTree> {
