@@ -35,17 +35,12 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
 
     let module = {
         let Interface { iface, wl_iface, .. } = &iface;
-        // FIX: remove impl {From,As}ObjectId
+        // FIX: remove impl AsObjectId
         // - blocker: change impl Read for Option<Object>
         // - blocker: remove the old wayland definition
         g! {
             pub use #wl_iface::#iface;
             pub use #wl_iface::Ext as _;
-            impl FromObjectId for #iface {
-                fn from_object_id(_: ObjectId) -> Self {
-                    Self
-                }
-            }
             impl AsObjectId for #iface {
                 fn object_id(&self) -> ObjectId {
                     unreachable!("internal error: temporary implementation")

@@ -24,7 +24,7 @@
 //!
 //! - [`AsObjectId`]: Type that is associated with an object id.
 
-pub use object_id::{AsNewId, AsObjectId, FromObjectId, NewId, ObjectId};
+pub use object_id::{AsObjectId, ObjectId};
 pub use types::{Fixed, Version};
 
 mod object_id;

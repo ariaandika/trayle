@@ -1,4 +1,4 @@
-use crate::wayland::primitives::{AsObjectId, FromObjectId};
+use crate::wayland::primitives::AsObjectId;
 
 pub use error::ObjectError;
 pub use object::Object;
@@ -13,8 +13,8 @@ mod handle;
 // ===== trait =====
 
 /// Type that represent a wayland object.
-pub trait WlObject: FromObjectId + AsObjectId {}
+pub trait WlObject: AsObjectId {}
 
 pub trait AsObject<I>: AsObjectId { }
 
-impl<O: FromObjectId + AsObjectId> WlObject for O {}
+impl<O: AsObjectId> WlObject for O {}

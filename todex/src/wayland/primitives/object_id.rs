@@ -2,12 +2,6 @@ use std::num::NonZeroU32;
 
 // ===== traits =====
 
-/// Constructs type with given object id.
-pub trait FromObjectId {
-    /// Create this object with given object id.
-    fn from_object_id(id: ObjectId) -> Self;
-}
-
 /// Type that is associated with an object id.
 pub trait AsObjectId {
     /// Returns this object id.
@@ -69,13 +63,6 @@ impl ObjectId {
     #[inline]
     pub const fn to_ne_bytes(self) -> [u8; 4] {
         self.0.get().to_ne_bytes()
-    }
-}
-
-impl FromObjectId for ObjectId {
-    #[inline]
-    fn from_object_id(id: ObjectId) -> Self {
-        id
     }
 }
 
