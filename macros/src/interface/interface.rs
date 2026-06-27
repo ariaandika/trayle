@@ -46,6 +46,14 @@ impl Interface {
         }
     }
 
+    pub fn gen_impl_marker(&self) -> impl Iterator<Item = TokenTree> {
+        let iface_name = &self.iface;
+        g! {
+            impl InterfaceMarker for #iface_name { }
+            impl sealed::Sealed for #iface_name { }
+        }
+    }
+
     pub fn gen_as_interface(&self) -> impl Iterator<Item = TokenTree> {
         let iface_name = &self.iface;
         g! {

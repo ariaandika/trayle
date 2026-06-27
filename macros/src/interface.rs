@@ -54,6 +54,7 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
 
     Ok(g!(use super::*;)
         .chain(iface.gen_struct())
+        .chain(iface.gen_impl_marker())
         .chain(iface.gen_as_interface())
         .chain(iface.gen_wl_global())
         .chain(rqop.gen_enum())

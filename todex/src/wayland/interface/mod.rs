@@ -5,12 +5,15 @@ pub trait AsInterface {
     /// Returns the interface that this type associated with.
     fn interface(&self) -> Interface;
 }
+pub trait InterfaceMarker: sealed::Sealed {}
 
 impl AsInterface for Interface {
     #[inline]
     fn interface(&self) -> Interface {
         *self
     }
+mod sealed {
+    pub trait Sealed: std::fmt::Debug + Default + Clone + Copy {}
 }
 
 pub trait WlInterface: Sized + WlObject + AsInterface { }
