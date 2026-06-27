@@ -1,3 +1,4 @@
+use std::fmt;
 use std::num::NonZeroU32;
 
 // ===== traits =====
@@ -6,14 +7,6 @@ use std::num::NonZeroU32;
 pub trait AsObjectId {
     /// Returns this object id.
     fn object_id(&self) -> ObjectId;
-}
-
-/// Type that is associated with a new id.
-pub trait AsNewId {
-    type Interface;
-
-    /// Returns the new id.
-    fn new_id(&self) -> NewId<Self::Interface>;
 }
 
 // ===== ObjectId =====
@@ -80,91 +73,9 @@ impl PartialEq<u32> for ObjectId {
     }
 }
 
-impl std::fmt::Display for ObjectId {
+impl fmt::Display for ObjectId {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.0.fmt(f)
-    }
-}
-
-// ===== NewId =====
-
-/// A new id for an object.
-///
-/// Create the actual object using [`NewId::create`].
-pub struct NewId<T> {
-    id: ObjectId,
-    _p: std::marker::PhantomData<T>,
-}
-
-impl<T> NewId<T> {
-    /// Creates `NewId` from given object id.
-    #[inline]
-    pub const fn new(id: ObjectId) -> Self {
-        Self {
-            id,
-            _p: std::marker::PhantomData,
-        }
-    }
-
-    /// Returns the new object id.
-    #[inline]
-    pub const fn object_id(&self) -> ObjectId {
-        self.id
-    }
-
-    /// Create the actual object.
-    #[inline]
-    pub fn create(self) -> T
-    where
-        T: FromObjectId,
-    {
-        T::from_object_id(self.id)
-    }
-}
-
-impl<T> FromObjectId for NewId<T> {
-    #[inline]
-    fn from_object_id(id: ObjectId) -> Self {
-        Self::new(id)
-    }
-}
-
-impl<T> AsObjectId for NewId<T> {
-    #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.id
-    }
-}
-
-impl<I> AsNewId for NewId<I> {
-    type Interface = I;
-
-    #[inline]
-    fn new_id(&self) -> NewId<Self::Interface> {
-        *self
-    }
-}
-
-impl<T> Copy for NewId<T> {}
-
-impl<T> Clone for NewId<T> {
-    #[inline]
-    fn clone(&self) -> Self {
-        *self
-    }
-}
-
-impl<T> std::fmt::Debug for NewId<T> {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
-    }
-}
-
-impl<T> std::fmt::Display for NewId<T> {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.id.fmt(f)
     }
 }
