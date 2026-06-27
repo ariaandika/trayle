@@ -188,4 +188,21 @@ impl Enum {
             }
         }
     }
+
+    pub fn gen_consts(&self) -> impl Iterator<Item = TokenTree> {
+        stream_if(self.is_bitfield, ||{
+            let name = &self.name;
+            let consts = self.variants.iter().flat_map(|v|{
+                let upname = v.variant.as_str().to_uppercase();
+                let upname = Ident::new_string(upname, v.variant.span());
+                let disc = &v.disc;
+                g!(pub const #upname: Self = Self(#disc);)
+            });
+            g! {
+                impl #name {
+                    @consts
+                }
+            }
+        })
+    }
 }

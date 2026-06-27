@@ -6,7 +6,7 @@ use ops::Ops;
 use opcode::OpCode;
 use ext::ExtTrait;
 use message::Message;
-use enums::Enums;
+use enums::{Enums, Enum};
 
 pub mod derive;
 
@@ -40,6 +40,7 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
         // - blocker: remove the old wayland definition
         g! {
             pub use #wl_iface::#iface;
+            pub use #wl_iface::Ext as _;
             impl FromObjectId for #iface {
                 fn from_object_id(_: ObjectId) -> Self {
                     Self
@@ -69,14 +70,17 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
         .chain(gen_messages(&iface.iface, &rqop))
         .chain(gen_messages(&iface.iface, &evop))
         .chain(ext.gen_ext_trait())
-        .chain(
-            en.enums
-                .iter()
-                .flat_map(|e| e.gen_enum().chain(e.gen_wl_enum()).chain(e.gen_display())),
-        )
+        .chain(en.enums.iter().flat_map(gen_enum))
         .map_group(Delimiter::Brace)
         .chain_back(module)
         .collect())
+}
+
+fn gen_enum(en: &Enum) -> impl Iterator<Item = TokenTree> {
+    en.gen_enum()
+        .chain(en.gen_consts())
+        .chain(en.gen_wl_enum())
+        .chain(en.gen_display())
 }
 
 fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTree> {
