@@ -31,27 +31,27 @@ impl<'a> OpCode<'a> {
     }
 
     pub fn gen_opcode_trait(&self) -> impl Iterator<Item = TokenTree> {
-        if self.ops.is_empty() {
-            return None.into_iter().flatten();
-        }
         let name = &self.name;
-        let cmp = match &self.ops[..] {
-            [] => unreachable!(),
-            [_] => Either::Left(g!(op == #ZERO)),
-            [.., Op { name, .. }] => Either::Right(g!(op as u8 <= Self::#name as u8)),
-        };
-        let cvt = match &self.ops[..] {
-            [] => unreachable!(),
-            [Op { name, .. }] => Either::Left(g!(Self::#name)),
-            [.., _] => {
-                Either::Right(g!(unsafe { std::mem::transmute::<u8, Self>(op as u8) }))
+        let from = match &self.ops[..] {
+            [] => Either::Left(Either::Left(g!(None))),
+            [Op { name, .. }] => Either::Left(Either::Right(g! {
+                if op == #ZERO { Some(Self::#name) } else { None }
+            })),
+            [.., Op { name, .. }] => {
+                Either::Right(g! {
+                    if op as u8 <= Self::#name as u8 {
+                        Some(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
+                    } else {
+                        None
+                    }
+                })
             },
         };
-        Some(g! {
+        g! {
             impl OpCode for #name {
                 #[inline]
                 fn from_op(op: u16) -> Option<Self> {
-                    if @cmp { Some(@cvt) } else { None }
+                    @from
                 }
 
                 #[inline]
@@ -59,7 +59,7 @@ impl<'a> OpCode<'a> {
                     self as u16
                 }
             }
-        }).into_iter().flatten()
+        }
     }
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> {

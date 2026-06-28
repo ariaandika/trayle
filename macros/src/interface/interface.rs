@@ -61,6 +61,17 @@ impl Interface {
         }
     }
 
+    pub fn gen_wl_interface(&self) -> impl Iterator<Item = TokenTree> {
+        let iface_name = &self.iface;
+        g! {
+            impl WlInterface for #iface_name {
+                type RequestOp = RequestOp;
+
+                type EventOp = EventOp;
+            }
+        }
+    }
+
     pub fn gen_wl_global(&self) -> impl Iterator<Item = TokenTree> {
         self.global.as_ref().map_stream(|version|{
             let iface_name = &self.iface;
