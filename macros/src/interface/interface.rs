@@ -49,8 +49,15 @@ impl Interface {
     pub fn gen_impl_marker(&self) -> impl Iterator<Item = TokenTree> {
         let iface_name = &self.iface;
         g! {
-            impl InterfaceMarker for #iface_name { }
-            impl sealed::Sealed for #iface_name { }
+            impl InterfaceMarker for #iface_name {
+                fn from_interface(iface: InterfaceId) -> Self {
+                    assert_iface!(iface, #iface_name);
+                    Self
+                }
+            }
+            impl sealed::Sealed for #iface_name {
+                const MARKER: Self = Self;
+            }
         }
     }
 
