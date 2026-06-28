@@ -1,20 +1,20 @@
 use crate::prelude::*;
 use crate::interface::*;
 
-pub struct ExtTrait<'a> {
+pub struct Constructor<'a> {
     pub iface: &'a Interface,
     pub rq: &'a Ops,
     pub ev: &'a Ops,
 }
 
-impl<'a> ExtTrait<'a> {
+impl<'a> Constructor<'a> {
     pub fn new(iface: &'a Interface, rq: &'a Ops, ev: &'a Ops) -> Self {
         Self { iface, rq, ev }
     }
 }
 
-fn gen_ops(ops: &Ops) -> impl Iterator<Item = TokenTree> + Clone {
-    ops.iter().flat_map(|op|{
+fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + Clone {
+    ops.iter().flat_map(move|op|{
         let Op { wl_name, name, lf_ph, .. } = op;
 
         let wl_name = if KEYWORDS.contains(&wl_name.as_str()) {
@@ -49,25 +49,23 @@ fn gen_ops(ops: &Ops) -> impl Iterator<Item = TokenTree> + Clone {
 
         g! {
             @doc
-            fn #wl_name @lf(&self @args) -> Message<#name @lf> {
+            ?vis fn #wl_name @lf(&self @args) -> Message<#name @lf> {
                 Message::new(self, #name { @ctor })
             }
         }
     })
 }
 
-impl ExtTrait<'_> {
-    pub fn gen_ext_trait(&self) -> impl Iterator<Item = TokenTree> {
+impl Constructor<'_> {
+    pub fn gen_constructor(&self) -> impl Iterator<Item = TokenTree> {
         let name = &self.iface.iface;
-        let rq = gen_ops(self.rq);
-        let ev = gen_ops(self.ev);
+        let rq = gen_ops(Some(Ident::new("pub", Span::call_site())), self.rq);
+        let ev = gen_ops(Some(Ident::new("pub", Span::call_site())), self.ev);
         g! {
-            pub trait Ext: Sized + AsObjectId {
+            impl Object<#name> {
                 @rq
                 @ev
             }
-
-            impl<O: AsObject<#name>> Ext for O { }
         }
     }
 }
