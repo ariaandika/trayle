@@ -10,12 +10,6 @@ use enums::{Enums, Enum};
 
 pub mod derive;
 
-macro_rules! g {
-    ($($tt:tt)*) => {
-        generate!($($tt)*)
-    };
-}
-
 mod interface;
 mod op;
 mod ops;
@@ -35,17 +29,9 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
 
     let module = {
         let Interface { iface, wl_iface, .. } = &iface;
-        // FIX: remove impl AsObjectId
-        // - blocker: change impl Read for Option<Object>
-        // - blocker: remove the old wayland definition
         g! {
             pub use #wl_iface::#iface;
             pub use #wl_iface::Ext as _;
-            impl AsObjectId for #iface {
-                fn object_id(&self) -> ObjectId {
-                    unreachable!("internal error: temporary implementation")
-                }
-            }
             pub mod #wl_iface
         }
     };
@@ -55,7 +41,6 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
     Ok(g!(use super::*;)
         .chain(iface.gen_struct())
         .chain(iface.gen_impl_marker())
-        .chain(iface.gen_as_interface())
         .chain(iface.gen_wl_global())
         .chain(rqop.gen_enum())
         .chain(rqop.gen_display())

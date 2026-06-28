@@ -54,18 +54,6 @@ impl Interface {
         }
     }
 
-    pub fn gen_as_interface(&self) -> impl Iterator<Item = TokenTree> {
-        let iface_name = &self.iface;
-        g! {
-            impl AsInterface for #iface_name {
-                #[inline]
-                fn interface(&self) -> Interface {
-                    Interface::#iface_name
-                }
-            }
-        }
-    }
-
     pub fn gen_wl_global(&self) -> impl Iterator<Item = TokenTree> {
         self.global.as_ref().map_stream(|version|{
             let iface_name = &self.iface;

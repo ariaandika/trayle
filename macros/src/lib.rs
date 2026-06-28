@@ -28,7 +28,14 @@ mod prelude {
     pub const TRUE: crate::Bool = crate::Bool(true);
 }
 
+macro_rules! g {
+    ($($tt:tt)*) => {
+        generate!($($tt)*)
+    };
+}
+
 mod interface;
+mod interface_id;
 mod opcode;
 mod message;
 mod wl_enum;
@@ -51,6 +58,12 @@ pub fn interface_derive(tokens: p::TokenStream) -> p::TokenStream {
 #[proc_macro]
 pub fn interface(tokens: p::TokenStream) -> p::TokenStream {
     call(tokens, interface::impl_interface)
+}
+
+/// Create interface enum.
+#[proc_macro]
+pub fn interface_id(tokens: p::TokenStream) -> p::TokenStream {
+    call(tokens, interface_id::impl_interface_id)
 }
 
 /// Implement `OpCode` and `Display`.
