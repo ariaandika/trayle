@@ -102,8 +102,9 @@ impl<'a> Message<'a> {
         let destructor = stream_if(self.op.is_destructor, || g! {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
-        let since = self.op.since.as_ref().map_stream(|since| g! {
-            const SINCE: Version = Version::new(#since).unwrap();
+        let since = self.op.since.map_stream(|since| {
+            let since = Literal::u32_unsuffixed(since);
+            g!(const SINCE: Version = Version::new(#since).unwrap();)
         });
         g! {
             impl WlMessage for #name @lf_ph {

@@ -26,8 +26,24 @@ impl Ops {
         parser.ident_of("impl")?;
         parser.ident()?;
         let mut body_parser = parser.group_of(Delimiter::Brace)?.body_parser();
+        let mut version = 1;
         while body_parser.peek().is_some() {
-            ops.push(body_parser.parse()?);
+            let mut op = body_parser.parse::<Op>()?;
+            match op.since {
+                Some(since) => {
+                    if since > version {
+                        version = since;
+                    } else {
+                        let m = if since == version { "equal" } else { "less" };
+                        return Err(Error::spanned(
+                            format!("version is {m} than previous op"),
+                            op.name.span(),
+                        ));
+                    }
+                }
+                None => op.since = Some(version),
+            }
+            ops.push(op);
         }
         Ok(Self { kind, ops })
     }

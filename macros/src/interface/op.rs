@@ -13,7 +13,7 @@ pub enum OpKind {
 pub struct Op {
     pub wl_name: Ident,
     pub name: Ident,
-    pub since: Option<Literal>,
+    pub since: Option<u32>,
     pub is_destructor: bool,
     pub args: Vec<Arg>,
     pub lf_ph: Option<TokenTree>,
@@ -39,6 +39,8 @@ impl Parse for Op {
 
             parser.check_empty()?;
         }
+
+        let since = since.and_then(|s|s.to_string().parse().ok());
 
         parser.parse::<Vis>()?;
         parser.ident_of("fn")?;
