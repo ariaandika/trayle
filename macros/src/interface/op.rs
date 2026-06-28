@@ -150,12 +150,10 @@ pub enum Ty {
     },
     Fixed,
     String,
-    Object(Ident),
-    NewId(Ident),
+    Object(Option<Ident>),
+    NewId(Option<Ident>),
     Array,
     Fd,
-    /// only used by wl_registry::bind
-    ObjectId,
     /// only used by wl_registry::bind
     Version,
 }
@@ -171,7 +169,7 @@ impl Ty {
 
     pub fn as_new_id(&self) -> Option<&Ident> {
         match self {
-            Ty::NewId(id) => Some(id),
+            Ty::NewId(id) => id.as_ref(),
             _ => None,
         }
     }
@@ -179,14 +177,16 @@ impl Ty {
 
 impl Parse for Arg {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        fn iface(parser: &mut Parser) -> Result<Ident, Error> {
-            parser.punct_of('<')?;
+        fn opt_iface(parser: &mut Parser) -> Result<Option<Ident>, Error> {
+            let Some(_) = parser.next_punct_of('<') else {
+                return Ok(None);
+            };
             let wl_name = parser.ident()?;
             let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
             parser.punct_of('>')?;
-            Ok(name)
+            Ok(Some(name))
         }
-        fn maybe_enum(is_signed: bool, parser: &mut Parser) -> Result<Ty, Error> {
+        fn opt_enum(is_signed: bool, parser: &mut Parser) -> Result<Ty, Error> {
             let Some(_) = parser.next_punct_of('<') else {
                 return Ok(if is_signed { Ty::Int } else { Ty::Uint });
             };
@@ -210,15 +210,14 @@ impl Parse for Arg {
         parser.punct_of(':')?;
         let ty = parser.ident()?;
         let ty = match ty.as_str() {
-            "int" => maybe_enum(true, parser)?,
-            "uint" => maybe_enum(false, parser)?,
+            "int" => opt_enum(true, parser)?,
+            "uint" => opt_enum(false, parser)?,
             "fixed" => Ty::Fixed,
             "string" => Ty::String,
-            "object" => Ty::Object(iface(parser)?),
-            "new_id" => Ty::NewId(iface(parser)?),
+            "object" => Ty::Object(opt_iface(parser)?),
+            "new_id" => Ty::NewId(opt_iface(parser)?),
             "array" => Ty::Array,
             "fd" => Ty::Fd,
-            "object_id" => Ty::ObjectId,
             "version" => Ty::Version,
             _ => return Err(Error::spanned("unknown type", ty.span())),
         };
@@ -249,11 +248,12 @@ impl Ty {
             Ty::Enum { path, .. } => path.clone().into(),
             Ty::Fixed => id!(Fixed),
             Ty::String => gr!(&'a str),
-            Ty::Object(i) => gr!(Object<#i>),
-            Ty::NewId(i) => gr!(NewId<#i>),
+            Ty::Object(None) => id!(Object),
+            Ty::Object(Some(i)) => gr!(Object<#i>),
+            Ty::NewId(None) => id!(NewId),
+            Ty::NewId(Some(i)) => gr!(NewId<#i>),
             Ty::Array => gr!(&'a [u8]),
             Ty::Fd => id!(RawFd),
-            Ty::ObjectId => id!(ObjectId),
             Ty::Version => id!(Version),
         }
     }
