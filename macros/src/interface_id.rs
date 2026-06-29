@@ -14,29 +14,25 @@ pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
         parser.next_punct_of(',');
     }
 
-    let as_interfaces = variants.iter().flat_map(|variant|{
-        g! {
-            impl AsInterface for #variant {
-                #[inline]
-                fn interface(&self) -> #name {
-                    #name::#variant
-                }
-            }
-        }
-    });
+    let enum_variants = variants.iter().flat_map(|variant|g!(#variant,));
     let names_len = Literal::usize_unsuffixed(variants.len());
     let names = variants.iter().flat_map(|variant|{
         let wl_variant_str = Literal::string(&to_snake(variant.as_str()));
         g!(#wl_variant_str,)
     });
-    let variants = variants.iter().flat_map(|variant|{
-        g!(#variant,)
+    let as_interfaces = variants.iter().flat_map(|variant|g! {
+        impl AsInterface for #variant {
+            #[inline]
+            fn interface(&self) -> #name {
+                #name::#variant
+            }
+        }
     });
 
     Ok(g! {
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum #name {
-            @variants
+            @enum_variants
         }
 
         impl #name {

@@ -8,8 +8,6 @@ use constructor::Constructor;
 use message::Message;
 use enums::{Enums, Enum};
 
-pub mod derive;
-
 mod interface;
 mod op;
 mod ops;
