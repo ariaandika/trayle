@@ -70,11 +70,26 @@ impl Cmsg {
     /// Returns `None` if there is no fd remaining.
     #[inline]
     pub fn read_fd(&mut self) -> Option<i32> {
-        let fd = *self.buf().get(self.len - 1)?;
+        // idk why past me read from the back of the queue
+        // let fd = *self.buf().get(self.len - 1)?;
+        let fd = *self.buf().first()?;
         self.len -= 1;
         self.off += 1;
         // SAFETY: `len` represent count of initialized element
         Some(unsafe { fd.assume_init() })
+    }
+
+    /// Read `N` number of fds.
+    ///
+    /// Returns `None` if there is not enough fds remaining.
+    #[inline]
+    pub fn read_chunk<const N: usize>(&mut self) -> Option<[i32; N]> {
+        let fd = self.buf().first_chunk::<N>()?.as_ptr();
+        self.len -= N;
+        self.off += N;
+        // SAFETY: `len` represent count of initialized element
+        // Some(unsafe { MaybeUninit::array_assume_init(fd) })
+        Some(unsafe { *fd.cast::<[i32; N]>() })
     }
 
     /// Clear buffer.
