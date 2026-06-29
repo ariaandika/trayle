@@ -42,7 +42,7 @@ impl Interface {
         let iface_name = &self.iface;
         g! {
             #[derive(Debug, Default, Clone, Copy)]
-            pub struct #iface_name;
+            pub struct #iface_name(std::marker::PhantomData<()>);
         }
     }
 
@@ -52,11 +52,11 @@ impl Interface {
             impl InterfaceMarker for #iface_name {
                 fn from_interface(iface: InterfaceId) -> Self {
                     assert_iface!(iface, #iface_name);
-                    Self
+                    <Self as sealed::Sealed>::MARKER
                 }
             }
             impl sealed::Sealed for #iface_name {
-                const MARKER: Self = Self;
+                const MARKER: Self = Self(std::marker::PhantomData);
             }
         }
     }
