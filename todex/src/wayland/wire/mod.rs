@@ -20,7 +20,7 @@ pub use opcode::{AsOpCode, OpCode};
 pub use frame::{Frame, FrameError};
 pub use read::{Read, Reader};
 pub use write::{Write, Writer, Sized2};
-pub use decode::{Decode, Decoder};
+pub use decode::{Decode, DecodePayload, Decoder, RawMessage};
 pub use encode::{Encode, EncodePayload};
 
 mod error;

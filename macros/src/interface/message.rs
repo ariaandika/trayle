@@ -126,6 +126,10 @@ impl<'a> Message<'a> {
             g!(#name @read,)
         });
 
+        let fd_len = Literal::usize_unsuffixed(self.fd.is_some() as usize);
+        let fd_arg = self.fd.map(|arg|arg.name.clone());
+        let reader_mut = (!self.op.args.is_empty()).then(||Ident::new("mut", Span::call_site()));
+
         g! {
             impl Decode for #name @lf_ph {
                 type Output<'a> = #name @lf;
@@ -134,6 +138,16 @@ impl<'a> Message<'a> {
                 fn decode<'a>(@cmut dec: Decoder<'a>) -> Result<Self::Output<'a>, DecodeError> {
                     @fd
                     let mut reader = dec.reader();
+                    Ok(#name { @ret })
+                }
+            }
+            impl DecodePayload for #name @lf_ph {
+                type Output<'a> = #name @lf;
+
+                type Fd = [i32; #fd_len];
+
+                #[inline]
+                fn decode_payload<'a>(?reader_mut reader: Reader<'a>, [?fd_arg]: Self::Fd) -> Result<Self::Output<'a>, DecodeError> {
                     Ok(#name { @ret })
                 }
             }
