@@ -17,15 +17,13 @@
 //! [`Message`]: crate::wayland::Message
 pub use error::DecodeError;
 pub use opcode::{AsOpCode, OpCode};
-pub use frame::{Frame, FrameError};
 pub use read::{Read, Reader};
 pub use write::{Write, Writer, Sized2};
-pub use decode::{Decode, DecodePayload, Decoder, RawMessage};
+pub use decode::{DecodePayload, Payload, RawMessage};
 pub use encode::{Encode, EncodePayload};
 
 mod error;
 mod opcode;
-mod frame;
 mod read;
 mod write;
 mod decode;

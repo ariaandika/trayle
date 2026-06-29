@@ -112,15 +112,11 @@ impl<'a> Message<'a> {
         }
     }
 
-    pub fn gen_decode(&self) -> impl Iterator<Item = TokenTree> + use<> {
+    pub fn gen_decode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let cmut = stream_if(self.op.fd_idx.is_some(), ||g!(mut));
         let lf_ph = &self.op.lf_ph;
         let lf = self.op.lf_ph.as_ref().map_stream(|_| g!(<'a>));
 
-        let fd = self.fd.map_stream(|Arg { name, .. }|{
-            g!(let #name = dec.pop_fd()?;)
-        });
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
             let read = stream_if(!ty.is_fd(), ||g!(: reader.read()?));
             g!(#name @read,)
@@ -131,16 +127,6 @@ impl<'a> Message<'a> {
         let reader_mut = (!self.op.args.is_empty()).then(||Ident::new("mut", Span::call_site()));
 
         g! {
-            impl Decode for #name @lf_ph {
-                type Output<'a> = #name @lf;
-
-                #[inline]
-                fn decode<'a>(@cmut dec: Decoder<'a>) -> Result<Self::Output<'a>, DecodeError> {
-                    @fd
-                    let mut reader = dec.reader();
-                    Ok(#name { @ret })
-                }
-            }
             impl DecodePayload for #name @lf_ph {
                 type Output<'a> = #name @lf;
 

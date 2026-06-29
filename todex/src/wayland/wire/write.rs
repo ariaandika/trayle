@@ -1,5 +1,5 @@
-use crate::wayland::Object;
-use crate::wayland::primitives::{AsObjectId, Fixed, NewId, ObjectId, Version, WlEnum};
+use crate::wayland::primitives::{AsObjectId, Fixed, Version, WlEnum};
+use crate::wayland::object::{NewId, Object};
 
 // ===== PrimitiveWrite =====
 
@@ -16,6 +16,10 @@ impl Writer {
             self.0.copy_from_nonoverlapping(ptr, len);
             Self(self.0.add(len))
         }
+    }
+
+    fn write_ne(self, ne: [u8; 4]) -> Self {
+        self.write_raw(ne.as_ptr(), 4)
     }
 
     pub fn write<W: Write>(self, value: W) -> Self {
@@ -64,34 +68,25 @@ macro_rules! sized4 {
         }
     };
 }
-
-macro_rules! impl_write_for_int {
-    ($me:ty) => {
-        sized4!(impl Sized2 for $me);
-        impl private::Sealed for $me {
-            #[inline]
-            fn write(self, writer: Writer) -> Writer {
-                writer.write_raw(self.to_ne_bytes().as_ptr(), 4)
-            }
-        }
-    };
-}
-
-impl_write_for_int!(u32);
-impl_write_for_int!(i32);
-impl_write_for_int!(ObjectId);
-
-sized4!(impl Sized2 for Option<ObjectId>);
+sized4!(impl Sized2 for u32);
+sized4!(impl Sized2 for i32);
 sized4!(impl Sized2 for Fixed);
 sized4!(impl Sized2 for Version);
 sized4!(impl<T> Sized2 for NewId<T>);
 sized4!(impl<T> Sized2 for Object<T>);
 sized4!(impl<T> Sized2 for Option<Object<T>>);
 
-impl private::Sealed for Option<ObjectId> {
+impl private::Sealed for u32 {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
-        self.map(ObjectId::to_u32).unwrap_or_default().write(writer)
+        writer.write_ne(self.to_ne_bytes())
+    }
+}
+
+impl private::Sealed for i32 {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        writer.write_ne(self.to_ne_bytes())
     }
 }
 
@@ -109,24 +104,26 @@ impl private::Sealed for Version {
     }
 }
 
-impl<T: AsObjectId> private::Sealed for Object<T> {
+impl<T> private::Sealed for Object<T> {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
-        self.object_id().write(writer)
+        self.object_id().to_u32().write(writer)
     }
 }
 
-impl<T: AsObjectId> private::Sealed for Option<Object<T>> {
+impl<T> private::Sealed for Option<Object<T>> {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
-        self.map(|e| e.object_id()).write(writer)
+        self.map(|e| e.object_id().to_u32())
+            .unwrap_or_default()
+            .write(writer)
     }
 }
 
 impl<T> private::Sealed for NewId<T> {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
-        self.object_id().write(writer)
+        self.object_id().to_u32().write(writer)
     }
 }
 

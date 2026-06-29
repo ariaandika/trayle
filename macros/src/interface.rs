@@ -34,10 +34,17 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
             pub mod #wl_iface
         }
     };
+    let prelude = {
+        let Interface { iface, .. } = &iface;
+        g! {
+            use super::*;
+            pub type InterfaceType = #iface;
+        }
+    };
 
     parser.check_empty()?;
 
-    Ok(g!(use super::*;)
+    Ok(prelude
         .chain(iface.gen_struct())
         .chain(iface.gen_impl_marker())
         .chain(iface.gen_wl_interface())
@@ -77,7 +84,7 @@ fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTre
                 .chain(m.gen_as_opcode())
                 .chain(m.gen_as_newid())
                 .chain(m.gen_wl_message())
-                .chain(m.gen_decode())
+                .chain(m.gen_decode_payload())
                 .chain(m.gen_encode_payload())
                 .chain(m.gen_display())
         })

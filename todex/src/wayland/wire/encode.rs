@@ -13,7 +13,7 @@ pub trait Encode: Sized + EncodePayload + AsObjectId + AsOpCode {
     fn encode(self, writer: Writer) {
         let size = 8 + self.size() as usize;
         let hdr2 = (size as u32) << u16::BITS | Self::OPCODE.to_op() as u32;
-        let object_id = self.object_id();
+        let object_id = self.object_id().to_u32();
         self.encode_payload(writer.write(object_id).write(hdr2));
     }
 
@@ -56,7 +56,7 @@ pub trait EncodePayload: Sized {
 
 impl<T: EncodePayload + AsObjectId + AsOpCode> Encode for T {}
 
-impl<T: EncodePayload> EncodePayload for Message<T> {
+impl<T: EncodePayload, M, D> EncodePayload for Message<T, M, D> {
     #[inline]
     fn size(&self) -> u16 {
         T::size(self.payload())

@@ -1,5 +1,6 @@
-use crate::wayland::Object;
-use crate::wayland::primitives::{Fixed, FromObjectId, NewId, ObjectId, Version, WlEnum};
+use crate::wayland::primitives::{Fixed, ObjectId, Version, WlEnum};
+use crate::wayland::object::{NewId, Object};
+use crate::wayland::interface::InterfaceMarker;
 use crate::wayland::wire::DecodeError;
 
 use DecodeError as E;
@@ -63,49 +64,6 @@ impl Read<'_> for i32 {
     }
 }
 
-// new type struct
-
-impl Read<'_> for ObjectId {
-    #[inline]
-    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
-        reader
-            .read_ne_bytes()
-            .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(E::ZeroId))
-    }
-}
-
-impl Read<'_> for Option<ObjectId> {
-    #[inline]
-    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
-        reader
-            .read_ne_bytes()
-            .map(|id| ObjectId::new(u32::from_ne_bytes(id)))
-    }
-}
-
-// TODO: blocker: protocol definitions as marker
-
-impl<T: FromObjectId> Read<'_> for Object<T> {
-    #[inline]
-    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
-        ObjectId::read(reader).map(|id| Object::new(id).typed_with(T::from_object_id(id)))
-    }
-}
-
-impl<T: FromObjectId> Read<'_> for Option<Object<T>> {
-    #[inline]
-    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
-        <Option<_>>::read(reader).map(|e| e.map(|id| Object::new(id).typed_with(T::from_object_id(id))))
-    }
-}
-
-impl<T> Read<'_> for NewId<T> {
-    #[inline]
-    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
-        reader.read().map(NewId::new)
-    }
-}
-
 impl Read<'_> for Version {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
@@ -119,6 +77,38 @@ impl Read<'_> for Fixed {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
         reader.read().map(Fixed::from_i32)
+    }
+}
+
+// generic
+
+impl<T: InterfaceMarker> Read<'_> for Object<T> {
+    #[inline]
+    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
+        reader
+            .read_ne_bytes()
+            .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(E::ZeroId))
+            .map(|id| Object::new_typed(id, T::MARKER))
+    }
+}
+
+impl<T: InterfaceMarker> Read<'_> for Option<Object<T>> {
+    #[inline]
+    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
+        reader
+            .read_ne_bytes()
+            .map(|id| ObjectId::new(u32::from_ne_bytes(id)))
+            .map(|id| id.map(|id| Object::new_typed(id, T::MARKER)))
+    }
+}
+
+impl<T: InterfaceMarker> Read<'_> for NewId<T> {
+    #[inline]
+    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
+        reader
+            .read_ne_bytes()
+            .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(E::ZeroId))
+            .map(|id| NewId::new(id, T::MARKER))
     }
 }
 
