@@ -109,7 +109,6 @@ impl Parse for Op {
 pub struct Arg {
     pub name: Ident,
     pub ty: Ty,
-    #[expect(dead_code)]
     pub opt: bool,
 }
 

@@ -35,11 +35,14 @@ fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + C
             g!(#[doc = #doc])
         });
 
-        let args = op.args.iter().flat_map(|Arg { name, ty, .. }|{
-            let mut name = name.clone();
-            name.set_span(Span::call_site());
+        let args = op.args.iter().flat_map(|Arg { name, opt, ty, .. }|{
             let ty = ty.generate();
-            g!(,#name: #ty)
+            let ty = if *opt {
+                Either::Left(g!(Option<#ty>))
+            } else {
+                Either::Right(Some(ty).into_iter())
+            };
+            g!(,#name: @ty)
         });
         let ctor = op.args.iter().flat_map(|Arg { name, .. }|{
             let mut name = name.clone();
@@ -50,7 +53,7 @@ fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + C
         g! {
             @doc
             ?vis fn #wl_name @lf(&self @args) -> Message<#name @lf> {
-                Message::new(self, #name { @ctor })
+                Message::new(self.object_id(), #name { @ctor })
             }
         }
     })

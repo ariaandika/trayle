@@ -27,17 +27,14 @@ impl<'a> Message<'a> {
 
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.name;
-        let fields = self.op.args.iter().flat_map(|Arg { name, /* opt, */ ty, .. }| {
+        let fields = self.op.args.iter().flat_map(|Arg { name, opt, ty, .. }| {
             let ty = ty.generate();
-            // FIX:
-            // - blocker: change impl Read for Option<Object>
-            // - blocker: remove the old wayland definition
-            // let ty = if *opt {
-            //     Either::Left(g!(Option<#ty>))
-            // } else {
-            //     Either::Right(Some(ty).into_iter())
-            // };
-            g!(pub #name: #ty,)
+            let ty = if *opt {
+                Either::Left(g!(Option<#ty>))
+            } else {
+                Either::Right(Some(ty).into_iter())
+            };
+            g!(pub #name: @ty,)
         });
         let lf = self.op.lf_ph.as_ref().map_stream(|_|g!(<'a>));
         g! {
