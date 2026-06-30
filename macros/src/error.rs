@@ -1,42 +1,51 @@
 use crate::tree::*;
-use crate::codegen::*;
+use crate::span::*;
+
+// ===== trait =====
+
+pub trait Expect {
+    const EXPECT: &str;
+
+    fn expected(self) -> Error
+    where
+        Self: Spanned + Sized,
+    {
+        Error::new(format!("expected `{}`", Self::EXPECT), self)
+    }
+}
 
 // ===== Error =====
 
-pub struct Error {
-    msg: String,
-    span: Span,
+pub type Result<T, E = Error> = std::result::Result<T, E>;
+
+pub struct Error(Literal);
+
+impl Spanned for Error {
+    fn span(&self) -> Span {
+        self.0.span()
+    }
+
+    fn set_span(&mut self, span: Span) {
+        self.0.set_span(span);
+    }
 }
 
 impl Error {
-    pub fn new<S: Into<String>>(msg: S) -> Self {
-        Self { msg: msg.into(), span: Span::call_site() }
+    pub fn new<M: AsRef<str>, S: Spanned>(msg: M, span: S) -> Self {
+        Self(Literal::string(msg.as_ref()).spanned(span.span()))
     }
 
-    pub fn spanned<S: Into<String>>(msg: S, span: Span) -> Self {
-        Self { msg: msg.into(), span }
+    pub fn new_site<M: AsRef<str>>(msg: M) -> Self {
+        Self::new(msg, Span::call_site())
     }
 
-    pub fn eof() -> Error {
-        Self {
-            msg: "unexpected EOF".into(),
-            span: Span::call_site(),
-        }
-    }
-
-    pub fn context(self, cx: &str) -> Error {
-        let Self { mut msg, span } = self;
-        msg.insert_str(0, cx);
-        Self { msg, span }
-    }
-
-    fn generate(&self) -> impl Iterator<Item = TokenTree> {
+    fn generate(&self) -> impl Iterator<Item = TokenTree> + Clone {
         [
-            Ident::new("compile_error", self.span).into(),
+            Ident::new("compile_error", self.span()).into(),
             Punct::new('!', Spacing::Alone).into(),
             Group::new(
                 Delimiter::Parenthesis,
-                TokenTree::Literal(Literal::string(&self.msg)).into_token_stream(),
+                <_>::from_iter(Some(TokenTree::from(self.0.clone()))),
             )
             .into(),
             Punct::new(';', Spacing::Alone).into(),
@@ -51,8 +60,8 @@ impl From<Error> for TokenStream {
     }
 }
 
-impl ToTokens for crate::Error {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(self.generate());
+impl From<Error> for p::TokenStream {
+    fn from(value: Error) -> Self {
+        TokenStream::from(value).into()
     }
 }

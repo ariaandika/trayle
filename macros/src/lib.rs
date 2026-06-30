@@ -4,34 +4,31 @@ use tree::{TokenStream, p};
 use error::Error;
 use parser::Parser;
 
-mod tree;
-mod codegen;
+mod span;
 mod error;
+mod tree;
+mod tree_ext;
+mod codegen;
+mod to_tokens;
 mod parser;
 
 // ===== syntax =====
 
 mod syntax;
-mod attr;
 
 // ===== implementations =====
 
 mod prelude {
     pub(crate) use super::{Bool, KEYWORDS, to_camel, to_snake};
+    pub use crate::span::*;
     pub use crate::tree::*;
+    pub use crate::tree_ext::*;
     pub use crate::codegen::*;
     pub use crate::error::*;
     pub use crate::parser::*;
     pub use crate::syntax::*;
-    pub use crate::attr::*;
     pub const ZERO: crate::Zero = crate::Zero;
     pub const TRUE: crate::Bool = crate::Bool(true);
-}
-
-macro_rules! g {
-    ($($tt:tt)*) => {
-        generate!($($tt)*)
-    };
 }
 
 mod interface;
@@ -54,7 +51,7 @@ pub fn interface_id(tokens: p::TokenStream) -> p::TokenStream {
 // ===== helpers =====
 
 fn call(tokens: p::TokenStream, f: fn(Parser) -> Result<TokenStream, Error>) -> p::TokenStream {
-    codegen::ToTokens::into_token_stream(f(Parser::new(tokens.into()))).into()
+    f(Parser::new(tokens.into())).map_or_else(<_>::into, <_>::into)
 }
 
 fn to_camel(string: &str) -> String {

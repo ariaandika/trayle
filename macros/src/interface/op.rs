@@ -28,7 +28,7 @@ impl Parse for Op {
         if let Some(mut parser) = attr(parser)? {
             if parser.next_ident_of("since").is_some() {
                 parser.punct_of('=')?;
-                since = Some(parser.lit()?);
+                since = Some(parser.parse::<Literal>()?);
                 parser.next_punct_of(',');
             }
 
@@ -42,10 +42,10 @@ impl Parse for Op {
 
         let since = since.and_then(|s|s.to_string().parse().ok());
 
-        parser.parse::<Vis>()?;
+        parser.next_ident_of("pub");
         parser.ident_of("fn")?;
 
-        let wl_name = parser.ident()?;
+        let wl_name = parser.parse::<Ident>()?;
         let name = Ident::new_string(to_camel(wl_name.as_str()), Span::call_site());
 
         let mut lf_ph = None;
@@ -63,13 +63,13 @@ impl Parse for Op {
             }
             if arg.ty.as_new_id().is_some() {
                 if has_new_id {
-                    return Err(Error::spanned("only one new_id is supported", arg.name.span()));
+                    return Err(Error::new("only one new_id is supported", arg.name));
                 }
                 has_new_id = true;
             }
             if arg.ty.is_fd() {
                 if fd_idx.is_some() {
-                    return Err(Error::spanned("only one fd is supported", arg.name.span()));
+                    return Err(Error::new("only one fd is supported", arg.name));
                 }
                 fd_idx = Some(args.len());
             }
@@ -180,7 +180,7 @@ impl Parse for Arg {
             let Some(_) = parser.next_punct_of('<') else {
                 return Ok(None);
             };
-            let wl_name = parser.ident()?;
+            let wl_name = parser.parse::<Ident>()?;
             let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
             parser.punct_of('>')?;
             Ok(Some(name))
@@ -189,10 +189,10 @@ impl Parse for Arg {
             let Some(_) = parser.next_punct_of('<') else {
                 return Ok(if is_signed { Ty::Int } else { Ty::Uint });
             };
-            let wl_name = parser.ident()?;
+            let wl_name = parser.parse::<Ident>()?;
             let path = match parser.next_punct_of('.') {
                 Some(_) => {
-                    let wl_subname = parser.ident()?;
+                    let wl_subname = parser.parse::<Ident>()?;
                     let name = Ident::new_string(to_camel(wl_subname.as_str()), wl_subname.span());
                     Path(Some(wl_name), name)
                 },
@@ -205,9 +205,9 @@ impl Parse for Arg {
             Ok(Ty::Enum { is_signed, path })
         }
 
-        let name = parser.ident()?;
+        let name = parser.parse::<Ident>()?;
         parser.punct_of(':')?;
-        let ty = parser.ident()?;
+        let ty = parser.parse::<Ident>()?;
         let ty = match ty.as_str() {
             "int" => opt_enum(true, parser)?,
             "uint" => opt_enum(false, parser)?,
@@ -218,7 +218,7 @@ impl Parse for Arg {
             "array" => Ty::Array,
             "fd" => Ty::Fd,
             "version" => Ty::Version,
-            _ => return Err(Error::spanned("unknown type", ty.span())),
+            _ => return Err(Error::new("unknown type", ty)),
         };
         let opt = parser.next_punct_of('?').is_some();
         Ok(Self {

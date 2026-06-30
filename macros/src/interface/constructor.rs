@@ -25,7 +25,7 @@ fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + C
 
         let lf = lf_ph.as_ref().map_stream(|_|g!(<'a>));
 
-        let doc = stream_if(op.since.is_some() || op.is_destructor, || {
+        let doc = (op.since.is_some() || op.is_destructor).then_stream(|| {
             let doc = match (op.since, op.is_destructor) {
                 (None, false) => unreachable!(),
                 (None, true) => Literal::string(" destructor"),

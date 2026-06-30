@@ -1,5 +1,44 @@
 use crate::tree::*;
 
+/// Returns and iterator of `TokenTree`.
+macro_rules! gentoken {
+    (::) => {[TokenTree::from(Punct::new(':', Spacing::Joint)), TokenTree::from(Punct::new(':', Spacing::Joint))]};
+    (==) => {[TokenTree::from(Punct::new('=', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
+    (=>) => {[TokenTree::from(Punct::new('=', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
+    (<=) => {[TokenTree::from(Punct::new('<', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
+    (>=) => {[TokenTree::from(Punct::new('>', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
+    (>>) => {[TokenTree::from(Punct::new('>', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
+    (<<) => {[TokenTree::from(Punct::new('<', Spacing::Joint)), TokenTree::from(Punct::new('<', Spacing::Joint))]};
+    (->) => {[TokenTree::from(Punct::new('-', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
+    (_) => {Some(TokenTree::from(Ident::new("_", Span::call_site())))};
+    (=) => {Some(TokenTree::from(Punct::new('=', Spacing::Alone)))};
+    (<) => {Some(TokenTree::from(Punct::new('<', Spacing::Alone)))};
+    (>) => {Some(TokenTree::from(Punct::new('>', Spacing::Alone)))};
+    (!) => {Some(TokenTree::from(Punct::new('!', Spacing::Alone)))};
+    (~) => {Some(TokenTree::from(Punct::new('~', Spacing::Alone)))};
+    (+) => {Some(TokenTree::from(Punct::new('+', Spacing::Alone)))};
+    (-) => {Some(TokenTree::from(Punct::new('-', Spacing::Alone)))};
+    (*) => {Some(TokenTree::from(Punct::new('*', Spacing::Alone)))};
+    (/) => {Some(TokenTree::from(Punct::new('/', Spacing::Alone)))};
+    (%) => {Some(TokenTree::from(Punct::new('%', Spacing::Alone)))};
+    (^) => {Some(TokenTree::from(Punct::new('^', Spacing::Alone)))};
+    (&) => {Some(TokenTree::from(Punct::new('&', Spacing::Alone)))};
+    (|) => {Some(TokenTree::from(Punct::new('|', Spacing::Alone)))};
+    (@) => {Some(TokenTree::from(Punct::new('@', Spacing::Alone)))};
+    (.) => {Some(TokenTree::from(Punct::new('.', Spacing::Alone)))};
+    (,) => {Some(TokenTree::from(Punct::new(',', Spacing::Alone)))};
+    (;) => {Some(TokenTree::from(Punct::new(';', Spacing::Alone)))};
+    (:) => {Some(TokenTree::from(Punct::new(':', Spacing::Alone)))};
+    (#) => {Some(TokenTree::from(Punct::new('#', Spacing::Alone)))};
+    (?) => {Some(TokenTree::from(Punct::new('?', Spacing::Alone)))};
+    ($lf:lifetime) => {[
+        TokenTree::from(Punct::new('\'', Spacing::Joint)),
+        TokenTree::from(Ident::new(&stringify!($lf)[1..], Span::call_site())),
+    ]};
+    ($l:literal) => {Some(LiteralType::to_token_tree($l))};
+    ($t:ident) => {Some(TokenTree::from(Ident::new(stringify!($t), Span::call_site())))};
+}
+
 macro_rules! token_stream {
     () => { TokenStream::new() };
     ($($tt:tt)*) => { crate::codegen::generate!($($tt)*).collect::<TokenStream>() };
@@ -82,148 +121,26 @@ macro_rules! impl_generate {
     };
 }
 
-macro_rules! gentoken {
-    (::) => {[TokenTree::from(Punct::new(':', Spacing::Joint)), TokenTree::from(Punct::new(':', Spacing::Joint))]};
-    (==) => {[TokenTree::from(Punct::new('=', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
-    (=>) => {[TokenTree::from(Punct::new('=', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
-    (<=) => {[TokenTree::from(Punct::new('<', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
-    (>=) => {[TokenTree::from(Punct::new('>', Spacing::Joint)), TokenTree::from(Punct::new('=', Spacing::Joint))]};
-    (>>) => {[TokenTree::from(Punct::new('>', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
-    (<<) => {[TokenTree::from(Punct::new('<', Spacing::Joint)), TokenTree::from(Punct::new('<', Spacing::Joint))]};
-    (->) => {[TokenTree::from(Punct::new('-', Spacing::Joint)), TokenTree::from(Punct::new('>', Spacing::Joint))]};
-    (_) => {Some(TokenTree::from(Ident::new("_", Span::call_site())))};
-    (=) => {Some(TokenTree::from(Punct::new('=', Spacing::Alone)))};
-    (<) => {Some(TokenTree::from(Punct::new('<', Spacing::Alone)))};
-    (>) => {Some(TokenTree::from(Punct::new('>', Spacing::Alone)))};
-    (!) => {Some(TokenTree::from(Punct::new('!', Spacing::Alone)))};
-    (~) => {Some(TokenTree::from(Punct::new('~', Spacing::Alone)))};
-    (+) => {Some(TokenTree::from(Punct::new('+', Spacing::Alone)))};
-    (-) => {Some(TokenTree::from(Punct::new('-', Spacing::Alone)))};
-    (*) => {Some(TokenTree::from(Punct::new('*', Spacing::Alone)))};
-    (/) => {Some(TokenTree::from(Punct::new('/', Spacing::Alone)))};
-    (%) => {Some(TokenTree::from(Punct::new('%', Spacing::Alone)))};
-    (^) => {Some(TokenTree::from(Punct::new('^', Spacing::Alone)))};
-    (&) => {Some(TokenTree::from(Punct::new('&', Spacing::Alone)))};
-    (|) => {Some(TokenTree::from(Punct::new('|', Spacing::Alone)))};
-    (@) => {Some(TokenTree::from(Punct::new('@', Spacing::Alone)))};
-    (.) => {Some(TokenTree::from(Punct::new('.', Spacing::Alone)))};
-    (,) => {Some(TokenTree::from(Punct::new(',', Spacing::Alone)))};
-    (;) => {Some(TokenTree::from(Punct::new(';', Spacing::Alone)))};
-    (:) => {Some(TokenTree::from(Punct::new(':', Spacing::Alone)))};
-    (#) => {Some(TokenTree::from(Punct::new('#', Spacing::Alone)))};
-    (?) => {Some(TokenTree::from(Punct::new('?', Spacing::Alone)))};
-    ($lf:lifetime) => {[
-        TokenTree::from(Punct::new('\'', Spacing::Joint)),
-        TokenTree::from(Ident::new(&stringify!($lf)[1..], Span::call_site())),
-    ]};
-    ($l:literal) => {Some(TokenTree::from(Literal::string($l)))};
-    ($t:ident) => {Some(TokenTree::from(Ident::new(stringify!($t), Span::call_site())))};
+pub(crate) use {gentoken, token_stream, generate, generate as g, impl_generate};
+
+pub trait LiteralType {
+    fn to_token_tree(self) -> TokenTree;
 }
 
-pub(crate) use {token_stream, gentoken, impl_generate, generate};
-
-// ===== ToTokens =====
-
-pub trait ToTokens {
-    fn to_tokens(&self, tokens: &mut TokenStream);
-
-    fn to_token_stream(&self) -> TokenStream {
-        let mut tokens = TokenStream::new();
-        self.to_tokens(&mut tokens);
-        tokens
-    }
-
-    fn into_token_stream(self) -> TokenStream
-    where
-        Self: Sized,
-    {
-        self.to_token_stream()
+impl LiteralType for bool {
+    fn to_token_tree(self) -> TokenTree {
+        Ident::new(if self { "true" } else { "false" }, Span::call_site()).into()
     }
 }
 
-impl<T: ToTokens> ToTokens for Option<T> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        if let Some(me) = self {
-            me.to_tokens(tokens);
-        }
-    }
-
-    fn into_token_stream(self) -> TokenStream
-    where
-        Self: Sized,
-    {
-        self.map(<_>::into_token_stream).unwrap_or_default()
+impl LiteralType for usize {
+    fn to_token_tree(self) -> TokenTree {
+        Literal::usize_unsuffixed(self).into()
     }
 }
 
-impl<T: ToTokens, E: ToTokens> ToTokens for Result<T, E> {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        match self {
-            Ok(ok) => ok.to_tokens(tokens),
-            Err(err) => err.to_tokens(tokens),
-        }
-    }
-
-    fn into_token_stream(self) -> TokenStream
-    where
-        Self: Sized,
-    {
-        match self {
-            Ok(ok) => ok.into_token_stream(),
-            Err(err) => err.into_token_stream(),
-        }
-    }
-}
-
-impl ToTokens for TokenStream {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.extend(self.clone());
-    }
-
-    fn into_token_stream(self) -> TokenStream
-    where
-        Self: Sized,
-    {
-        self
-    }
-}
-
-macro_rules! impl_single {
-    ($($me:ident),*) => {$(
-        impl ToTokens for $me {
-            fn to_tokens(&self, tokens: &mut TokenStream) {
-                tokens.push(self.clone());
-            }
-        }
-    )*};
-}
-impl_single!(Ident, Punct, Group, Literal, TokenTree);
-macro_rules! impl_int {
-    ($($me:ident = $fn:ident),* $(,)?) => {$(
-        impl ToTokens for $me {
-            fn to_tokens(&self, tokens: &mut TokenStream) {
-                tokens.push(Literal::from(p::Literal::$fn(*self)));
-            }
-        }
-    )*};
-}
-impl_int! {
-    u8 = u8_suffixed,
-    u16 = u16_suffixed,
-    u32 = u32_suffixed,
-    u64 = u64_suffixed,
-    usize = usize_suffixed,
-}
-
-impl ToTokens for bool {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        let ident = if *self { "true" } else { "false" };
-        tokens.push(Ident::new(ident, Span::call_site()));
-    }
-}
-
-impl ToTokens for str {
-    fn to_tokens(&self, tokens: &mut TokenStream) {
-        tokens.push(Literal::string(self));
+impl LiteralType for &str {
+    fn to_token_tree(self) -> TokenTree {
+        Literal::string(self).into()
     }
 }

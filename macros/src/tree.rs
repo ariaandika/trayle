@@ -8,6 +8,9 @@ use std::cell::OnceCell;
 pub use proc_macro as p;
 pub use proc_macro::{Span, Delimiter, Spacing};
 
+use crate::span::*;
+use crate::error::*;
+
 // ===== TokenStream =====
 
 #[derive(Default, Clone)]
@@ -40,13 +43,51 @@ pub enum TokenTree {
 }
 
 impl TokenTree {
-    pub fn span(&self) -> Span {
+    pub fn found(&self) -> impl std::fmt::Display {
         match self {
-            TokenTree::Group(g) => g.span(),
-            TokenTree::Ident(i) => i.span(),
-            TokenTree::Punct(p) => p.span(),
-            TokenTree::Literal(l) => l.span(),
+            TokenTree::Group(g) => lmao::StrOrCh::from(delim_punct(g.delimiter())),
+            TokenTree::Ident(id) => id.as_str().into(),
+            TokenTree::Punct(p) => p.as_char().into(),
+            TokenTree::Literal(_) => "literal".into(),
         }
+    }
+}
+
+mod lmao {
+    pub enum StrOrCh<'a> {
+        Str(&'a str),
+        Ch(char),
+    }
+
+    impl From<char> for StrOrCh<'_> {
+        fn from(v: char) -> Self {
+            Self::Ch(v)
+        }
+    }
+
+    impl<'a> From<&'a str> for StrOrCh<'a> {
+        fn from(v: &'a str) -> Self {
+            Self::Str(v)
+        }
+    }
+
+    impl std::fmt::Display for StrOrCh<'_> {
+        fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+            match self {
+                StrOrCh::Str(s) => s.fmt(f),
+                StrOrCh::Ch(c) => c.fmt(f),
+            }
+        }
+    }
+}
+
+/// Returns delimiter opening as str.
+pub fn delim_punct(delim: Delimiter) -> &'static str {
+    match delim {
+        Delimiter::Parenthesis => "(",
+        Delimiter::Brace => "{",
+        Delimiter::Bracket => "[",
+        Delimiter::None => "undelimited"
     }
 }
 
@@ -73,42 +114,34 @@ impl Group {
 
 #[derive(Clone)]
 pub struct Ident {
-    token: p::Ident,
-    string: OnceCell<String>,
+    ident: p::Ident,
+    string: OnceCell<Box<str>>,
 }
 
 impl Ident {
     pub fn new(string: &str, span: Span) -> Ident {
         Self {
-            token: p::Ident::new(string, span),
+            ident: p::Ident::new(string, span),
             string: OnceCell::new(),
         }
     }
 
     pub fn new_raw(string: &str, span: Span) -> Ident {
         Self {
-            token: p::Ident::new_raw(string, span),
+            ident: p::Ident::new_raw(string, span),
             string: OnceCell::new(),
         }
     }
 
     pub fn new_string(string: String, span: Span) -> Ident {
         Self {
-            token: p::Ident::new(&string, span),
-            string: OnceCell::from(string),
+            ident: p::Ident::new(&string, span),
+            string: OnceCell::from(string.into_boxed_str()),
         }
     }
 
     pub fn as_str(&self) -> &str {
-        self.string.get_or_init(|| self.token.to_string())
-    }
-
-    pub fn set_span(&mut self, span: Span) {
-        self.token.set_span(span);
-    }
-
-    pub fn span(&self) -> Span {
-        self.token.span()
+        self.string.get_or_init(|| self.ident.to_string().into_boxed_str())
     }
 }
 
@@ -154,6 +187,18 @@ impl Literal {
     }
 }
 
+impl From<&str> for Literal {
+    fn from(value: &str) -> Self {
+        Self::string(value)
+    }
+}
+
+impl From<usize> for Literal {
+    fn from(value: usize) -> Self {
+        Self::usize_unsuffixed(value)
+    }
+}
+
 // ===== trait TokenStream =====
 
 impl From<p::TokenStream> for TokenStream {
@@ -181,7 +226,7 @@ impl IntoIterator for TokenStream {
     }
 }
 
-// ===== trait tokens =====
+// ===== trait TokenTree =====
 
 impl FromIterator<TokenTree> for p::TokenStream {
     fn from_iter<T: IntoIterator<Item = TokenTree>>(iter: T) -> Self {
@@ -217,22 +262,41 @@ impl From<TokenTree> for p::TokenTree {
     }
 }
 
+impl Spanned for TokenTree {
+    fn span(&self) -> Span {
+        match self {
+            TokenTree::Group(g) => g.span(),
+            TokenTree::Ident(i) => i.span(),
+            TokenTree::Punct(p) => p.span(),
+            TokenTree::Literal(l) => l.span(),
+        }
+    }
+
+    fn set_span(&mut self, span: Span) {
+        match self {
+            TokenTree::Group(g) => g.set_span(span),
+            TokenTree::Ident(i) => i.set_span(span),
+            TokenTree::Punct(p) => p.set_span(span),
+            TokenTree::Literal(l) => l.set_span(span),
+        }
+    }
+}
+
 macro_rules! token_tree_from {
-    ($($v:ident($ty:ty)),*) => {
-        $(
+    ($($v:ident($ty:ty)),*) => {$(
         impl From<$ty> for TokenTree {
             fn from(value: $ty) -> Self {
                 Self::$v(value)
             }
         }
-        )*
-    };
+    )*};
 }
 token_tree_from!(Group(Group), Ident(Ident), Punct(Punct), Literal(Literal));
 
+// ===== trait tokens =====
+
 macro_rules! wrapper {
-    ($($me:ident),*) => {
-        $(
+    ($($me:ident = $e:expr),*) => {$(
         impl From<p::$me> for $me {
             fn from(value: p::$me) -> Self {
                 Self(value)
@@ -250,21 +314,43 @@ macro_rules! wrapper {
                 &self.0
             }
         }
-
         impl std::ops::DerefMut for $me {
             fn deref_mut(&mut self) -> &mut Self::Target {
                 &mut self.0
             }
         }
-        )*
-    };
+        impl Spanned for $me {
+            fn span(&self) -> Span {
+                self.0.span()
+            }
+
+            fn set_span(&mut self, span: Span) {
+                self.0.set_span(span);
+            }
+        }
+        impl Expect for $me {
+            const EXPECT: &str = $e;
+        }
+        impl TryFrom<TokenTree> for $me {
+            type Error = TokenTree;
+
+            fn try_from(value: TokenTree) -> Result<Self, Self::Error> {
+                match value {
+                    TokenTree::$me(g) => Ok(g),
+                    t => Err(t),
+                }
+            }
+        }
+    )*};
 }
-wrapper!(Group, Punct, Literal);
+wrapper!(Group = "group", Punct = "punctuation", Literal = "literal");
+
+// ident is not simple wrapper
 
 impl From<p::Ident> for Ident {
     fn from(value: p::Ident) -> Self {
         Self {
-            token: value,
+            ident: value,
             string: OnceCell::new(),
         }
     }
@@ -272,13 +358,38 @@ impl From<p::Ident> for Ident {
 
 impl From<Ident> for p::Ident {
     fn from(value: Ident) -> Self {
-        value.token
+        value.ident
+    }
+}
+
+impl Spanned for Ident {
+    fn span(&self) -> Span {
+        self.ident.span()
+    }
+
+    fn set_span(&mut self, span: Span) {
+        self.ident.set_span(span);
+    }
+}
+
+impl Expect for Ident {
+    const EXPECT: &str = "identifier";
+}
+
+impl TryFrom<TokenTree> for Ident {
+    type Error = TokenTree;
+
+    fn try_from(value: TokenTree) -> Result<Self, Self::Error> {
+        match value {
+            TokenTree::Ident(i) => Ok(i),
+            t => Err(t),
+        }
     }
 }
 
 impl std::fmt::Debug for Ident {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.token.fmt(f)
+        self.ident.fmt(f)
     }
 }
 
@@ -287,45 +398,3 @@ impl std::fmt::Display for Ident {
         self.as_str().fmt(f)
     }
 }
-
-// ===== Extension =====
-
-pub fn stream_if<I: IntoIterator<Item = TokenTree>, F: FnOnce() -> I>(
-    cond: bool,
-    f: F,
-) -> std::iter::Flatten<std::option::IntoIter<I::IntoIter>> {
-    if cond { Some(f().into_iter()) } else { None }
-        .into_iter()
-        .flatten()
-}
-
-pub trait OptionExt<T> {
-    fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
-        self,
-        f: F,
-    ) -> std::iter::Flatten<std::option::IntoIter<I>>;
-}
-
-impl<T> OptionExt<T> for Option<T> {
-    fn map_stream<I: Iterator<Item = TokenTree>, F: FnOnce(T) -> I>(
-        self,
-        f: F,
-    ) -> std::iter::Flatten<std::option::IntoIter<I>> {
-        self.map(f).into_iter().flatten()
-    }
-}
-
-pub trait IteratorExt: Sized + Iterator<Item = TokenTree> {
-    fn map_group(self, delim: Delimiter) -> impl Iterator<Item = TokenTree> {
-        Some(Group::new(delim, self.collect()).into()).into_iter()
-    }
-
-    fn chain_back(
-        self,
-        other: impl Iterator<Item = TokenTree>,
-    ) -> impl Iterator<Item = TokenTree> {
-        other.chain(self)
-    }
-}
-
-impl<I: Iterator<Item = TokenTree>> IteratorExt for I {}

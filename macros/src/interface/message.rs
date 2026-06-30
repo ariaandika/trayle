@@ -96,7 +96,7 @@ impl<'a> Message<'a> {
         let name = &self.op.name;
         let is_request = Bool(self.is_request);
         let lf_ph = &self.op.lf_ph;
-        let destructor = stream_if(self.op.is_destructor, || g! {
+        let destructor = self.op.is_destructor.then_stream(|| g! {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
         let since = self.op.since.map_stream(|since| {
@@ -118,7 +118,7 @@ impl<'a> Message<'a> {
         let lf = self.op.lf_ph.as_ref().map_stream(|_| g!(<'a>));
 
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
-            let read = stream_if(!ty.is_fd(), ||g!(: reader.read()?));
+            let read = (!ty.is_fd()).then_stream(||g!(: reader.read()?));
             g!(#name @read,)
         });
 

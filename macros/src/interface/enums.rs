@@ -40,17 +40,17 @@ impl Parse for Enum {
             parser.check_empty()?;
         }
 
-        parser.parse::<Vis>()?;
+        parser.next_ident_of("pub");
         parser.ident_of("enum")?;
-        let name = parser.ident()?;
+        let name = parser.parse()?;
 
         let mut variants = vec![];
         let mut parser = parser.group_of(Delimiter::Brace)?.body_parser();
         let mut i = 0;
 
-        while let Some(wl_variant) = parser.next_ident() {
+        while let Some(wl_variant) = parser.next_token::<Ident>() {
             let disc = if parser.next_punct_of('=').is_some() {
-                parser.lit()?
+                parser.parse()?
             } else {
                 Literal::u32_unsuffixed({
                     let i_ = i;
@@ -95,7 +95,7 @@ impl Enum {
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> {
         let name = &self.name;
-        let names = stream_if(!self.is_bitfield, ||{
+        let names = (!self.is_bitfield).then_stream(||{
             let names = self.variants.iter().flat_map(|v|{
                 let variant = &v.variant;
                 let wl_variant = Literal::string(&to_snake(variant.as_str()));
@@ -192,7 +192,7 @@ impl Enum {
     // bitfield only
 
     pub fn gen_consts(&self) -> impl Iterator<Item = TokenTree> {
-        stream_if(self.is_bitfield, ||{
+        self.is_bitfield.then_stream(||{
             let name = &self.name;
             let consts = self.variants.iter().flat_map(|v|{
                 let upname = v.variant.as_str().to_uppercase();
@@ -209,7 +209,7 @@ impl Enum {
     }
 
     pub fn gen_impl_flags(&self) -> impl Iterator<Item = TokenTree> {
-        stream_if(self.is_bitfield, ||{
+        self.is_bitfield.then_stream(||{
             let name = &self.name;
             g! {
                 impl crate::bitflags::Flags for #name {
@@ -222,7 +222,7 @@ impl Enum {
     }
 
     pub fn gen_bit_ops(&self) -> impl Iterator<Item = TokenTree> {
-        stream_if(self.is_bitfield, ||{
+        self.is_bitfield.then_stream(||{
             let name = &self.name;
             gen_bitops(name, "BitAnd", "bitand", '&')
                 .chain(gen_bitops(name, "BitOr", "bitor", '|'))

@@ -24,7 +24,7 @@ impl Ops {
         }
         let mut ops = Vec::with_capacity(4);
         parser.ident_of("impl")?;
-        parser.ident()?;
+        parser.parse::<Ident>()?;
         let mut body_parser = parser.group_of(Delimiter::Brace)?.body_parser();
         let mut version = 1;
         while body_parser.peek().is_some() {
@@ -35,9 +35,9 @@ impl Ops {
                         version = since;
                     } else {
                         let m = if since == version { "equal" } else { "less" };
-                        return Err(Error::spanned(
+                        return Err(Error::new(
                             format!("version is {m} than previous op"),
-                            op.name.span(),
+                            op.name,
                         ));
                     }
                 }

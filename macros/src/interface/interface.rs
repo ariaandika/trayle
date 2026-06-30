@@ -15,16 +15,16 @@ impl Parse for Interface {
 
             if attr.next_ident_of("global").is_some() {
                 attr.punct_of('=')?;
-                global = Some(attr.lit()?);
+                global = Some(attr.parse()?);
                 attr.next_punct_of(',');
             }
 
             attr.check_empty()?;
         }
 
-        parser.parse::<Vis>()?;
+        parser.next_ident_of("pub");
         parser.ident_of("struct")?;
-        let iface = parser.ident()?;
+        let iface = parser.parse::<Ident>()?;
         parser.punct_of(';')?;
 
         let wl_iface = Ident::new_string(to_snake(iface.as_str()), Span::call_site());

@@ -1,15 +1,15 @@
 use crate::prelude::*;
 
 pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
-    parser.parse::<Attributes>()?;
+    parser.call(attrs_anon)?;
     parser.ident_of("pub")?;
     parser.ident_of("enum")?;
-    let name = parser.ident()?;
+    let name = parser.parse::<Ident>()?;
     parser.punct_of(';')?;
 
     let mut variants = Vec::with_capacity(32);
 
-    while let Some(variant) = parser.next_ident() {
+    while let Some(variant) = parser.next_token::<Ident>() {
         variants.push(variant);
         parser.next_punct_of(',');
     }
