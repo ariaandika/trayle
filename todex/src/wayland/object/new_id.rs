@@ -1,6 +1,7 @@
 use std::fmt;
 
 use crate::wayland::primitives::{AsObjectId, ObjectId};
+use crate::wayland::interface::InterfaceMarker;
 
 // ===== traits =====
 
@@ -12,13 +13,20 @@ pub trait AsNewId {
     fn new_id(&self) -> NewId<Self::Interface>;
 }
 
+impl<I: AsNewId> AsNewId for &I {
+    type Interface = I::Interface;
+
+    #[inline]
+    fn new_id(&self) -> NewId<Self::Interface> {
+        I::new_id(self)
+    }
+}
+
 // ===== NewId =====
 
 /// A new id for an object.
-///
-/// Create the actual object using [`NewId::create`].
 #[derive(Clone, Copy)]
-pub struct NewId<I> {
+pub struct NewId<I = ()> {
     pub id: ObjectId,
     pub interface: I,
 }
@@ -38,12 +46,12 @@ impl<T> AsObjectId for NewId<T> {
     }
 }
 
-impl<I: Clone> AsNewId for NewId<I> {
+impl<I: InterfaceMarker> AsNewId for NewId<I> {
     type Interface = I;
 
     #[inline]
     fn new_id(&self) -> NewId<Self::Interface> {
-        NewId::new(self.id, self.interface.clone())
+        NewId::new(self.id, I::MARKER)
     }
 }
 

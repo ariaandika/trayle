@@ -41,6 +41,19 @@ impl std::fmt::Display for Fixed {
 
 // ===== Version =====
 
+/// Type that is associated with a version.
+pub trait AsVersion {
+    /// Returns the associated version.
+    fn version(&self) -> Version;
+}
+
+impl<I: AsVersion> AsVersion for &I {
+    #[inline]
+    fn version(&self) -> Version {
+        I::version(self)
+    }
+}
+
 /// An operation version.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 #[repr(transparent)]
@@ -66,6 +79,13 @@ impl Version {
     #[inline]
     pub const fn to_u32(self) -> u32 {
         self.0.get() as u32
+    }
+}
+
+impl AsVersion for Version {
+    #[inline]
+    fn version(&self) -> Version {
+        *self
     }
 }
 

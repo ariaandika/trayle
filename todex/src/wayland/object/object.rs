@@ -1,8 +1,10 @@
 use std::fmt;
 
-use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
-use crate::wayland::object::Handle;
-use crate::wayland::{AsInterface, Interface};
+use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
+use crate::wayland::object::{Handle, NewId};
+use crate::wayland::interface::{InterfaceMarker, AsInterface, Interface};
+
+// ===== Object =====
 
 /// Wayland object.
 ///
@@ -52,47 +54,57 @@ pub struct Object<I = (), M = (), D = ObjectId> {
 }
 
 impl Object {
-    /// Create new untyped [`Object`].
+    /// Create new untyped `Object`.
     #[inline]
-    pub fn new(object_id: ObjectId) -> Self {
+    pub const fn new(object_id: ObjectId) -> Self {
         Self {
             iface: (),
             marker: (),
             id: object_id,
         }
     }
+}
 
-    /// Convert object to typed interface object.
-    ///
-    /// Note that this method **add** interface information, no validation are performed.
+impl<I> Object<I> {
+    /// Create new typed `Object`.
     #[inline]
-    pub fn typed<I: Default>(self) -> Object<I> {
-        Object {
-            iface: I::default(),
-            marker: (),
-            id: self.id,
-        }
-    }
-
-    /// Convert object to typed interface object.
-    ///
-    /// Note that this method **add** interface information, no validation are performed.
-    #[inline]
-    pub fn typed_with<I>(self, interface: I) -> Object<I> {
-        Object {
+    pub fn new_typed(object_id: ObjectId, interface: I) -> Self {
+        Self {
             iface: interface,
             marker: (),
-            id: self.id,
+            id: object_id,
+        }
+    }
+
+    /// Create new typed `Object` from [`NewId`].
+    #[inline]
+    pub fn from_new_id(new_id: NewId<I>) -> Self {
+        Self {
+            iface: new_id.interface,
+            marker: (),
+            id: new_id.id,
         }
     }
 }
 
-impl<I, M, D> Object<I, M, D> {
+impl<I: InterfaceMarker> Object<I> {
+    /// Create new typed `Object` from [`NewId`] and [`Interface`].
+    ///
+    /// # Panics
+    ///
+    /// Panics if the interface type does not match with given [`Interface`].
     #[inline]
-    pub const fn from_parts(iface: I, marker: M, id: D) -> Self {
-        Self { iface, marker, id }
+    pub fn from_dynamic(new_id: NewId, interface: Interface) -> Self {
+        // yes the method name sucks
+        Self {
+            iface: I::from_interface(interface),
+            marker: (),
+            id: new_id.id,
+        }
     }
 }
+
+// ===== typed interface =====
 
 impl<I: AsInterface, M, D> AsInterface for Object<I, M, D> {
     #[inline]
@@ -101,17 +113,33 @@ impl<I: AsInterface, M, D> AsInterface for Object<I, M, D> {
     }
 }
 
-impl<I, D> Object<I, Version, D> {
+impl<M, D> Object<Interface, M, D> {
     #[inline]
-    pub fn version(&self) -> Version {
+    pub fn with_type<I2: InterfaceMarker>(self) -> Object<I2, M, D> {
+        Object {
+            iface: I2::from_interface(self.iface),
+            marker: self.marker,
+            id: self.id,
+        }
+    }
+}
+
+// ===== typed marker =====
+
+impl<I, D> AsVersion for Object<I, Version, D> {
+    #[inline]
+    fn version(&self) -> Version {
         self.marker
     }
 }
 
-impl<I, M> AsObjectId for Object<I, M> {
+// ===== fully typed =====
+
+impl<I, M, D> Object<I, M, D> {
+    /// Create new `Object` from parts.
     #[inline]
-    fn object_id(&self) -> ObjectId {
-        self.id
+    pub const fn from_parts(iface: I, marker: M, id: D) -> Self {
+        Self { iface, marker, id }
     }
 }
 
@@ -126,6 +154,13 @@ impl<I, M> Object<I, M, &'static str> {
     #[inline]
     pub const fn name(&self) -> &'static str {
         self.id
+    }
+}
+
+impl<I, M, D: AsObjectId> AsObjectId for Object<I, M, D> {
+    #[inline]
+    fn object_id(&self) -> ObjectId {
+        self.id.object_id()
     }
 }
 

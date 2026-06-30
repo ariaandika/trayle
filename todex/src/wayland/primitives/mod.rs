@@ -25,11 +25,9 @@
 //! - [`AsObjectId`]: Type that is associated with an object id.
 
 pub use object_id::{AsObjectId, ObjectId};
-pub use new_id::{AsNewId, NewId};
 pub use traits::WlEnum;
-pub use types::{Fixed, Version};
+pub use types::{Fixed, AsVersion, Version};
 
 mod object_id;
-mod new_id;
 mod traits;
 mod types;

@@ -1,8 +1,31 @@
 use crate::wayland::object::ObjectError;
 use crate::wayland::wire::DecodeError;
-use crate::wayland::wl_display::WlDisplayError;
-use crate::wayland::wl_registry::BindError;
-use crate::wayland::wl_seat;
+use crate::wayland::interface::wl_display::DisplayError as WlDisplayError;
+use crate::wayland::interface::wl_seat;
+
+// ===== BindError =====
+
+#[derive(Debug, Clone, Copy)]
+pub enum BindError {
+    /// Unknown bind name.
+    UnknownName,
+    /// Missmatch bind name.
+    MissmatchName,
+    /// Unsupported bind version.
+    UnsupportedVersion,
+}
+
+impl BindError {
+    pub fn message(&self) -> &'static str {
+        match self {
+            Self::UnknownName => "unknown bind name",
+            Self::MissmatchName => "missmatch bind name",
+            Self::UnsupportedVersion => "unsupported bind version"
+        }
+    }
+}
+
+// ===== WlError =====
 
 #[derive(Debug, Clone, Copy)]
 pub enum WlError {
@@ -27,7 +50,9 @@ impl WlError {
     pub fn message(&self) -> &'static str {
         match self {
             Self::NotYetImplemented => "not yet implemented",
-            Self::Seat(e) => e.message(),
+            Self::Seat(e) => match e {
+                wl_seat::Error::MissingCapability => "seat missing capability",
+            }
             Self::Decode(e) => e.message(),
             Self::Object(e) => e.message(),
             Self::Bind(e) => e.message(),

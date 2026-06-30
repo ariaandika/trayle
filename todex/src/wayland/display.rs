@@ -1,4 +1,5 @@
-use crate::wayland::primitives::{AsObjectId, Fixed, NewId, ObjectId, Version};
+use crate::wayland::primitives::{AsObjectId, Fixed, ObjectId, Version};
+use crate::wayland::object::NewId;
 use crate::wayland::{Message, Object};
 
 #[inline]
@@ -10,7 +11,7 @@ pub trait AsDisplay {
     fn display(&self) -> impl std::fmt::Display;
 }
 
-impl<T: AsDisplay> AsDisplay for Message<T> {
+impl<T: AsDisplay, M, D> AsDisplay for Message<T, M, D> {
     fn display(&self) -> impl std::fmt::Display {
         self.payload().display()
     }

@@ -1,9 +1,7 @@
 use crate::collections::slots::Slots;
-use crate::wayland::interface::WlInterface;
-use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
-use crate::wayland::object::{AsHandle, Handle, Object, ObjectError};
-use crate::wayland::message::Constructor;
-use crate::wayland::{AsInterface, Interface};
+use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
+use crate::wayland::object::{AsHandle, AsNewId, Handle, NewId, Object, ObjectError};
+use crate::wayland::interface::{AsInterface, Interface};
 
 use ObjectError as E;
 
@@ -30,60 +28,56 @@ impl Objects {
     }
 
     /// Create new object from constructor message.
-    pub fn create<C>(&mut self, constructor: C) -> Result<C::Interface, ObjectError>
+    pub fn create<M>(&mut self, msg: M) -> Result<Object<M::Interface>, ObjectError>
     where
-        C: Constructor,
-        C::Interface: WlInterface,
+        M: AsNewId<Interface: AsInterface> + AsVersion,
     {
-        let object = constructor.new_id().create();
-        self.insert_parts(
-            object.object_id(),
-            object.interface(),
-            constructor.new_version(),
-            Handle::default(),
-        )?;
-        Ok(object)
+        self.create_handle(msg, Handle::default())
     }
 
     /// Create new object from constructor message.
-    pub fn create_handle<C, H>(
+    pub fn create_handle<M, H>(
         &mut self,
-        constructor: C,
+        msg: M,
         handle: H,
-    ) -> Result<C::Interface, ObjectError>
+    ) -> Result<Object<M::Interface>, ObjectError>
     where
-        C: Constructor,
-        C::Interface: WlInterface,
+        M: AsNewId<Interface: AsInterface> + AsVersion,
         H: AsHandle,
     {
-        let object = constructor.new_id().create();
-        self.insert_parts(
-            object.object_id(),
-            object.interface(),
-            constructor.new_version(),
-            handle,
+        let new_id = msg.new_id();
+        self.insert_inner(
+            new_id.object_id(),
+            new_id.interface.interface(),
+            msg.version(),
+            handle.to_handle(),
         )?;
-        Ok(object)
+        Ok(Object::from_new_id(new_id))
     }
 
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    pub fn insert_parts<H: AsHandle>(
+    pub fn insert_parts<I, H: AsHandle>(
         &mut self,
-        object_id: ObjectId,
+        new_id: NewId<I>,
         interface: Interface,
         version: Version,
         handle: H,
     ) -> Result<(), ObjectError> {
-        self.insert_inner(
-            object_id,
-            ObjectEntry::from_parts(interface, version, handle.to_handle()),
-        )
+        self.insert_inner(new_id.object_id(), interface, version, handle.to_handle())
     }
 
-    fn insert_inner(&mut self, id: ObjectId, entry: ObjectEntry) -> Result<(), ObjectError> {
-        let Some(idx) = id.to_u32().checked_sub(2).map(|e|e as usize) else {
+    // detach the generics
+    fn insert_inner(
+        &mut self,
+        object_id: ObjectId,
+        interface: Interface,
+        version: Version,
+        handle: Handle,
+    ) -> Result<(), ObjectError> {
+        let entry = ObjectEntry::from_parts(interface, version, handle);
+        let Some(idx) = object_id.to_u32().checked_sub(2).map(|e| e as usize) else {
             return Err(E::InvalidNewId);
         };
         match self.slots.insert(idx, entry) {
@@ -95,23 +89,19 @@ impl Objects {
 
     /// This has the same effect of inserting the id and immediately remove it.
     #[inline]
-    pub fn use_one<O: WlInterface>(&mut self, object: &O) {
-        let Some(idx) = object.object_id().to_u32().checked_sub(2) else {
-            return;
-        };
-        self.slots.use_one(idx as usize);
+    pub fn use_one<I>(&mut self, new_id: NewId<I>) -> Object<I> {
+        if let Some(idx) = new_id.object_id().to_u32().checked_sub(2) {
+            self.slots.use_one(idx as usize);
+        }
+        Object::from_new_id(new_id)
     }
 
     /// Performs an object lookup.
-    ///
-    /// The index can be an [`ObjectId`], and returns the object [`Interface`] and associated data.
-    /// If object id is `1`, returns [`Interface::WlDisplay`].
-    ///
-    /// Otherwise, [`Object`] can be used, and returns the associated object data. It also validate
-    /// whether the interface is equal. Returns `None` if object id is `1`.
-    ///
-    /// Object data usually is an index referencing other resource. Object data are provided in
-    /// object insertion.
+    pub fn get_anon(&mut self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
+        self.entry(id)
+    }
+
+    /// Performs an object lookup.
     pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Result<ObjectEntry, ObjectError> {
         ObjectIndex::get_object_mut(idx, self)
     }
@@ -131,14 +121,7 @@ pub trait ObjectIndex {
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;
 }
 
-impl ObjectIndex for ObjectId {
-    #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
-        objects.entry(self)
-    }
-}
-
-impl<I: WlInterface> ObjectIndex for &Object<I> {
+impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for &Object<I, M, D> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         let object = objects.entry(self.object_id())?;
@@ -150,7 +133,7 @@ impl<I: WlInterface> ObjectIndex for &Object<I> {
     }
 }
 
-impl<I: WlInterface> ObjectIndex for Object<I> {
+impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for Object<I, M, D> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         <&Self>::get_object_mut(&self, objects)

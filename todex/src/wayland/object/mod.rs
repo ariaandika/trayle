@@ -1,20 +1,11 @@
-use crate::wayland::primitives::AsObjectId;
-
+pub use handle::{AsHandle, Handle};
 pub use error::ObjectError;
+pub use new_id::{AsNewId, NewId};
 pub use object::Object;
 pub use global::{Global, WlGlobal, global_of};
-pub use handle::{AsHandle, Handle};
 
+mod handle;
 mod error;
+mod new_id;
 mod object;
 mod global;
-mod handle;
-
-// ===== trait =====
-
-/// Type that represent a wayland object.
-pub trait WlObject: AsObjectId {}
-
-pub trait AsObject<I>: AsObjectId { }
-
-impl<O: AsObjectId> WlObject for O {}

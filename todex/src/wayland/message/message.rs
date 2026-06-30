@@ -1,6 +1,6 @@
-use crate::wayland::message::Constructor;
-use crate::wayland::primitives::{AsNewId, AsObjectId, NewId, ObjectId, Version};
-use crate::wayland::wire::AsOpCode;
+use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
+use crate::wayland::object::{AsNewId, NewId};
+use crate::wayland::wire::{AsOpCode, OpCode};
 use crate::wayland::{AsInterface, Interface};
 
 // ===== trait =====
@@ -20,24 +20,23 @@ pub trait WlMessage: AsInterface + AsOpCode {
 
 /// Associate object id with a message.
 #[derive(Debug)]
-pub struct Message<T, M = ()> {
+pub struct Message<T, M = (), D = ObjectId> {
     payload: T,
-    object_id: ObjectId,
     marker: M,
+    id: D,
 }
 
-impl<T> Message<T> {
-    /// Create new [`Message`].
-    pub fn new<O: AsObjectId>(object: &O, payload: T) -> Self {
+impl<T, D> Message<T, (), D> {
+    pub fn new(object_id: D, payload: T) -> Self {
         Self {
             payload,
             marker: (),
-            object_id: object.object_id(),
+            id: object_id,
         }
     }
 }
 
-impl<T, M> Message<T, M> {
+impl<T, M, D> Message<T, M, D> {
     #[inline]
     pub const fn payload(&self) -> &T {
         &self.payload
@@ -49,19 +48,34 @@ impl<T, M> Message<T, M> {
     }
 }
 
-impl<T> Message<T, Version> {
-    /// Create new [`Message`].
+impl<T, D> AsVersion for Message<T, Version, D> {
     #[inline]
-    pub fn new_versioned(object_id: ObjectId, payload: T, version: Version) -> Self {
-        Self {
-            payload,
-            marker: version,
-            object_id,
-        }
+    fn version(&self) -> Version {
+        self.marker
+    }
+}
+
+impl<T, M, D> Message<T, M, D> {
+    pub(crate) fn marker(&self) -> M
+    where
+        M: Copy,
+    {
+        self.marker
     }
 
     #[inline]
-    pub fn version(&self) -> Version {
+    pub fn from_parts(id: D, payload: T, marker: M) -> Self {
+        Self {
+            payload,
+            marker,
+            id,
+        }
+    }
+}
+
+impl<T, M: OpCode + Copy, D> Message<T, M, D> {
+    #[inline]
+    pub fn op(&self) -> M {
         self.marker
     }
 }
@@ -75,14 +89,14 @@ impl<T, M> std::ops::Deref for Message<T, M> {
     }
 }
 
-impl<T, M> AsObjectId for Message<T, M> {
+impl<T, M, D: AsObjectId> AsObjectId for Message<T, M, D> {
     #[inline]
     fn object_id(&self) -> ObjectId {
-        self.object_id
+        self.id.object_id()
     }
 }
 
-impl<T: AsNewId, M> AsNewId for Message<T, M> {
+impl<T: AsNewId, M, D> AsNewId for Message<T, M, D> {
     type Interface = T::Interface;
 
     #[inline]
@@ -91,14 +105,14 @@ impl<T: AsNewId, M> AsNewId for Message<T, M> {
     }
 }
 
-impl<T: AsInterface, M> AsInterface for Message<T, M> {
+impl<T: AsInterface, M, D> AsInterface for Message<T, M, D> {
     #[inline]
     fn interface(&self) -> Interface {
         self.payload.interface()
     }
 }
 
-impl<T: AsOpCode, M> AsOpCode for Message<T, M> {
+impl<T: AsOpCode, M, D> AsOpCode for Message<T, M, D> {
     type OpCode = T::OpCode;
 
     const OPCODE: Self::OpCode = T::OPCODE;
@@ -106,7 +120,7 @@ impl<T: AsOpCode, M> AsOpCode for Message<T, M> {
     const OPNAME: &str = T::OPNAME;
 }
 
-impl<T: WlMessage, M> WlMessage for Message<T, M> {
+impl<T: WlMessage, M, D> WlMessage for Message<T, M, D> {
     const IS_REQUEST: bool = T::IS_REQUEST;
 
     const IS_EVENT: bool = T::IS_EVENT;
@@ -114,18 +128,4 @@ impl<T: WlMessage, M> WlMessage for Message<T, M> {
     const IS_DESTRUCTOR: bool = T::IS_DESTRUCTOR;
 
     const SINCE: Version = T::SINCE;
-}
-
-impl<T: AsNewId> Constructor for Message<T, Version> {
-    type Interface = T::Interface;
-
-    #[inline]
-    fn new_version(&self) -> Version {
-        self.marker
-    }
-
-    #[inline]
-    fn new_id(&self) -> NewId<Self::Interface> {
-        T::new_id(&self.payload)
-    }
 }
