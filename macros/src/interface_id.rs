@@ -17,7 +17,7 @@ pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
     let enum_variants = variants.iter().flat_map(|variant|g!(#variant,));
     let names_len = Literal::usize_unsuffixed(variants.len());
     let names = variants.iter().flat_map(|variant|{
-        let wl_variant_str = Literal::string(&to_snake(variant.as_str()));
+        let wl_variant_str = variant.to_lit_snake();
         g!(#wl_variant_str,)
     });
     let as_interfaces = variants.iter().flat_map(|variant|g! {

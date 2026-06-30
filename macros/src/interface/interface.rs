@@ -27,7 +27,7 @@ impl Parse for Interface {
         let iface = parser.parse::<Ident>()?;
         parser.punct_of(';')?;
 
-        let wl_iface = Ident::new_string(to_snake(iface.as_str()), Span::call_site());
+        let wl_iface = iface.to_snake().spanned(Span::call_site());
 
         Ok(Self {
             iface,

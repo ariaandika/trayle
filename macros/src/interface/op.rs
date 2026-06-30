@@ -46,7 +46,7 @@ impl Parse for Op {
         parser.ident_of("fn")?;
 
         let wl_name = parser.parse::<Ident>()?;
-        let name = Ident::new_string(to_camel(wl_name.as_str()), Span::call_site());
+        let name = wl_name.to_camel().spanned(Span::call_site());
 
         let mut lf_ph = None;
         let mut has_new_id = false;
@@ -181,7 +181,7 @@ impl Parse for Arg {
                 return Ok(None);
             };
             let wl_name = parser.parse::<Ident>()?;
-            let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
+            let name = wl_name.to_camel();
             parser.punct_of('>')?;
             Ok(Some(name))
         }
@@ -193,11 +193,11 @@ impl Parse for Arg {
             let path = match parser.next_punct_of('.') {
                 Some(_) => {
                     let wl_subname = parser.parse::<Ident>()?;
-                    let name = Ident::new_string(to_camel(wl_subname.as_str()), wl_subname.span());
+                    let name = wl_subname.to_camel();
                     Path(Some(wl_name), name)
                 },
                 None => {
-                    let name = Ident::new_string(to_camel(wl_name.as_str()), wl_name.span());
+                    let name = wl_name.to_camel();
                     Path(None, name)
                 },
             };

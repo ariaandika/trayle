@@ -58,9 +58,8 @@ impl Parse for Enum {
                     i_
                 })
             };
-            let variant = Ident::new_string(to_camel(wl_variant.as_str()), wl_variant.span());
             variants.push(Variant {
-                variant,
+                variant: wl_variant.to_camel(),
                 disc,
             });
             parser.next_punct_of(',');
@@ -80,7 +79,7 @@ impl Enum {
             })
         } else {
             let variants = self.variants.iter().flat_map(|v| {
-                let var = Ident::new_string(to_camel(v.variant.as_str()), v.variant.span());
+                let var = v.variant.to_camel();
                 let disc = &v.disc;
                 g!(#var = #disc,)
             });
@@ -98,7 +97,7 @@ impl Enum {
         let names = (!self.is_bitfield).then_stream(||{
             let names = self.variants.iter().flat_map(|v|{
                 let variant = &v.variant;
-                let wl_variant = Literal::string(&to_snake(variant.as_str()));
+                let wl_variant = variant.to_lit_snake();
                 g!(Self::#variant => #wl_variant,)
             });
             g! {
@@ -116,7 +115,7 @@ impl Enum {
             let gt = Literal::character('>');
             let sepr = Literal::character('|');
             let fmt = self.variants.iter().flat_map(|v|{
-                let wl_name = Literal::string(&to_snake(v.variant.as_str()));
+                let wl_name = v.variant.to_lit_snake();
                 let disc = &v.disc;
                 g! {
                     if self.#ZERO & #disc == #disc {
