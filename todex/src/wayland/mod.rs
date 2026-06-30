@@ -29,10 +29,9 @@
 //!
 //! These traits are not meant to be implemented by application.
 
-pub use primitives::ObjectId;
-pub use object::{Object, WlObject};
-pub use interface::{AsInterface, WlInterface};
+pub use object::Object;
 pub use message::{Message, WlMessage};
+pub use interface::{AsInterface, Interface};
 pub use error::WlError;
 
 macro_rules! roundup4 {
@@ -43,60 +42,8 @@ macro_rules! roundup4 {
 
 pub mod primitives;
 pub mod object;
-pub mod display;
-pub mod interface;
 pub mod message;
+pub mod interface;
 pub mod wire;
+pub mod display;
 pub mod error;
-
-mod prelude {
-    pub use super::primitives::*;
-    pub use super::object::{AsObject, Object, WlGlobal};
-    pub use super::wire::{AsOpCode, OpCode};
-    pub use super::wire::{Decode, DecodeError, Decoder};
-    pub use super::wire::{EncodePayload, Sized2, Writer};
-    pub use super::message::{Message, WlMessage};
-    pub use super::interface::AsInterface;
-    pub use super::Interface;
-    pub use super::display;
-    pub use macros::{Interface, Message, OpCode, WlEnum, bitfield};
-    pub use macros::interface;
-}
-
-macros::protocol! {
-    /// Reexport interfaces as upper camel case.
-    pub mod interfaces;
-
-    #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-    pub enum Interface;
-
-    pub mod wl_display;
-    pub mod wl_registry;
-    pub mod wl_callback;
-    pub mod wl_compositor;
-    pub mod wl_shm_pool;
-    pub mod wl_shm;
-    pub mod wl_buffer;
-    pub mod wl_data_offer;
-    pub mod wl_data_source;
-    pub mod wl_data_device;
-    pub mod wl_data_device_manager;
-    pub mod wl_surface;
-    pub mod wl_seat;
-    pub mod wl_pointer;
-    pub mod wl_keyboard;
-    pub mod wl_touch;
-    pub mod wl_output;
-    pub mod wl_region;
-    pub mod wl_subcompositor;
-    pub mod wl_subsurface;
-    #[todo] pub mod wl_fixes;
-    pub mod xdg_wm_base;
-    pub mod xdg_positioner;
-    pub mod xdg_surface;
-    pub mod xdg_toplevel;
-    pub mod xdg_popup;
-    #[todo] pub mod zwp_linux_dmabuf_v1;
-    #[todo] pub mod zwp_linux_buffer_params_v1;
-    #[todo] pub mod zwp_linux_dmabuf_feedback_v1;
-}
