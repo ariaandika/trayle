@@ -78,6 +78,14 @@ pub trait IteratorExt: Sized + Iterator<Item = TokenTree> {
     fn chain_back(self, other: impl Iterator<Item = TokenTree>) -> impl Iterator<Item = TokenTree> {
         other.chain(self)
     }
+
+    fn left<R>(self) -> Either<Self, R> {
+        Either::Left(self)
+    }
+
+    fn right<L>(self) -> Either<L, Self> {
+        Either::Right(self)
+    }
 }
 
 impl<I: Iterator<Item = TokenTree>> IteratorExt for I {}

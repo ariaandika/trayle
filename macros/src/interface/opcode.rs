@@ -19,7 +19,7 @@ impl<'a> OpCode<'a> {
 
     pub fn gen_enum(&self) -> impl Iterator<Item = TokenTree> {
         let name = &self.name;
-        let variants = self.ops.iter().flat_map(|Op { name, .. }|{
+        let variants = self.ops.iter().flat_map(|Op { op_name: name, .. }|{
             g!(#name,)
         });
         g! {
@@ -34,10 +34,10 @@ impl<'a> OpCode<'a> {
         let name = &self.name;
         let from = match &self.ops[..] {
             [] => Either::Left(Either::Left(g!(None))),
-            [Op { name, .. }] => Either::Left(Either::Right(g! {
+            [Op { op_name: name, .. }] => Either::Left(Either::Right(g! {
                 if op == #ZERO { Some(Self::#name) } else { None }
             })),
-            [.., Op { name, .. }] => {
+            [.., Op { op_name: name, .. }] => {
                 Either::Right(g! {
                     if op as u8 <= Self::#name as u8 {
                         Some(unsafe { std::mem::transmute::<u8, Self>(op as u8) })
@@ -64,7 +64,7 @@ impl<'a> OpCode<'a> {
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> {
         let name = &self.name;
-        let names = self.ops.iter().flat_map(|Op { wl_name, name, .. }|{
+        let names = self.ops.iter().flat_map(|Op { wl_name, op_name: name, .. }|{
             let wl_name = Literal::string(wl_name.as_str());
             g!(Self::#name => #wl_name,)
         });

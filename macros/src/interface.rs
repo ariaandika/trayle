@@ -1,16 +1,21 @@
 use crate::prelude::*;
 
 use interface::Interface;
-use op::{Arg, Op, OpKind};
+use arg::Arg;
+use op::{Op, OpKind};
+
 use ops::Ops;
 use opcode::OpCode;
 use constructor::Constructor;
 use message::Message;
-use enums::{Enums, Enum};
+use enums::Enums;
+
 
 mod interface;
+mod arg;
 mod op;
 mod ops;
+
 mod opcode;
 mod constructor;
 mod message;
@@ -20,55 +25,39 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
     let iface = parser.parse::<Interface>()?;
     let rq = Ops::parse(OpKind::Request, &mut parser)?;
     let ev = Ops::parse(OpKind::Event, &mut parser)?;
-    let en = Enums::parse(&mut parser)?;
+    let enums = Enums::parse(&mut parser)?;
+
     let rqop = OpCode::new(&rq);
     let evop = OpCode::new(&ev);
     let ctr = Constructor::new(&iface, &rq, &ev);
 
-    let module = {
-        let Interface { iface, wl_iface, .. } = &iface;
-        g! {
-            pub use #wl_iface::#iface;
-            pub mod #wl_iface
-        }
+    let Interface { iface_name, wl_iface, .. } = &iface;
+    let premodule = g! {
+        pub use #wl_iface::#iface_name;
+        pub mod #wl_iface
     };
-    let prelude = {
-        let Interface { iface, .. } = &iface;
-        g! {
-            use super::*;
-            pub type InterfaceType = #iface;
-        }
+    let prelude = g! {
+        use super::*;
+        pub type InterfaceType = #iface_name;
     };
 
     parser.check_empty()?;
 
     Ok(prelude
-        .chain(iface.gen_struct())
-        .chain(iface.gen_impl_marker())
-        .chain(iface.gen_wl_interface())
-        .chain(iface.gen_wl_global())
+        .chain(iface.generate())
         .chain(rqop.gen_enum())
         .chain(rqop.gen_display())
         .chain(rqop.gen_opcode_trait())
         .chain(evop.gen_enum())
         .chain(evop.gen_display())
         .chain(evop.gen_opcode_trait())
-        .chain(gen_messages(&iface.iface, &rqop))
-        .chain(gen_messages(&iface.iface, &evop))
+        .chain(gen_messages(iface_name, &rqop))
+        .chain(gen_messages(iface_name, &evop))
         .chain(ctr.gen_constructor())
-        .chain(en.enums.iter().flat_map(gen_enum))
+        .chain(enums.generate())
         .map_group(Delimiter::Brace)
-        .chain_back(module)
+        .chain_back(premodule)
         .collect())
-}
-
-fn gen_enum(en: &Enum) -> impl Iterator<Item = TokenTree> {
-    en.gen_enum()
-        .chain(en.gen_wl_enum())
-        .chain(en.gen_display())
-        .chain(en.gen_consts())
-        .chain(en.gen_impl_flags())
-        .chain(en.gen_bit_ops())
 }
 
 fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTree> {
@@ -86,11 +75,4 @@ fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTre
                 .chain(m.gen_encode_payload())
                 .chain(m.gen_display())
         })
-}
-
-fn attr(parser: &mut Parser) -> Result<Option<Parser>, Error> {
-    match parser.next_punct_of('#') {
-        Some(_) => Ok(Some(parser.group_of(Delimiter::Bracket)?.body_parser())),
-        None => Ok(None),
-    }
 }

@@ -7,20 +7,16 @@ pub struct Ops {
 }
 
 impl Ops {
-    fn empty(kind: OpKind) -> Self {
-        Self { kind, ops: vec![] }
-    }
-
     pub fn parse(kind: OpKind, parser: &mut Parser) -> Result<Self, Error> {
         let name = match kind {
             OpKind::Request => "request",
             OpKind::Event => "event",
         };
         let Some(TokenTree::Ident(id)) = parser.peek2() else {
-            return Ok(Self::empty(kind));
+            return Ok(Self { kind, ops: vec![] });
         };
         if !id.as_str().eq_ignore_ascii_case(name) {
-            return Ok(Self::empty(kind));
+            return Ok(Self { kind, ops: vec![] });
         }
         let mut ops = Vec::with_capacity(4);
         parser.ident_of("impl")?;
@@ -28,20 +24,20 @@ impl Ops {
         let mut body_parser = parser.group_of(Delimiter::Brace)?.body_parser();
         let mut version = 1;
         while body_parser.peek().is_some() {
-            let mut op = body_parser.parse::<Op>()?;
-            match op.since {
+            let mut op = body_parser.call(|p|Op::parse(kind, p))?;
+            match op.since.as_ref() {
                 Some(since) => {
-                    if since > version {
-                        version = since;
+                    if since.get() > version {
+                        version = since.get();
                     } else {
-                        let m = if since == version { "equal" } else { "less" };
+                        let m = if since.get() == version { "equal" } else { "less" };
                         return Err(Error::new(
                             format!("version is {m} than previous op"),
-                            op.name,
+                            op.op_name,
                         ));
                     }
                 }
-                None => op.since = Some(version),
+                None => op.since = Some(LitInt::new(version)),
             }
             ops.push(op);
         }

@@ -14,7 +14,7 @@ fn encodables(op: &Op) -> std::iter::Filter<std::slice::Iter<'_, Arg>, fn(&&Arg)
 
 impl<'a> Message<'a> {
     pub fn new(opcode: &OpCode, op: &'a Op) -> Self {
-        let is_request = matches!(opcode.ops.kind, OpKind::Request);
+        let is_request = matches!(op.kind, OpKind::Request);
         let opkind = opcode.name.clone();
         let fd = op.fd_idx.map(|i|&op.args[i]);
         Self {
@@ -26,7 +26,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let fields = self.op.args.iter().flat_map(|Arg { name, opt, ty, .. }| {
             let ty = ty.generate();
             let ty = if *opt {
@@ -36,7 +36,7 @@ impl<'a> Message<'a> {
             };
             g!(pub #name: @ty,)
         });
-        let lf = self.op.lf_ph.as_ref().map_stream(|_|g!(<'a>));
+        let lf = self.op.lf_ph.named();
         g! {
             #[derive(Debug, Clone)]
             pub struct #name @lf {
@@ -46,7 +46,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_as_interface(&self, iface: &Ident) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let lf_ph = &self.op.lf_ph;
         g! {
             impl AsInterface for #name @lf_ph {
@@ -64,7 +64,7 @@ impl<'a> Message<'a> {
             .iter()
             .find_map(|a| a.ty.as_new_id().map(|i| (&a.name, i)))
             .map_stream(|(field, new_iface)| {
-                let name = &self.op.name;
+                let name = &self.op.op_name;
                 g! {
                     impl AsNewId for #name {
                         type Interface = #new_iface;
@@ -79,7 +79,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let opkind = &self.opkind;
         let lf_ph = &self.op.lf_ph;
         let wl_string = Literal::string(self.op.wl_name.as_str());
@@ -93,14 +93,13 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_wl_message(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let is_request = Bool(self.is_request);
         let lf_ph = &self.op.lf_ph;
         let destructor = self.op.is_destructor.then_stream(|| g! {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
-        let since = self.op.since.map_stream(|since| {
-            let since = Literal::u32_unsuffixed(since);
+        let since = self.op.since.as_ref().map_stream(|since| {
             g!(const SINCE: Version = Version::new(#since).unwrap();)
         });
         g! {
@@ -113,9 +112,9 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_decode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let lf_ph = &self.op.lf_ph;
-        let lf = self.op.lf_ph.as_ref().map_stream(|_| g!(<'a>));
+        let lf = self.op.lf_ph.named();
 
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
             let read = (!ty.is_fd()).then_stream(||g!(: reader.read()?));
@@ -141,7 +140,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_encode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let lf_ph = &self.op.lf_ph;
 
         let sum = encodables(self.op).flat_map(|Arg { name, .. }|{
@@ -173,7 +172,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.name;
+        let name = &self.op.op_name;
         let lf_ph = &self.op.lf_ph;
         g! {
             impl display::AsDisplay for #name @lf_ph {

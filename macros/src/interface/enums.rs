@@ -8,24 +8,30 @@ pub struct Enums {
 impl Parse for Enums {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let mut enums = vec![];
-
         while parser.peek().is_some() {
             enums.push(parser.parse()?);
         }
-
         Ok(Self { enums })
     }
 }
 
-pub struct Enum {
-    pub is_bitfield: bool,
-    pub name: Ident,
-    pub variants: Vec<Variant>,
+impl Enums {
+    pub fn generate(&self) -> impl Iterator<Item = TokenTree> {
+        self.enums.iter().flat_map(Enum::generate)
+    }
 }
 
-pub struct Variant {
-    pub variant: Ident,
-    pub disc: Literal,
+pub struct Enum {
+    is_bitfield: bool,
+    name: Ident,
+    variants: Vec<Variant>,
+}
+
+struct Variant {
+    variant: Ident,
+    wl_variant: Literal,
+    const_name: Ident,
+    disc: Literal,
 }
 
 impl Parse for Enum {
@@ -58,93 +64,89 @@ impl Parse for Enum {
                     i_
                 })
             };
+
+            let variant = wl_variant.to_camel();
+            let const_name =
+                Ident::new_string(wl_variant.as_str().to_uppercase(), Span::call_site());
+            let wl_variant = Literal::string(variant.as_str());
+
             variants.push(Variant {
-                variant: wl_variant.to_camel(),
+                variant,
+                wl_variant,
+                const_name,
                 disc,
             });
             parser.next_punct_of(',');
         }
 
-        Ok(Self { is_bitfield, name, variants })
+        Ok(Self {
+            is_bitfield,
+            name,
+            variants,
+        })
     }
 }
 
 impl Enum {
-    pub fn gen_enum(&self) -> impl Iterator<Item = TokenTree> {
-        let name = &self.name;
+    fn generate(&self) -> impl Iterator<Item = TokenTree> {
         if self.is_bitfield {
-            Either::Left(g! {
-                #[derive(Debug, Clone, Copy)]
-                pub struct #name(u32);
-            })
+            self.gen_bitfield().left()
         } else {
-            let variants = self.variants.iter().flat_map(|v| {
-                let var = v.variant.to_camel();
-                let disc = &v.disc;
-                g!(#var = #disc,)
-            });
-            Either::Right(g! {
-                #[derive(Debug, Clone, Copy)]
-                pub enum #name {
-                    @variants
-                }
-            })
+            self.gen_enum().right()
         }
     }
+}
 
-    pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> {
-        let name = &self.name;
-        let names = (!self.is_bitfield).then_stream(||{
-            let names = self.variants.iter().flat_map(|v|{
-                let variant = &v.variant;
-                let wl_variant = variant.to_lit_snake();
-                g!(Self::#variant => #wl_variant,)
-            });
-            g! {
-                impl #name {
-                    /// Returns the wayland name.
-                    #[inline]
-                    pub const fn name(&self) -> &'static str {
-                        match self { @names }
-                    }
+impl Enum {
+    fn gen_enum(&self) -> impl Iterator<Item = TokenTree> {
+        let Self { name, variants, .. } = self;
+
+        let names = variants.iter().flat_map(|v| {
+            let Variant { variant, wl_variant, .. } = v;
+            g!(Self::#variant => #wl_variant,)
+        });
+        let variants_def = variants.iter().flat_map(|v| {
+            let Variant { variant, disc, .. } = v;
+            g!(#variant = #disc,)
+        });
+        let from_arms = variants.iter().flat_map(|v|{
+            let Variant { variant, disc, .. } = v;
+            g!(#disc => Some(Self::#variant),)
+        });
+
+        g! {
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            pub enum #name {
+                @variants_def
+            }
+
+            impl #name {
+                /// Returns the wayland name.
+                #[inline]
+                pub const fn name(&self) -> &'static str {
+                    match self { @names }
                 }
             }
-        });
-        let display = if self.is_bitfield {
-            let lt = Literal::character('<');
-            let gt = Literal::character('>');
-            let sepr = Literal::character('|');
-            let fmt = self.variants.iter().flat_map(|v|{
-                let wl_name = v.variant.to_lit_snake();
-                let disc = &v.disc;
-                g! {
-                    if self.#ZERO & #disc == #disc {
-                        sepr.fmt(f)?;
-                        sepr = #sepr;
-                        #wl_name.fmt(f)?;
-                    }
+
+            impl WlEnum for #name {
+                #[inline]
+                fn from_u32(uint: u32) -> Option<Self> {
+                    match uint { @from_arms _ => None, }
                 }
-            });
-            Either::Left(g! {
-                if self.#ZERO == #ZERO {
-                    "<none>".fmt(f)?;
-                } else {
-                    let mut sepr = #lt;
-                    @fmt
-                    #gt.fmt(f)?;
+
+                #[inline]
+                fn to_u32(self) -> u32 {
+                    self as u32
                 }
-                Ok(())
-            })
-        } else {
-            Either::Right(g!(self.name().fmt(f)))
-        };
-        g! {
+            }
+
             impl std::fmt::Display for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    @display
+                    self.name().fmt(f)
                 }
             }
+
             impl display::Display2 for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
@@ -152,81 +154,83 @@ impl Enum {
                 }
             }
         }
-        .chain(names)
     }
+}
 
-    pub fn gen_wl_enum(&self) -> impl Iterator<Item = TokenTree> {
-        let name = &self.name;
+impl Enum {
+    fn gen_bitfield(&self) -> impl Iterator<Item = TokenTree> {
+        let Self { name, variants, .. } = self;
 
-        let from = if self.is_bitfield {
-            Either::Left(g!(Some(Self(uint))))
-        } else {
-            let arms = self.variants.iter().flat_map(|v|{
-                let Variant { variant, disc, .. } = v;
-                g!(#disc => Some(Self::#variant),)
-            });
-            Either::Right(g!(match uint { @arms _ => None, }))
-        };
-        let to = if self.is_bitfield {
-            Either::Left(g!(self.#ZERO))
-        } else {
-            Either::Right(g!(self as u32))
-        };
+        let consts = variants.iter().flat_map(|v|{
+            let Variant { const_name, disc, .. } = v;
+            g!(pub const #const_name: Self = Self(#disc);)
+        });
+
+        let lt = Literal::character('<');
+        let gt = Literal::character('>');
+        let sepr = Literal::character('|');
+        let fmt = variants.iter().flat_map(|v|{
+            let Variant { wl_variant, disc, .. } = v;
+            g! {
+                if self.0 & #disc == #disc {
+                    sepr.fmt(f)?;
+                    sepr = #sepr;
+                    #wl_variant.fmt(f)?;
+                }
+            }
+        });
 
         g! {
+            #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+            pub struct #name(u32);
+
+            impl #name {
+                @consts
+            }
+
+            impl crate::bitflags::Flags for #name {
+                #[inline]
+                fn bits(self) -> u32 {
+                    self.0
+                }
+            }
+
             impl WlEnum for #name {
                 #[inline]
                 fn from_u32(uint: u32) -> Option<Self> {
-                    @from
+                    Some(Self(uint))
                 }
 
                 #[inline]
                 fn to_u32(self) -> u32 {
-                    @to
+                    self.0
+                }
+            }
+
+            impl std::fmt::Display for #name {
+                #[inline]
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    if self.#ZERO == #ZERO {
+                        "<none>".fmt(f)?;
+                    } else {
+                        let mut sepr = #lt;
+                        @fmt
+                        #gt.fmt(f)?;
+                    }
+                    Ok(())
+                }
+            }
+
+            impl display::Display2 for #name {
+                #[inline]
+                fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+                    std::fmt::Display::fmt(self, f)
                 }
             }
         }
-    }
-
-    // bitfield only
-
-    pub fn gen_consts(&self) -> impl Iterator<Item = TokenTree> {
-        self.is_bitfield.then_stream(||{
-            let name = &self.name;
-            let consts = self.variants.iter().flat_map(|v|{
-                let upname = v.variant.as_str().to_uppercase();
-                let upname = Ident::new_string(upname, v.variant.span());
-                let disc = &v.disc;
-                g!(pub const #upname: Self = Self(#disc);)
-            });
-            g! {
-                impl #name {
-                    @consts
-                }
-            }
-        })
-    }
-
-    pub fn gen_impl_flags(&self) -> impl Iterator<Item = TokenTree> {
-        self.is_bitfield.then_stream(||{
-            let name = &self.name;
-            g! {
-                impl crate::bitflags::Flags for #name {
-                    fn bits(self) -> u32 {
-                        self.#ZERO
-                    }
-                }
-            }
-        })
-    }
-
-    pub fn gen_bit_ops(&self) -> impl Iterator<Item = TokenTree> {
-        self.is_bitfield.then_stream(||{
-            let name = &self.name;
-            gen_bitops(name, "BitAnd", "bitand", '&')
-                .chain(gen_bitops(name, "BitOr", "bitor", '|'))
-                .chain(gen_bitops(name, "BitXor", "bitxor", '^'))
-        })
+        .chain(gen_bitops(name, "BitAnd", "bitand", '&'))
+        .chain(gen_bitops(name, "BitOr", "bitor", '|'))
+        .chain(gen_bitops(name, "BitXor", "bitxor", '^'))
     }
 }
 

@@ -12,6 +12,15 @@ pub trait Spanned {
         self.set_span(span);
         self
     }
+
+    fn unspan(&mut self) -> Span
+    where
+        Self: Sized,
+    {
+        let span = self.span();
+        self.set_span(Span::call_site());
+        span
+    }
 }
 
 impl Spanned for Span {

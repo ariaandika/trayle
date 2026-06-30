@@ -1,6 +1,23 @@
+use crate::span::*;
 use crate::tree::*;
 use crate::error::*;
 use crate::parser::*;
+
+pub fn attr(parser: &mut Parser) -> Result<Option<Parser>, Error> {
+    match parser.next_punct_of('#') {
+        Some(_) => Ok(Some(parser.group_of(Delimiter::Bracket)?.body_parser())),
+        None => Ok(None),
+    }
+}
+
+pub fn attrs_anon(parser: &mut Parser) -> Result<TokenStream> {
+    let mut attrs = TokenStream::new();
+    while let Some(punct) = parser.next_punct_of('#') {
+        attrs.push(punct);
+        attrs.push(parser.group_of(Delimiter::Bracket)?);
+    }
+    Ok(attrs)
+}
 
 #[expect(dead_code)]
 pub fn type_anon(parser: &mut Parser) -> TokenStream {
@@ -46,11 +63,49 @@ pub fn type_anon(parser: &mut Parser) -> TokenStream {
     ty
 }
 
-pub fn attrs_anon(parser: &mut Parser) -> Result<TokenStream> {
-    let mut attrs = TokenStream::new();
-    while let Some(punct) = parser.next_punct_of('#') {
-        attrs.push(punct);
-        attrs.push(parser.group_of(Delimiter::Bracket)?);
+// ===== LitInt =====
+
+#[derive(Clone)]
+pub struct LitInt {
+    int: usize,
+    span: Span,
+}
+
+impl Parse for LitInt {
+    fn parse(parser: &mut Parser) -> Result<Self> {
+        let lit = parser.parse::<Literal>()?;
+        let int = match lit.to_string().parse::<usize>() {
+            Ok(ok) => ok,
+            Err(e) => return Err(Error::new(e.to_string(), lit))
+        };
+        Ok(Self {
+            int,
+            span: lit.span(),
+        })
     }
-    Ok(attrs)
+}
+
+impl LitInt {
+    pub fn new(int: usize) -> Self {
+        Self {
+            int,
+            span: Span::call_site(),
+        }
+    }
+
+    pub fn get(&self) -> usize {
+        self.int
+    }
+}
+
+impl std::fmt::Debug for LitInt {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.int.fmt(f)
+    }
+}
+
+impl From<LitInt> for TokenTree {
+    fn from(val: LitInt) -> Self {
+        TokenTree::Literal(Literal::usize_unsuffixed(val.int)).spanned(val.span)
+    }
 }

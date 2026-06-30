@@ -15,22 +15,22 @@ impl<'a> Constructor<'a> {
 
 fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + Clone {
     ops.iter().flat_map(move|op|{
-        let Op { wl_name, name, lf_ph, .. } = op;
+        let Op { wl_name, op_name: name, lf_ph, op_span, .. } = op;
 
         let wl_name = if KEYWORDS.contains(&wl_name.as_str()) {
-            Ident::new_raw(wl_name.as_str(), wl_name.span())
+            Ident::new_raw(wl_name.as_str(), *op_span)
         } else {
-            wl_name.clone()
+            wl_name.clone().spanned(*op_span)
         };
 
-        let lf = lf_ph.as_ref().map_stream(|_|g!(<'a>));
+        let lf = lf_ph.named();
 
         let doc = (op.since.is_some() || op.is_destructor).then_stream(|| {
-            let doc = match (op.since, op.is_destructor) {
+            let doc = match (op.since.as_ref(), op.is_destructor) {
                 (None, false) => unreachable!(),
                 (None, true) => Literal::string(" destructor"),
-                (Some(s), false) => Literal::string(&format!(" since={s}")),
-                (Some(s), true) => Literal::string(&format!(" since={s}, destructor")),
+                (Some(s), false) => Literal::string(&format!(" since={}", s.get())),
+                (Some(s), true) => Literal::string(&format!(" since={}, destructor", s.get())),
             };
             g!(#[doc = #doc])
         });
@@ -61,7 +61,7 @@ fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + C
 
 impl Constructor<'_> {
     pub fn gen_constructor(&self) -> impl Iterator<Item = TokenTree> {
-        let name = &self.iface.iface;
+        let name = &self.iface.iface_name;
         let rq = gen_ops(Some(Ident::new("pub", Span::call_site())), self.rq);
         let ev = gen_ops(Some(Ident::new("pub", Span::call_site())), self.ev);
         g! {

@@ -1,7 +1,8 @@
 use crate::prelude::*;
 
 pub struct Interface {
-    pub iface: Ident,
+    pub iface_name: Ident,
+    pub iface_span: Span,
     pub wl_iface: Ident,
     pub global: Option<Literal>,
 }
@@ -24,13 +25,15 @@ impl Parse for Interface {
 
         parser.next_ident_of("pub");
         parser.ident_of("struct")?;
-        let iface = parser.parse::<Ident>()?;
+        let mut iface_name = parser.parse::<Ident>()?;
         parser.punct_of(';')?;
 
-        let wl_iface = iface.to_snake().spanned(Span::call_site());
+        let iface_span = iface_name.unspan();
+        let wl_iface = iface_name.to_snake();
 
         Ok(Self {
-            iface,
+            iface_name,
+            iface_span,
             wl_iface,
             global,
         })
@@ -38,43 +41,11 @@ impl Parse for Interface {
 }
 
 impl Interface {
-    pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> {
-        let iface_name = &self.iface;
-        g! {
-            #[derive(Debug, Default, Clone, Copy)]
-            pub struct #iface_name(std::marker::PhantomData<()>);
-        }
-    }
+    pub fn generate(&self) -> impl Iterator<Item = TokenTree> {
+        let iface_name_spanned = self.iface_name.clone().spanned(self.iface_span);
+        let iface_name = &self.iface_name;
 
-    pub fn gen_impl_marker(&self) -> impl Iterator<Item = TokenTree> {
-        let iface_name = &self.iface;
-        g! {
-            impl InterfaceMarker for #iface_name {
-                fn from_interface(iface: InterfaceId) -> Self {
-                    assert_iface!(iface, #iface_name);
-                    <Self as sealed::Sealed>::MARKER
-                }
-            }
-            impl sealed::Sealed for #iface_name {
-                const MARKER: Self = Self(std::marker::PhantomData);
-            }
-        }
-    }
-
-    pub fn gen_wl_interface(&self) -> impl Iterator<Item = TokenTree> {
-        let iface_name = &self.iface;
-        g! {
-            impl WlInterface for #iface_name {
-                type RequestOp = RequestOp;
-
-                type EventOp = EventOp;
-            }
-        }
-    }
-
-    pub fn gen_wl_global(&self) -> impl Iterator<Item = TokenTree> {
-        self.global.as_ref().map_stream(|version|{
-            let iface_name = &self.iface;
+        let global = self.global.as_ref().map_stream(|version|{
             let wl_string = Literal::string(self.wl_iface.as_str());
             g! {
                 impl WlGlobal for #iface_name {
@@ -83,7 +54,30 @@ impl Interface {
                     const INTERFACE: Interface = Interface::#iface_name;
                 }
             }
-        })
+        });
+
+        g! {
+            #[derive(Debug, Default, Clone, Copy)]
+            pub struct #iface_name_spanned(());
+
+            impl InterfaceMarker for #iface_name {
+                fn from_interface(iface: InterfaceId) -> Self {
+                    assert_iface!(iface, #iface_name);
+                    <Self as sealed::Sealed>::MARKER
+                }
+            }
+
+            impl sealed::Sealed for #iface_name {
+                const MARKER: Self = Self(());
+            }
+
+            impl WlInterface for #iface_name {
+                type RequestOp = RequestOp;
+
+                type EventOp = EventOp;
+            }
+
+            @global
+        }
     }
 }
-

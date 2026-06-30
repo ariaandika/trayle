@@ -1,34 +1,39 @@
 use crate::interface::attr;
 use crate::prelude::*;
+use crate::interface::arg::*;
 
+#[derive(Debug, Clone, Copy)]
 pub enum OpKind {
     Request,
     Event,
 }
 
-// ```
-// #[destructor, since = 5]
-// delete_id(id: uint, parent: object<wl_registry>?)
-// ```
+/// `#[destructor, since = 5]`
+/// `delete_id(id: uint, parent: object<wl_registry>?)`
 pub struct Op {
     pub wl_name: Ident,
-    pub name: Ident,
-    pub since: Option<u32>,
+    pub op_name: Ident,
+    pub op_span: Span,
+
+    pub kind: OpKind,
+    pub since: Option<LitInt>,
     pub is_destructor: bool,
-    pub args: Vec<Arg>,
-    pub lf_ph: Option<TokenTree>,
+
+    pub lf_ph: LfPh,
     pub fd_idx: Option<usize>,
+
+    pub args: Vec<Arg>,
 }
 
-impl Parse for Op {
-    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+impl Op {
+    pub fn parse(kind: OpKind, parser: &mut Parser) -> Result<Self, Error> {
         let mut since = None;
         let mut is_destructor = false;
 
         if let Some(mut parser) = attr(parser)? {
             if parser.next_ident_of("since").is_some() {
                 parser.punct_of('=')?;
-                since = Some(parser.parse::<Literal>()?);
+                since = Some(parser.parse::<LitInt>()?);
                 parser.next_punct_of(',');
             }
 
@@ -40,15 +45,14 @@ impl Parse for Op {
             parser.check_empty()?;
         }
 
-        let since = since.and_then(|s|s.to_string().parse().ok());
-
         parser.next_ident_of("pub");
         parser.ident_of("fn")?;
 
-        let wl_name = parser.parse::<Ident>()?;
-        let name = wl_name.to_camel().spanned(Span::call_site());
+        let mut wl_name = parser.parse::<Ident>()?;
+        let op_span = wl_name.unspan();
+        let op_name = wl_name.to_camel();
 
-        let mut lf_ph = None;
+        let mut lf_ph = LfPh::new(false);
         let mut has_new_id = false;
         let mut fd_idx = None;
 
@@ -59,7 +63,7 @@ impl Parse for Op {
             let arg = arg_parser.parse::<Arg>()?;
 
             if arg.is_lf() {
-                lf_ph = Some(Group::new(Delimiter::None, token_stream!(<'_>)).into())
+                lf_ph = LfPh::new(true);
             }
             if arg.ty.as_new_id().is_some() {
                 if has_new_id {
@@ -82,7 +86,9 @@ impl Parse for Op {
 
         Ok(Self {
             wl_name,
-            name,
+            op_name,
+            op_span,
+            kind,
             since,
             is_destructor,
             args,
@@ -92,168 +98,46 @@ impl Parse for Op {
     }
 }
 
-// `id: uint, parent: object<wl_registry>?`
-//
-// ```
-// int uint
-// fixed
-// string
-// object<iface>
-// new_id<iface>
-// array
-// fd
-// ```
-//
-// `<ty>?` allow null
-// `uint<iface.enum>?` enum arg
-pub struct Arg {
-    pub name: Ident,
-    pub ty: Ty,
-    pub opt: bool,
+#[derive(Debug, Clone, Copy)]
+pub struct LfPh {
+    has_lf: bool,
+    has_name: bool,
 }
 
-impl std::ops::Deref for Arg {
-    type Target = Ty;
-
-    fn deref(&self) -> &Self::Target {
-        &self.ty
-    }
-}
-
-#[derive(Clone)]
-pub struct Path(Option<Ident>, Ident);
-
-impl From<Path> for TokenTree {
-    fn from(value: Path) -> Self {
-        Group::new(
-            Delimiter::None,
-            value
-                .0
-                .map(<_>::into)
-                .into_iter()
-                .chain(gentoken!(::))
-                .chain(Some(TokenTree::from(value.1)))
-                .collect(),
-        )
-        .into()
-    }
-}
-
-pub enum Ty {
-    Int,
-    Uint,
-    Enum {
-        #[expect(dead_code)]
-        is_signed: bool,
-        path: Path,
-    },
-    Fixed,
-    String,
-    Object(Option<Ident>),
-    NewId(Option<Ident>),
-    Array,
-    Fd,
-    /// only used by wl_registry::bind
-    Version,
-}
-
-impl Ty {
-    pub fn is_lf(&self) -> bool {
-        matches!(self, Ty::String | Ty::Array)
+impl LfPh {
+    fn new(has_lf: bool) -> Self {
+        Self { has_lf, has_name: false }
     }
 
-    pub fn is_fd(&self) -> bool {
-        matches!(self, Ty::Fd)
-    }
-
-    pub fn as_new_id(&self) -> Option<&Ident> {
-        match self {
-            Ty::NewId(id) => id.as_ref(),
-            _ => None,
+    pub fn named(self) -> Self {
+        Self {
+            has_lf: self.has_lf,
+            has_name: true,
         }
     }
 }
 
-impl Parse for Arg {
-    fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        fn opt_iface(parser: &mut Parser) -> Result<Option<Ident>, Error> {
-            let Some(_) = parser.next_punct_of('<') else {
-                return Ok(None);
-            };
-            let wl_name = parser.parse::<Ident>()?;
-            let name = wl_name.to_camel();
-            parser.punct_of('>')?;
-            Ok(Some(name))
-        }
-        fn opt_enum(is_signed: bool, parser: &mut Parser) -> Result<Ty, Error> {
-            let Some(_) = parser.next_punct_of('<') else {
-                return Ok(if is_signed { Ty::Int } else { Ty::Uint });
-            };
-            let wl_name = parser.parse::<Ident>()?;
-            let path = match parser.next_punct_of('.') {
-                Some(_) => {
-                    let wl_subname = parser.parse::<Ident>()?;
-                    let name = wl_subname.to_camel();
-                    Path(Some(wl_name), name)
-                },
-                None => {
-                    let name = wl_name.to_camel();
-                    Path(None, name)
-                },
-            };
-            parser.punct_of('>')?;
-            Ok(Ty::Enum { is_signed, path })
-        }
+impl IntoIterator for LfPh {
+    type Item = TokenTree;
 
-        let name = parser.parse::<Ident>()?;
-        parser.punct_of(':')?;
-        let ty = parser.parse::<Ident>()?;
-        let ty = match ty.as_str() {
-            "int" => opt_enum(true, parser)?,
-            "uint" => opt_enum(false, parser)?,
-            "fixed" => Ty::Fixed,
-            "string" => Ty::String,
-            "object" => Ty::Object(opt_iface(parser)?),
-            "new_id" => Ty::NewId(opt_iface(parser)?),
-            "array" => Ty::Array,
-            "fd" => Ty::Fd,
-            "version" => Ty::Version,
-            _ => return Err(Error::new("unknown type", ty)),
-        };
-        let opt = parser.next_punct_of('?').is_some();
-        Ok(Self {
-            name,
-            ty,
-            opt,
-        })
-    }
-}
+    type IntoIter = Either<std::option::IntoIter<TokenTree>, std::array::IntoIter<TokenTree, 4>>;
 
-impl Ty {
-    pub fn generate(&self) -> TokenTree {
-        macro_rules! id {
-            ($ty:ident) => {
-                Ident::new(stringify!($ty), Span::call_site()).into()
-            };
-        }
-        macro_rules! gr {
-            ($($tt:tt)*) => {
-                Group::new(Delimiter::None, token_stream!($($tt)*)).into()
-            };
-        }
-        match self {
-            Ty::Int => id!(i32),
-            Ty::Uint => id!(u32),
-            Ty::Enum { path, .. } => path.clone().into(),
-            Ty::Fixed => id!(Fixed),
-            Ty::String => gr!(&'a str),
-            Ty::Object(None) => id!(Object),
-            Ty::Object(Some(i)) => gr!(Object<#i>),
-            Ty::NewId(None) => id!(NewId),
-            Ty::NewId(Some(i)) => gr!(NewId<#i>),
-            Ty::Array => gr!(&'a [u8]),
-            Ty::Fd => id!(RawFd),
-            Ty::Version => id!(Version),
+    fn into_iter(self) -> Self::IntoIter {
+        if self.has_lf {
+            Either::Right(
+                [
+                    TokenTree::from(Punct::new('<', Spacing::Alone)),
+                    TokenTree::from(Punct::new('\'', Spacing::Joint)),
+                    TokenTree::from(Ident::new(
+                        if self.has_name { "a" } else { "_" },
+                        Span::call_site(),
+                    )),
+                    TokenTree::from(Punct::new('>', Spacing::Alone)),
+                ]
+                .into_iter(),
+            )
+        } else {
+            Either::Left(None.into_iter())
         }
     }
 }
