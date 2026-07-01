@@ -1,6 +1,6 @@
-use wayland::xdg_wm_base::{self, CreatePositioner, GetXdgSurface, Pong};
-use wayland::xdg_surface;
-use wayland::xdg_toplevel;
+use wayland::interface::xdg_wm_base::{CreatePositioner, GetXdgSurface, Pong};
+use wayland::interface::xdg_surface;
+use wayland::interface::xdg_toplevel;
 
 use crate::compositor::prelude::*;
 

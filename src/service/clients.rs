@@ -41,6 +41,7 @@ impl ClientService<'_> {
         let mut client = ClientMut {
             id,
             state,
+            read_fd: &mut buffer.read_fd,
             write_buf: &mut buffer.write_buf,
             write_fd: &mut buffer.write_fd,
         };
@@ -53,12 +54,11 @@ impl ClientService<'_> {
 
             if event.interest.is_read() {
                 loop {
-                    if compositor.has_frame(&buffer.read_buf) {
-                        compositor.route(&mut buffer.read_buf, &mut buffer.read_fd, &mut client)?;
-                    } else {
-                        if buffer.read_fd.recvmsg(&mut buffer.read_buf, &client)?.is_pending() {
-                            break;
-                        }
+                    if compositor.message(&mut buffer.read_buf, &mut client)?.is_ready() {
+                        continue;
+                    }
+                    if client.recvmsg(&mut buffer.read_buf)?.is_pending() {
+                        break;
                     }
                 }
             }

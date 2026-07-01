@@ -1,13 +1,13 @@
 use todex::bitflags::Flags;
 
-use wayland::wl_keyboard::{KeymapFormat, RepeatInfo};
-use wayland::wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};
+use wl_keyboard::{KeymapFormat, RepeatInfo};
+use wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};
 
 use crate::compositor::BindEffect;
 use crate::compositor::prelude::*;
 
 impl BindEffect<WlSeat> for Compositor {
-    fn bind(&mut self, wl_seat: WlSeat, client: &mut ClientMut) -> Result<(), WlError> {
+    fn bind(&mut self, wl_seat: Object<WlSeat>, client: &mut ClientMut) -> Result<(), WlError> {
         client.send(wl_seat.name(self.seat.name()));
         client.send(wl_seat.capabilities(self.seat.capability()));
         Ok(())
@@ -30,7 +30,11 @@ impl RequestHandler<GetKeyboard> for Compositor {
             return Err(wl_seat::Error::MissingCapability.into());
         }
         let wl_keyboard = client.objects.create(&req)?;
-        client.send(self.seat.to_keymap_event(KeymapFormat::XkbV1, &wl_keyboard));
+        client.send(wl_keyboard.keymap(
+            KeymapFormat::XkbV1,
+            self.seat.keymap_memfd(),
+            self.seat.keymap_size(),
+        ));
         if req.version() >= RepeatInfo::SINCE {
             client.send(wl_keyboard.repeat_info(50, 160));
         }

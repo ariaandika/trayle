@@ -2,8 +2,7 @@ use std::os::fd::AsRawFd;
 
 use todex::sys::errno::Errno;
 use todex::sys::memfd::Memfd;
-use todex::wayland::{Message, wl_keyboard};
-use todex::wayland::wl_seat::Capability;
+use todex::wayland::interface::wl_seat::Capability;
 
 // ===== Seat =====
 
@@ -13,7 +12,7 @@ pub struct Seat {
     name: Box<str>,
     capability: Capability,
     data_device: Option<u64>,
-    memfd: Memfd,
+    keymap_memfd: Memfd,
 }
 
 impl Seat {
@@ -27,7 +26,7 @@ impl Seat {
             name: String::from("seat0").into_boxed_str(),
             capability: Capability::POINTER | Capability::KEYBOARD,
             data_device: None,
-            memfd,
+            keymap_memfd: memfd,
         })
     }
 
@@ -37,6 +36,10 @@ impl Seat {
 
     pub fn capability(&self) -> Capability {
         self.capability
+    }
+
+    pub fn keymap_memfd(&self) -> i32 {
+        self.keymap_memfd.as_raw_fd()
     }
 
     pub const fn keymap_size(&self) -> u32 {
@@ -51,14 +54,6 @@ impl Seat {
     /// Clear client id that holds the data device.
     pub fn clear_data_device(&mut self) {
         self.data_device = None;
-    }
-
-    pub fn to_keymap_event(
-        &self,
-        format: wl_keyboard::KeymapFormat,
-        wl_keyboard: &wl_keyboard::WlKeyboard,
-    ) -> Message<wl_keyboard::Keymap> {
-        wl_keyboard.keymap(format, self.memfd.as_raw_fd(), self.keymap_size())
     }
 }
 

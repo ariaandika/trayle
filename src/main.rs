@@ -4,6 +4,7 @@ use todex::sys::epoll::Epoll;
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::poller::Poller;
+use todex::log;
 
 use buffer::BufferPool;
 use client::Clients;
@@ -21,7 +22,6 @@ mod client;
 mod compositor;
 mod service;
 
-mod log;
 mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");

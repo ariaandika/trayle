@@ -13,6 +13,7 @@ pub enum ObjectError {
 }
 
 impl ObjectError {
+    #[inline]
     pub fn message(&self) -> &'static str {
         match self {
             Self::UnknownId => "unknown object id",
@@ -21,5 +22,12 @@ impl ObjectError {
             Self::OutOfBoundsNewId => "out of bounds new id",
             Self::OccupiedNewId => "occupied new id",
         }
+    }
+}
+
+impl std::fmt::Display for ObjectError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.message().fmt(f)
     }
 }

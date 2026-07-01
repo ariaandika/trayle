@@ -1,4 +1,4 @@
-use wayland::wl_data_device_manager::{CreateDataSource, GetDataDevice, Release};
+use wayland::interface::wl_data_device_manager::{CreateDataSource, GetDataDevice, Release};
 
 use crate::compositor::prelude::*;
 
@@ -19,7 +19,7 @@ impl RequestHandler<GetDataDevice> for Compositor {
         req: Operation<GetDataDevice>,
         client: &mut ClientMut,
     ) -> Result<(), WlError> {
-        let _ = client.objects.get_mut(&req.seat)?;
+        let _ = client.objects.get_mut(req.seat)?;
         let _ = client.objects.create(req)?;
         self.seat.set_data_device(client.id.to_raw());
         Ok(())

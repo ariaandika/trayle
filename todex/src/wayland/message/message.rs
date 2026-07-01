@@ -1,7 +1,7 @@
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsNewId, NewId};
-use crate::wayland::wire::{AsOpCode, OpCode};
-use crate::wayland::{AsInterface, Interface};
+use crate::wayland::interface::{AsInterface, Interface};
+use crate::wayland::wire::AsOpCode;
 
 // ===== trait =====
 
@@ -36,7 +36,38 @@ impl<T, D> Message<T, (), D> {
     }
 }
 
+impl<T, D> AsVersion for Message<T, Version, D> {
+    #[inline]
+    fn version(&self) -> Version {
+        self.marker
+    }
+}
+
 impl<T, M, D> Message<T, M, D> {
+    #[inline]
+    pub fn from_parts(id: D, payload: T, marker: M) -> Self {
+        Self {
+            payload,
+            marker,
+            id,
+        }
+    }
+
+    pub(crate) fn marker(&self) -> M
+    where
+        M: Copy,
+    {
+        self.marker
+    }
+
+    #[inline]
+    pub fn op(&self) -> M
+    where
+        M: Copy,
+    {
+        self.marker
+    }
+
     #[inline]
     pub const fn payload(&self) -> &T {
         &self.payload
@@ -48,39 +79,7 @@ impl<T, M, D> Message<T, M, D> {
     }
 }
 
-impl<T, D> AsVersion for Message<T, Version, D> {
-    #[inline]
-    fn version(&self) -> Version {
-        self.marker
-    }
-}
-
-impl<T, M, D> Message<T, M, D> {
-    pub(crate) fn marker(&self) -> M
-    where
-        M: Copy,
-    {
-        self.marker
-    }
-
-    #[inline]
-    pub fn from_parts(id: D, payload: T, marker: M) -> Self {
-        Self {
-            payload,
-            marker,
-            id,
-        }
-    }
-}
-
-impl<T, M: OpCode + Copy, D> Message<T, M, D> {
-    #[inline]
-    pub fn op(&self) -> M {
-        self.marker
-    }
-}
-
-impl<T, M> std::ops::Deref for Message<T, M> {
+impl<T, M, D> std::ops::Deref for Message<T, M, D> {
     type Target = T;
 
     #[inline]

@@ -22,6 +22,7 @@ pub enum DecodeError {
 }
 
 impl DecodeError {
+    #[inline]
     pub fn message(&self) -> &'static str {
         match self {
             Self::InsufficientSize => "insufficient payload size",
@@ -34,5 +35,12 @@ impl DecodeError {
             Self::MissingFd => "missing fd",
             Self::InvalidVersion => "invalid version",
         }
+    }
+}
+
+impl std::fmt::Display for DecodeError {
+    #[inline]
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.message().fmt(f)
     }
 }

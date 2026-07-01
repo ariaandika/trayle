@@ -53,6 +53,11 @@ impl<'a> RawMessage<'a, u16> {
     }
 
     #[inline]
+    pub fn opcode(&self) -> u16 {
+        self.marker()
+    }
+
+    #[inline]
     pub fn with_op<Op: OpCode>(self) -> Result<Message<Payload<'a>, Op>, DecodeError> {
         let op = Op::try_from_op(self.marker())?;
         Ok(Message::from_parts(
