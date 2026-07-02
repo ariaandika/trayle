@@ -5,7 +5,7 @@ use crate::wayland::interface::{AsInterface, Interface};
 
 use ObjectError as E;
 
-type ObjectEntry = Object<Interface, Version, Handle>;
+pub type ObjectEntry = Object<Interface, Version, Handle>;
 
 const INITIAL_CAP: usize = 32;
 

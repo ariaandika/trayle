@@ -39,6 +39,5 @@ pub mod sys;
 pub mod alloc;
 pub mod collections;
 pub mod wayland;
-pub mod compositor;
 pub mod poller;
 pub mod log;

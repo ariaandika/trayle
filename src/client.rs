@@ -1,15 +1,17 @@
 use std::os::fd::{AsRawFd, OwnedFd};
 use std::task::Poll;
+
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::{Cmsg, WriteError, ReadError};
 use todex::collections::slab::Slab;
 use todex::wayland::primitives::AsObjectId;
-use todex::wayland::{Message, Object, WlError, display};
+use todex::wayland::display;
+use todex::wayland::object::{Objects, Object};
+use todex::wayland::message::{Message, WlMessage};
 use todex::wayland::interface::wl_display::{DeleteId, Error};
 use todex::wayland::interface::DisplayId;
-use todex::wayland::WlMessage;
 use todex::wayland::wire::{Encode, EncodePayload};
-use todex::compositor::objects::Objects;
+use todex::wayland::error::WlError;
 
 use crate::log;
 
