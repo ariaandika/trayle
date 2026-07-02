@@ -2,7 +2,6 @@ use std::task::Poll::{self, *};
 
 use todex::log;
 use todex::sys::bytes::Bytes;
-use todex::collections::slab::Slab;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, global_of, ObjectEntry};
 use todex::wayland::message::{Message, WlMessage};
@@ -13,7 +12,7 @@ use todex::wayland::error::WlError;
 use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
-use crate::wayland::surface::Surface;
+use crate::wayland::Surfaces;
 
 use traits::MessageHandler;
 
@@ -34,11 +33,11 @@ mod prelude {
 mod traits;
 
 mod wl_display;
+mod wl_compositor;
 mod wl_shm;
 mod wl_seat;
 mod wl_data_source;
 mod wl_data_device_manager;
-mod wl_surface;
 mod xdg_shell;
 
 // ===== globals =====
@@ -58,14 +57,14 @@ static GLOBALS: [Global; 5] = {
 
 pub struct Compositor {
     seat: Seat,
-    surfaces: Slab<Surface>,
+    surfaces: Surfaces,
 }
 
 impl Compositor {
     pub fn new() -> Result<Self, FatalError> {
         Ok(Self {
             seat: Seat::new()?,
-            surfaces: Slab::with_capacity(8),
+            surfaces: Surfaces::new(),
         })
     }
 
@@ -153,14 +152,12 @@ dispatcher! {
         CreatePool::handle,
         Release::handle,
     }
-    // ===== seat =====
     WlSeat {
         GetPointer::handle,
         GetKeyboard::handle,
         GetTouch::handle,
         Release::handle,
     }
-    // ===== data =====
     WlDataSource {
         Offer::handle,
         Destroy::handle,
@@ -171,13 +168,20 @@ dispatcher! {
         GetDataDevice::handle,
         Release::handle,
     }
-    // ===== surface =====
-    // WlSurface {
-    //     Attach::handle,
-    //     Destroy::handle,
-    //     Commit::handle,
-    // }
-    // ===== xdg shell =====
+    WlSurface {
+        Destroy::handle,
+        Attach::handle,
+        Damage::handle,
+        Frame::handle,
+        SetOpaqueRegion::handle,
+        SetInputRegion::handle,
+        Commit::handle,
+        SetBufferTransform::handle,
+        SetBufferScale::handle,
+        DamageBuffer::handle,
+        Offset::handle,
+        GetRelease::handle,
+    }
     XdgWmBase {
         Destroy::handle,
         CreatePositioner::handle,

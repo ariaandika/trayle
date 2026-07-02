@@ -20,13 +20,13 @@ pub trait MessageHandler<M>: Sized {
 }
 
 macro_rules! todo_handler {
-    ($($ty:ident),* $(,)?) => {$(
+    ($ty:ident) => {
         impl MessageHandler<$ty> for Compositor {
             fn handle(&mut self, msg: Msg<$ty>, client: &mut ClientMut) -> Result<(), WlError> {
                 self.todo(msg, client)
             }
         }
-    )*};
+    };
 }
 
 pub(crate) use todo_handler;

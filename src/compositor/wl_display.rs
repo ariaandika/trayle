@@ -3,12 +3,10 @@ use wayland::error::BindError;
 
 use wl_display::{GetRegistry, Sync};
 use wl_registry::Bind;
-use wl_compositor::{CreateSurface, CreateRegion, Release};
 
 use crate::compositor::prelude::*;
 use crate::compositor::GLOBALS;
 use crate::compositor::traits::BindEffect;
-use crate::wayland::surface::Surface;
 
 impl MessageHandler<Sync> for Compositor {
     fn handle(&mut self, sync: Msg<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -65,18 +63,4 @@ impl MessageHandler<Bind<'_>> for Compositor {
         }
         dispatch!(WlSeat::bind, WlShm::bind)
     }
-}
-
-impl MessageHandler<CreateSurface> for Compositor {
-    fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
-        let (id, _) = self.surfaces.insert(Surface::None);
-        let handle = Handle::from_idx(id);
-        let _ = client.objects.create_handle(req, handle)?;
-        Ok(())
-    }
-}
-
-todo_handler! {
-    CreateRegion,
-    Release,
 }
