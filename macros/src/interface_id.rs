@@ -1,7 +1,13 @@
 use crate::prelude::*;
 
 pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
-    parser.call(attrs_anon)?;
+    let mod_attrs = parser.call(attrs_anon)?;
+    parser.ident_of("pub")?;
+    parser.ident_of("mod")?;
+    let mod_name = parser.parse::<Ident>()?;
+    parser.punct_of(';')?;
+
+    let enum_attrs = parser.call(attrs_anon)?;
     parser.ident_of("pub")?;
     parser.ident_of("enum")?;
     let name = parser.parse::<Ident>()?;
@@ -29,7 +35,14 @@ pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
         }
     });
 
+    let camel_cased_mod = variants.iter().flat_map(|v|{
+        // NOTE: assuming the module has already declared
+        let v_mod = v.to_snake();
+        g!(pub use super::#v_mod as #v;)
+    });
+
     Ok(g! {
+        @enum_attrs
         #[derive(Debug, Clone, Copy, PartialEq, Eq)]
         pub enum #name {
             @enum_variants
@@ -38,9 +51,9 @@ pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
         impl #name {
             #[doc = " Returns the wayland name."]
             #[inline]
-            pub fn name(&self) -> &'static str {
+            pub const fn name(self) -> &'static str {
                 static LOOKUP: [&'static str; #names_len] = [@names];
-                unsafe { LOOKUP.get_unchecked(*self as usize) }
+                unsafe { *LOOKUP.as_ptr().add(self as usize) }
             }
         }
 
@@ -52,5 +65,10 @@ pub fn impl_interface_id(mut parser: Parser) -> Result<TokenStream, Error> {
         }
 
         @as_interfaces
+
+        @mod_attrs
+        pub mod #mod_name {
+            @camel_cased_mod
+        }
     }.collect())
 }

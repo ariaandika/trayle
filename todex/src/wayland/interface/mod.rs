@@ -102,6 +102,10 @@ mod xdg_shell;
 pub use Interface as InterfaceId;
 
 macros::interface_id! {
+    /// Reexport interface modules as upper camel case.
+    pub mod camel_cased;
+
+    /// Interface definitions id.
     pub enum Interface;
 
     WlDisplay,
