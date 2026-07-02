@@ -5,9 +5,9 @@ use todex::sys::bytes::Bytes;
 use todex::collections::slab::Slab;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, global_of, ObjectEntry};
-use todex::wayland::message::WlMessage;
+use todex::wayland::message::{Message, WlMessage};
 use todex::wayland::interface::{self, AsInterface, DisplayId, Interface};
-use todex::wayland::wire::{RawMessage, AsOpCode};
+use todex::wayland::wire::{AsOpCode, OpCode, Payload};
 use todex::wayland::error::WlError;
 
 use crate::error::FatalError;
@@ -74,7 +74,7 @@ impl Compositor {
         read_buf: &mut Bytes,
         client: &mut ClientMut,
     ) -> Poll<Result<(), ()>> {
-        let Ready(result) = RawMessage::decode_with(read_buf) else {
+        let Ready(result) = Message::get_message(read_buf) else {
             return Pending;
         };
 
@@ -210,16 +210,14 @@ macro_rules! dispatcher {
             fn route(
                 &mut self,
                 obj: ObjectEntry,
-                msg: RawMessage<'_>,
+                msg: Message<Payload<'_>, u16>,
                 client: &mut ClientMut,
             ) -> Result<(), WlError> {
                 use interface::*;
                 match obj.interface() {
                     $(Interface::$iface => {
                         use interface::camel_cased::$iface::{*, RequestOp};
-                        let msg = msg.with_op()?;
-                        let obj = obj.with_type::<$iface>();
-                        match msg.op() {
+                        match <_>::try_from_op(msg.opcode())? {
                             $(RequestOp::$msg => {
                                 log::debug!(
                                     "client#{} <- {}::{}(..)",
@@ -228,7 +226,9 @@ macro_rules! dispatcher {
                                     $msg::OPNAME,
                                 );
                                 let id = msg.object_id();
-                                self.$h(msg.decode_payload::<_, $msg>(client.read_fd, obj.version())?, client)?;
+                                let payload = msg.decode_payload::<_, $msg>(client.read_fd)?;
+                                let msg = Message::from_parts(obj.handle(), payload, obj.version());
+                                self.$h(msg, client)?;
                                 if $msg::IS_DESTRUCTOR {
                                     client.delete_id(id);
                                 }
@@ -236,7 +236,7 @@ macro_rules! dispatcher {
                             })*
                         }
                     })*
-                    _ => self.todo_interface(obj.interface(), msg.op(), client),
+                    _ => self.todo_interface(obj.interface(), msg.meta(), client),
                 }
             }
         }

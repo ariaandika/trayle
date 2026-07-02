@@ -2,9 +2,9 @@ use std::task::Poll::{*, self};
 
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
-use crate::wayland::primitives::{AsObjectId, ObjectId, Version};
+use crate::wayland::primitives::{ObjectId};
 use crate::wayland::message::Message;
-use crate::wayland::wire::{DecodeError, OpCode, Reader};
+use crate::wayland::wire::{DecodeError, Reader};
 
 use DecodeError as E;
 
@@ -23,17 +23,14 @@ pub trait DecodePayload {
     ) -> Result<Self::Output<'a>, DecodeError>;
 }
 
-// ===== RawMessage =====
+// ===== Payload =====
 
 #[derive(Debug, Clone, Copy)]
 pub struct Payload<'a>(&'a [u8]);
 
-/// A decodable raw bytes message.
-pub type RawMessage<'a, Op = u16> = Message<Payload<'a>, Op>;
-
-impl<'a> RawMessage<'a, u16> {
+impl<'a> Message<Payload<'a>, u16> {
     #[inline]
-    pub fn decode_with(bytes: &'a mut Bytes) -> Poll<Result<Self, DecodeError>> {
+    pub fn get_message(bytes: &'a mut Bytes) -> Poll<Result<Self, DecodeError>> {
         let Some(header) = bytes.first_chunk::<8>() else {
             return Pending;
         };
@@ -52,38 +49,23 @@ impl<'a> RawMessage<'a, u16> {
     }
 
     #[inline]
-    pub fn opcode(&self) -> u16 {
-        self.meta()
-    }
-
-    #[inline]
-    pub fn with_op<Op: OpCode>(self) -> Result<Message<Payload<'a>, Op>, DecodeError> {
-        let op = Op::try_from_op(self.meta())?;
-        Ok(Message::from_parts(
-            self.object_id(),
-            self.into_payload(),
-            op,
-        ))
-    }
-}
-
-impl<'a, Op> RawMessage<'a, Op> {
-    #[inline]
     pub fn decode_payload<const N: usize, P>(
         self,
         cmsg: &mut Cmsg,
-        version: Version,
-    ) -> Result<Message<P::Output<'a>, Version>, DecodeError>
+    ) -> Result<P::Output<'a>, DecodeError>
     where
         P: DecodePayload<Fd = [i32; N]>,
     {
-        Ok(Message::from_parts(
-            self.object_id(),
-            P::decode_payload(
-                Reader::new(self.into_payload().0),
-                cmsg.read_chunk().ok_or(DecodeError::MissingFd)?,
-            )?,
-            version,
-        ))
+        P::decode_payload(
+            Reader::new(self.into_payload().0),
+            cmsg.read_chunk().ok_or(DecodeError::MissingFd)?,
+        )
+    }
+}
+
+impl<T, D> Message<T, u16, D> {
+    #[inline]
+    pub fn opcode(&self) -> u16 {
+        self.meta()
     }
 }

@@ -1,5 +1,5 @@
 use todex::wayland::primitives::Version;
-use todex::wayland::object::Object;
+use todex::wayland::object::{Handle, Object};
 use todex::wayland::message::Message;
 use todex::wayland::error::WlError;
 
@@ -12,11 +12,11 @@ use crate::client::ClientMut;
 /// Contains payload, version, and object id.
 ///
 /// Version is used for creating object with new id.
-pub type Msg<M> = Message<M, Version>;
+pub type Msg<M> = Message<M, Version, Handle>;
 
 /// Handle incoming message.
-pub trait MessageHandler<Request>: Sized {
-    fn handle(&mut self, msg: Msg<Request>, client: &mut ClientMut) -> Result<(), WlError>;
+pub trait MessageHandler<M>: Sized {
+    fn handle(&mut self, msg: Msg<M>, client: &mut ClientMut) -> Result<(), WlError>;
 }
 
 macro_rules! todo_handler {

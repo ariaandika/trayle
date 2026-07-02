@@ -19,7 +19,7 @@ pub use error::DecodeError;
 pub use opcode::{AsOpCode, OpCode};
 pub use read::{Read, Reader};
 pub use write::{Write, Writer, Sized2};
-pub use decode::{DecodePayload, Payload, RawMessage};
+pub use decode::{DecodePayload, Payload};
 pub use encode::{Encode, EncodePayload};
 
 mod error;
