@@ -18,21 +18,17 @@ pub trait Expect {
 
 pub type Result<T, E = Error> = std::result::Result<T, E>;
 
-pub struct Error(Literal);
-
-impl Spanned for Error {
-    fn span(&self) -> Span {
-        self.0.span()
-    }
-
-    fn set_span(&mut self, span: Span) {
-        self.0.set_span(span);
-    }
+pub struct Error {
+    msg: Literal,
+    span: Span,
 }
 
 impl Error {
     pub fn new<M: AsRef<str>, S: Spanned>(msg: M, span: S) -> Self {
-        Self(Literal::string(msg.as_ref()).spanned(span.span()))
+        Self {
+            msg: Literal::string(msg.as_ref()),
+            span: span.span(),
+        }
     }
 
     pub fn new_site<M: AsRef<str>>(msg: M) -> Self {
@@ -41,12 +37,13 @@ impl Error {
 
     fn generate(&self) -> impl Iterator<Item = TokenTree> + Clone {
         [
-            Ident::new("compile_error", self.span()).into(),
+            Ident::new("compile_error", self.span).into(),
             Punct::new('!', Spacing::Alone).into(),
             Group::new(
                 Delimiter::Parenthesis,
-                <_>::from_iter(Some(TokenTree::from(self.0.clone()))),
+                <_>::from_iter(Some(TokenTree::from(self.msg.clone()))),
             )
+            .spanned(self.span)
             .into(),
             Punct::new(';', Spacing::Alone).into(),
         ]
