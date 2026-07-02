@@ -58,11 +58,12 @@ impl Parse for Enum {
             let disc = if parser.next_punct_of('=').is_some() {
                 parser.parse()?
             } else {
-                Literal::u32_unsuffixed({
-                    let i_ = i;
-                    i += 1;
-                    i_
-                })
+                if is_bitfield {
+                    return Err(Error::new("bitfield enum must have explicit value", wl_variant))
+                }
+                let i_ = i;
+                i += 1;
+                Literal::u32_unsuffixed(i_)
             };
 
             let variant = wl_variant.to_camel();

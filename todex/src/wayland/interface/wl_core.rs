@@ -188,8 +188,8 @@ interface! {
 
     #[bitfield]
     pub enum Mode {
-        current,
-        preferred,
+        current = 1,
+        preferred = 2,
     }
 }
 
@@ -261,9 +261,9 @@ interface! {
 
     #[bitfield]
     pub enum Capability {
-        pointer,
-        keyboard,
-        touch,
+        pointer = 1,
+        keyboard = 2,
+        touch = 4,
     }
 
     pub enum Error {
