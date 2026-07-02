@@ -1,12 +1,14 @@
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsNewId, NewId};
-use crate::wayland::interface::{AsInterface, Interface};
+use crate::wayland::interface::{AsInterface, Interface, WlInterface};
 use crate::wayland::wire::AsOpCode;
 
 // ===== trait =====
 
 /// Type that represent wayland message.
 pub trait WlMessage: AsInterface + AsOpCode {
+    type WlInterface: WlInterface;
+
     const IS_REQUEST: bool;
 
     const IS_EVENT: bool = !Self::IS_REQUEST;
@@ -120,6 +122,8 @@ impl<T: AsOpCode, M, D> AsOpCode for Message<T, M, D> {
 }
 
 impl<T: WlMessage, M, D> WlMessage for Message<T, M, D> {
+    type WlInterface = T::WlInterface;
+
     const IS_REQUEST: bool = T::IS_REQUEST;
 
     const IS_EVENT: bool = T::IS_EVENT;

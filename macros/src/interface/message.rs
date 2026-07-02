@@ -3,7 +3,7 @@ use crate::interface::*;
 
 pub struct Message<'a> {
     pub is_request: bool,
-    pub opkind: Ident,
+    pub iface: &'a Interface,
     pub op: &'a Op,
     pub fd: Option<&'a Arg>,
 }
@@ -13,13 +13,12 @@ fn encodables(op: &Op) -> std::iter::Filter<std::slice::Iter<'_, Arg>, fn(&&Arg)
 }
 
 impl<'a> Message<'a> {
-    pub fn new(opcode: &OpCode, op: &'a Op) -> Self {
+    pub fn new(iface: &'a Interface, op: &'a Op) -> Self {
         let is_request = matches!(op.kind, OpKind::Request);
-        let opkind = opcode.name.clone();
         let fd = op.fd_idx.map(|i|&op.args[i]);
         Self {
             is_request,
-            opkind,
+            iface,
             op,
             fd,
         }
@@ -45,14 +44,15 @@ impl<'a> Message<'a> {
         }
     }
 
-    pub fn gen_as_interface(&self, iface: &Ident) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.op_name;
+    pub fn gen_as_interface(&self) -> impl Iterator<Item = TokenTree> + use<> {
+        let iface_name = &self.iface.iface_name;
+        let op_name = &self.op.op_name;
         let lf_ph = &self.op.lf_ph;
         g! {
-            impl AsInterface for #name @lf_ph {
+            impl AsInterface for #op_name @lf_ph {
                 #[inline]
                 fn interface(&self) -> Interface {
-                    Interface::#iface
+                    Interface::#iface_name
                 }
             }
         }
@@ -80,9 +80,13 @@ impl<'a> Message<'a> {
 
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let opkind = &self.opkind;
         let lf_ph = &self.op.lf_ph;
         let wl_string = Literal::string(self.op.wl_name.as_str());
+        let opkind = Ident::new(match self.op.kind {
+            OpKind::Request => "RequestOp",
+            OpKind::Event => "EventOp",
+        }, Span::call_site());
+
         g! {
             impl AsOpCode for #name @lf_ph {
                 type OpCode = #opkind;
@@ -93,6 +97,7 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_wl_message(&self) -> impl Iterator<Item = TokenTree> + use<> {
+        let iface_name = &self.iface.iface_name;
         let name = &self.op.op_name;
         let is_request = Bool(self.is_request);
         let lf_ph = &self.op.lf_ph;
@@ -104,6 +109,7 @@ impl<'a> Message<'a> {
         });
         g! {
             impl WlMessage for #name @lf_ph {
+                type WlInterface = #iface_name;
                 const IS_REQUEST: bool = #is_request;
                 @destructor
                 @since

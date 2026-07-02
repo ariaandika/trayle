@@ -51,8 +51,8 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
         .chain(evop.gen_enum())
         .chain(evop.gen_display())
         .chain(evop.gen_opcode_trait())
-        .chain(gen_messages(iface_name, &rqop))
-        .chain(gen_messages(iface_name, &evop))
+        .chain(gen_messages(&iface, &rqop))
+        .chain(gen_messages(&iface, &evop))
         .chain(ctr.gen_constructor())
         .chain(enums.generate())
         .map_group(Delimiter::Brace)
@@ -60,14 +60,17 @@ pub fn impl_interface(mut parser: Parser) -> Result<TokenStream, Error> {
         .collect())
 }
 
-fn gen_messages(iface: &Ident, opcode: &OpCode) -> impl Iterator<Item = TokenTree> {
+fn gen_messages<'a>(
+    iface: &'a Interface,
+    opcode: &'a OpCode,
+) -> impl Iterator<Item = TokenTree> + 'a {
     opcode
         .ops
         .iter()
-        .map(move |op| Message::new(opcode, op))
+        .map(move |op| Message::new(iface, op))
         .flat_map(move |m| {
             m.gen_struct()
-                .chain(m.gen_as_interface(iface))
+                .chain(m.gen_as_interface())
                 .chain(m.gen_as_opcode())
                 .chain(m.gen_as_newid())
                 .chain(m.gen_wl_message())
