@@ -98,6 +98,18 @@ impl Bytes {
         self.len = 0;
         self.off = 0;
     }
+
+    #[inline]
+    pub fn split_to(&mut self, len: usize) -> Option<&[u8]> {
+        if len > self.len {
+            return None;
+        }
+        // SAFETY: len <= self.len
+        unsafe {
+            self.advance_unchecked(len);
+            Some(slice::from_raw_parts(self.ptr.as_ptr().sub(len), len))
+        }
+    }
 }
 
 impl Bytes {

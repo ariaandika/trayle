@@ -42,12 +42,11 @@ impl<'a> RawMessage<'a, u16> {
         };
         let hdr2 = u32::from_ne_bytes(*header.last_chunk().unwrap());
         let len = hdr2 >> u16::BITS;
-        let Some(body_len) = len.checked_sub(8) else {
-            return Ready(Err(E::InsufficientSize));
-        };
-        // bytes.split
-        let Some(payload) = bytes.get(..body_len as usize) else {
+        let Some(msg) = bytes.split_to(len as usize) else {
             return Pending;
+        };
+        let Some(payload) = msg.get(8..) else {
+            return Ready(Err(E::InsufficientSize));
         };
         Ready(Ok(Message::from_parts(id, Payload(payload), hdr2 as u16)))
     }
