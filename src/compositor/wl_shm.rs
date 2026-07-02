@@ -1,6 +1,6 @@
-use wayland::interface::wl_shm::{FormatEnum, WlShm};
+use wl_shm::{FormatEnum, WlShm, CreatePool, Release};
 
-use crate::compositor::BindEffect;
+use crate::compositor::traits::BindEffect;
 use crate::compositor::prelude::*;
 
 impl BindEffect<WlShm> for Compositor {
@@ -10,3 +10,16 @@ impl BindEffect<WlShm> for Compositor {
         Ok(())
     }
 }
+
+impl MessageHandler<CreatePool> for Compositor {
+    fn handle(&mut self, msg: Msg<CreatePool>, client: &mut ClientMut) -> Result<(), WlError> {
+        self.todo(msg, client)
+    }
+}
+
+impl MessageHandler<Release> for Compositor {
+    fn handle(&mut self, msg: Msg<Release>, client: &mut ClientMut) -> Result<(), WlError> {
+        self.todo(msg, client)
+    }
+}
+

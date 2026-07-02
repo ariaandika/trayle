@@ -1,13 +1,11 @@
-use wayland::interface::xdg_wm_base::{CreatePositioner, GetXdgSurface, Pong};
-use wayland::interface::xdg_surface;
-use wayland::interface::xdg_toplevel;
+use xdg_wm_base::{CreatePositioner, GetXdgSurface, Pong};
 
 use crate::compositor::prelude::*;
 
 macro_rules! ignore {
     ($req:ty) => {
-        impl RequestHandler<$req> for Compositor {
-            fn handle(&mut self, _: Operation<$req>, _: &mut ClientMut) -> Result<(), WlError> {
+        impl MessageHandler<$req> for Compositor {
+            fn handle(&mut self, _: Msg<$req>, _: &mut ClientMut) -> Result<(), WlError> {
                 Ok(())
             }
         }
@@ -16,8 +14,8 @@ macro_rules! ignore {
 
 macro_rules! insert {
     ($req:ty) => {
-        impl RequestHandler<$req> for Compositor {
-            fn handle(&mut self, req: Operation<$req>, client: &mut ClientMut) -> Result<(), WlError> {
+        impl MessageHandler<$req> for Compositor {
+            fn handle(&mut self, req: Msg<$req>, client: &mut ClientMut) -> Result<(), WlError> {
                 let _ = client.objects.create(req)?;
                 Ok(())
             }

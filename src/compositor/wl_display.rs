@@ -1,4 +1,3 @@
-use wayland::interface::AsInterface;
 use wayland::object::Handle;
 use wayland::error::BindError;
 
@@ -7,11 +6,12 @@ use wl_registry::Bind;
 use wl_compositor::{CreateSurface, CreateRegion, Release};
 
 use crate::compositor::prelude::*;
-use crate::compositor::{BindEffect, GLOBALS};
+use crate::compositor::GLOBALS;
+use crate::compositor::traits::BindEffect;
 use crate::wayland::surface::Surface;
 
-impl RequestHandler<Sync> for Compositor {
-    fn handle(&mut self, sync: Req<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<Sync> for Compositor {
+    fn handle(&mut self, sync: Msg<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_callback = client.objects.use_one(sync.callback);
         client.send(wl_callback.done(0));
         client.delete_id(wl_callback);
@@ -19,8 +19,8 @@ impl RequestHandler<Sync> for Compositor {
     }
 }
 
-impl RequestHandler<GetRegistry> for Compositor {
-    fn handle(&mut self, msg: Req<GetRegistry>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<GetRegistry> for Compositor {
+    fn handle(&mut self, msg: Msg<GetRegistry>, client: &mut ClientMut) -> Result<(), WlError> {
         let wl_registry = client.objects.create(msg)?;
         for (global, i) in GLOBALS.iter().zip(0..) {
             client.send(wl_registry.global(i, global.name(), global.version().to_u32()));
@@ -29,8 +29,8 @@ impl RequestHandler<GetRegistry> for Compositor {
     }
 }
 
-impl RequestHandler<Bind<'_>> for Compositor {
-    fn handle(&mut self, bind: Req<Bind<'_>>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<Bind<'_>> for Compositor {
+    fn handle(&mut self, bind: Msg<Bind<'_>>, client: &mut ClientMut) -> Result<(), WlError> {
         let Some(global) = GLOBALS.get(bind.name as usize) else {
             return Err(BindError::UnknownName.into());
         };
@@ -67,8 +67,8 @@ impl RequestHandler<Bind<'_>> for Compositor {
     }
 }
 
-impl RequestHandler<CreateSurface> for Compositor {
-    fn handle(&mut self, req: Req<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<CreateSurface> for Compositor {
+    fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
         let (id, _) = self.surfaces.insert(Surface::None);
         let handle = Handle::from_idx(id);
         let _ = client.objects.create_handle(req, handle)?;
@@ -76,14 +76,7 @@ impl RequestHandler<CreateSurface> for Compositor {
     }
 }
 
-impl RequestHandler<CreateRegion> for Compositor {
-    fn handle(&mut self, req: Req<CreateRegion>, client: &mut ClientMut) -> Result<(), WlError> {
-        Err(self.todo(req, client))
-    }
-}
-
-impl RequestHandler<Release> for Compositor {
-    fn handle(&mut self, req: Req<Release>, client: &mut ClientMut) -> Result<(), WlError> {
-        Err(self.todo(req, client))
-    }
+todo_handler! {
+    CreateRegion,
+    Release,
 }

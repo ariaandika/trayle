@@ -3,12 +3,11 @@ use std::task::Poll::{self, *};
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::collections::slab::Slab;
-use todex::wayland;
-use todex::wayland::primitives::{AsObjectId, AsVersion, Version};
-use todex::wayland::object::{Global, Handle, Object, global_of};
-use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::wire::{Payload, RawMessage};
-use todex::wayland::interface::{self, DisplayId, Interface, WlInterface, AsInterface};
+use todex::wayland::primitives::{AsObjectId, AsVersion};
+use todex::wayland::object::{Global, global_of, ObjectEntry};
+use todex::wayland::message::WlMessage;
+use todex::wayland::interface::{self, AsInterface, DisplayId, Interface};
+use todex::wayland::wire::{RawMessage, AsOpCode};
 use todex::wayland::error::WlError;
 
 use crate::error::FatalError;
@@ -16,9 +15,9 @@ use crate::seat::Seat;
 use crate::client::ClientMut;
 use crate::wayland::surface::Surface;
 
-mod prelude {
-    use super::{Version, Message};
+use traits::MessageHandler;
 
+mod prelude {
     pub(super) use todex::wayland;
     pub(super) use todex::wayland::primitives::AsVersion;
     pub(super) use todex::wayland::object::Object;
@@ -28,12 +27,11 @@ mod prelude {
 
     pub(super) use crate::client::ClientMut;
 
-    pub(super) type Op<I> = Message<I, Version>;
-    pub(super) type Operation<I> = Message<I, Version>;
-
     pub(super) use super::Compositor;
-    pub(super) use super::{RequestHandler, RequestMsg as Req};
+    pub(super) use super::traits::{MessageHandler, Msg, todo_handler};
 }
+
+mod traits;
 
 mod wl_display;
 mod wl_shm;
@@ -43,22 +41,10 @@ mod wl_data_device_manager;
 mod wl_surface;
 mod xdg_shell;
 
-// ===== traits =====
-
-type RequestMsg<M> = Message<M, Version>;
-
-trait RequestHandler<Request>: Sized {
-    fn handle(&mut self, req: RequestMsg<Request>, client: &mut ClientMut) -> Result<(), WlError>;
-}
-
-trait BindEffect<Interface> {
-    fn bind(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), WlError>;
-}
-
 // ===== globals =====
 
 static GLOBALS: [Global; 5] = {
-    use wayland::interface::*;
+    use interface::*;
     [
         global_of::<WlCompositor>(),
         global_of::<WlShm>(),
@@ -107,183 +93,153 @@ impl Compositor {
             Ok(ok) => ok,
             Err(err) => {
                 log::error!("client#{} failed to lookup object#{id}: {err}", client.id);
-                client.send_error(id, err.into());
+                client.send_error(DisplayId, err.into());
                 return Ready(Err(()));
-            },
+            }
         };
 
         let iface = obj.interface();
         match self.route(obj, msg, client) {
             Ok(_) => Ready(Ok(())),
             Err(err) => {
-                log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
-                client.send_error(id, err);
+                if !matches!(err, WlError::NotYetImplemented) {
+                    log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
+                    client.send_error(id, err);
+                }
                 Ready(Err(()))
             }
         }
     }
 
-    fn route(
+    fn todo<T, M: WlMessage>(
         &mut self,
-        obj: Object<Interface, Version, Handle>,
-        msg: RawMessage<'_>,
+        msg: prelude::Msg<M>,
         client: &mut ClientMut,
-    ) -> Result<(), WlError> {
-        use wayland::interface::*;
-        macro_rules! dispatch {
-            (
-                |$ob:ident|$exp:expr,
-                ||$todo:expr,
-                $($iface:ident,)*
-            ) => {
-                match obj.interface() {
-                    $(InterfaceId::$iface => {
-                        let $ob = obj.with_type::<$iface>();
-                        $exp
-                    },)*
-                    _ => $todo,
-                }
-            };
-        }
-        // see dispatcher below to lookup the handler
-        dispatch! {
-            |ob|self.dispatch(ob, msg.with_op()?, client),
-            ||self.todo_interface(obj.interface(), msg.op(), client),
-            WlDisplay,
-            WlRegistry,
-            WlCompositor,
-            // WlShm,
-            WlSeat,
-            WlDataSource,
-            WlDataDeviceManager,
-        }
+    ) -> Result<T, WlError> {
+        let iface = msg.interface();
+        let op = M::OPNAME;
+        log::error!("client#{} {iface}::{op} is not yet implemented", client.id);
+        client.send_error(DisplayId, WlError::NotYetImplemented);
+        Err(WlError::NotYetImplemented)
+    }
+
+    fn todo_interface<T>(
+        &mut self,
+        iface: Interface,
+        op: u16,
+        client: &mut ClientMut,
+    ) -> Result<T, WlError> {
+        log::error!("client#{} {iface}::{op} is not yet implemented", client.id);
+        client.send_error(DisplayId, WlError::NotYetImplemented);
+        Err(WlError::NotYetImplemented)
     }
 }
 
 // one can use goto definition on the method calls
 dispatcher! {
-    wl_display {
+    WlDisplay {
         Sync::handle,
         GetRegistry::handle,
     }
-    wl_registry {
+    WlRegistry {
         Bind::handle,
     }
-    wl_compositor {
+    WlCompositor {
         CreateSurface::handle,
         CreateRegion::handle,
         Release::handle,
     }
-//     wl_shm {
-//         CreatePool,
-//         Release,
-//     }
+    WlShm {
+        CreatePool::handle,
+        Release::handle,
+    }
     // ===== seat =====
-    wl_seat {
+    WlSeat {
         GetPointer::handle,
         GetKeyboard::handle,
         GetTouch::handle,
         Release::handle,
     }
     // ===== data =====
-    wl_data_source {
+    WlDataSource {
         Offer::handle,
         Destroy::handle,
         SetActions::handle,
     }
-    wl_data_device_manager {
+    WlDataDeviceManager {
         CreateDataSource::handle,
         GetDataDevice::handle,
         Release::handle,
     }
-    // // ===== surface =====
-    // wl_surface {
+    // ===== surface =====
+    // WlSurface {
+    //     Attach::handle,
+    //     Destroy::handle,
     //     Commit::handle,
     // }
     // ===== xdg shell =====
-    xdg_wm_base {
+    XdgWmBase {
         Destroy::handle,
         CreatePositioner::handle,
         GetXdgSurface::handle,
         Pong::handle,
     }
-    xdg_surface {
+    XdgSurface {
         Destroy::handle,
         GetToplevel::handle,
         GetPopup::handle,
         SetWindowGeometry::handle,
         AckConfigure::handle,
     }
-    // xdg_toplevel {
+    // XdgToplevel {
     //     SetTitle::handle,
     //     SetAppId::handle,
     //     .. todo_interface,
     // }
 }
 
-impl Compositor {
-    pub fn todo_interface<T>(
-        &mut self,
-        iface: Interface,
-        op: u16,
-        client: &mut ClientMut,
-    ) -> Result<T, WlError> {
-        log::error!("client#{} {iface}::{op} is not yet implemented", client.id,);
-        Err(WlError::NotYetImplemented)
-    }
-
-    pub fn todo<R: WlMessage>(&mut self, req: R, client: &mut ClientMut) -> WlError {
-        log::error!(
-            "client#{} {}::{} is not yet implemented",
-            client.id,
-            R::OPNAME,
-            req.interface(),
-        );
-        WlError::NotYetImplemented
-    }
-}
-
 // ===== dispatch =====
-
-type DispatchObj<I> = Object<I, Version, Handle>;
-
-type DispatchMsg<'a, I> = Message<Payload<'a>, <I as WlInterface>::RequestOp>;
-
-trait Dispatcher<Interface: WlInterface>: Sized {
-    fn dispatch(
-        &mut self,
-        obj: DispatchObj<Interface>,
-        msg: DispatchMsg<'_, Interface>,
-        client: &mut ClientMut,
-    ) -> Result<(), WlError>;
-}
 
 macro_rules! dispatcher {
     ($(
-        $imod:ident {
+        $iface:ident {
             $($msg:ident::$h:ident),* $(,)?
         }
-    )*) => {$(
-        impl Dispatcher<interface::$imod::InterfaceType> for Compositor {
-            fn dispatch(
+    )*) => {
+        impl Compositor {
+            fn route(
                 &mut self,
-                obj: DispatchObj<interface::$imod::InterfaceType>,
-                msg: DispatchMsg<'_, interface::$imod::InterfaceType>,
+                obj: ObjectEntry,
+                msg: RawMessage<'_>,
                 client: &mut ClientMut,
             ) -> Result<(), WlError> {
-                use interface::$imod::{*, RequestOp as Op};
-                match msg.op() {$(
-                    Op::$msg => {
-                        let id = msg.object_id();
-                        self.$h(msg.decode_payload::<_, $msg>(client.read_fd, obj.version())?, client)?;
-                        if $msg::IS_DESTRUCTOR {
-                            client.delete_id(id);
+                use interface::*;
+                match obj.interface() {
+                    $(Interface::$iface => {
+                        use interface::camel_cased::$iface::{*, RequestOp};
+                        let msg = msg.with_op()?;
+                        let obj = obj.with_type::<$iface>();
+                        match msg.op() {
+                            $(RequestOp::$msg => {
+                                log::debug!(
+                                    "client#{} <- {}::{}(..)",
+                                    client.id,
+                                    Interface::$iface,
+                                    $msg::OPNAME,
+                                );
+                                let id = msg.object_id();
+                                self.$h(msg.decode_payload::<_, $msg>(client.read_fd, obj.version())?, client)?;
+                                if $msg::IS_DESTRUCTOR {
+                                    client.delete_id(id);
+                                }
+                                Ok(())
+                            })*
                         }
-                        Ok(())
-                    }
-                )*}
+                    })*
+                    _ => self.todo_interface(obj.interface(), msg.op(), client),
+                }
             }
         }
-    )*};
+    };
 }
 use dispatcher;

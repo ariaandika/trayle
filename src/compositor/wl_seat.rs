@@ -3,7 +3,7 @@ use todex::bitflags::Flags;
 use wl_keyboard::{KeymapFormat, RepeatInfo};
 use wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};
 
-use crate::compositor::BindEffect;
+use crate::compositor::traits::BindEffect;
 use crate::compositor::prelude::*;
 
 impl BindEffect<WlSeat> for Compositor {
@@ -14,8 +14,8 @@ impl BindEffect<WlSeat> for Compositor {
     }
 }
 
-impl RequestHandler<GetPointer> for Compositor {
-    fn handle(&mut self, req: Op<GetPointer>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<GetPointer> for Compositor {
+    fn handle(&mut self, req: Msg<GetPointer>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::POINTER) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
@@ -24,8 +24,8 @@ impl RequestHandler<GetPointer> for Compositor {
     }
 }
 
-impl RequestHandler<GetKeyboard> for Compositor {
-    fn handle(&mut self, req: Op<GetKeyboard>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<GetKeyboard> for Compositor {
+    fn handle(&mut self, req: Msg<GetKeyboard>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::KEYBOARD) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
@@ -42,8 +42,8 @@ impl RequestHandler<GetKeyboard> for Compositor {
     }
 }
 
-impl RequestHandler<GetTouch> for Compositor {
-    fn handle(&mut self, req: Op<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<GetTouch> for Compositor {
+    fn handle(&mut self, req: Msg<GetTouch>, client: &mut ClientMut) -> Result<(), WlError> {
         if !self.seat.capability().contains(Capability::TOUCH) {
             return Err(wl_seat::Error::MissingCapability.into());
         }
@@ -52,8 +52,8 @@ impl RequestHandler<GetTouch> for Compositor {
     }
 }
 
-impl RequestHandler<wl_seat::Release> for Compositor {
-    fn handle(&mut self, _: Op<wl_seat::Release>, _: &mut ClientMut) -> Result<(), WlError> {
+impl MessageHandler<wl_seat::Release> for Compositor {
+    fn handle(&mut self, _: Msg<wl_seat::Release>, _: &mut ClientMut) -> Result<(), WlError> {
         // idk what need to do here, perhaps there can be ref count for the seat instance ?
         Ok(())
     }

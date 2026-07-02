@@ -1,25 +1,21 @@
-use wl_data_source::{Offer, Destroy, SetActions};
+use wl_data_source::{Destroy, Offer, SetActions};
 
 use crate::compositor::prelude::*;
 
-impl RequestHandler<Offer<'_>> for Compositor {
-    fn handle(&mut self, req: Operation<Offer>, client: &mut ClientMut) -> Result<(), WlError> {
-        Err(self.todo(req, client))
+impl MessageHandler<Offer<'_>> for Compositor {
+    fn handle(&mut self, _msg: Msg<Offer>, _client: &mut ClientMut) -> Result<(), WlError> {
+        Err(WlError::NotYetImplemented)
     }
 }
 
-impl RequestHandler<Destroy> for Compositor {
-    fn handle(&mut self, req: Operation<Destroy>, client: &mut ClientMut) -> Result<(), WlError> {
-        Err(self.todo(req, client))
+impl MessageHandler<Destroy> for Compositor {
+    fn handle(&mut self, _msg: Msg<Destroy>, _client: &mut ClientMut) -> Result<(), WlError> {
+        Err(WlError::NotYetImplemented)
     }
 }
 
-impl RequestHandler<SetActions> for Compositor {
-    fn handle(
-        &mut self,
-        req: Operation<SetActions>,
-        client: &mut ClientMut,
-    ) -> Result<(), WlError> {
-        Err(self.todo(req, client))
+impl MessageHandler<SetActions> for Compositor {
+    fn handle(&mut self, _msg: Msg<SetActions>, _client: &mut ClientMut) -> Result<(), WlError> {
+        Err(WlError::NotYetImplemented)
     }
 }
