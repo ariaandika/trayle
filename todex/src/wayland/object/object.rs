@@ -114,6 +114,11 @@ impl<I: AsInterface, M, D> AsInterface for Object<I, M, D> {
 }
 
 impl<M, D> Object<Interface, M, D> {
+    /// Convert the `Interface` value to type safe interface.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the interface type does not match with the contained `Interface`.
     #[inline]
     pub fn with_type<I2: InterfaceMarker>(self) -> Object<I2, M, D> {
         Object {

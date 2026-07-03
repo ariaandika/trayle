@@ -67,7 +67,10 @@ pub struct ShmPool {
 
 impl ShmPool {
     pub fn new(fd: i32, size: i32) -> Result<Self, Error> {
-        let mem = Memmap::new(fd, size as usize).map_err(|_| Error::InvalidFd)?;
+        let mem = Memmap::new(fd, size as usize).map_err(|e| {
+            println!("ERROR: {fd}, {e}");
+            Error::InvalidFd
+        })?;
         // SAFETY: mmap call success indicate valid fd
         let fd = unsafe { OwnedFd::from_raw_fd(fd) };
         Ok(Self {

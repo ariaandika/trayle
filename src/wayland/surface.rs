@@ -1,11 +1,10 @@
-use todex::wayland::interface::wl_surface::Damage;
+use todex::wayland::interface::wl_surface::{Damage, Error};
 use todex::wayland::object::Handle;
 
 pub struct Surface {
     states: [State; 2],
     current: bool,
-    #[expect(dead_code)]
-    kind: SurfaceKind,
+    role: Role,
 }
 
 impl Surface {
@@ -13,12 +12,21 @@ impl Surface {
         Self {
             states: [State::new(), State::new()],
             current: false,
-            kind: SurfaceKind::None,
+            role: Role::None,
         }
     }
 
     fn current_mut(&mut self) -> &mut State {
         &mut self.states[self.current as usize]
+    }
+
+    pub fn set_role(&mut self, role: Role) -> Result<(), RoleOverwrite> {
+        if self.role.is_none() && !role.is_none() {
+            self.role = role;
+            Ok(())
+        } else {
+            Err(RoleOverwrite)
+        }
     }
 
     pub fn attach(&mut self, buffer: Option<Handle>) {
@@ -63,19 +71,23 @@ impl State {
     }
 }
 
-// ===== SurfaceKind =====
+// ===== Role =====
 
-pub enum SurfaceKind {
+/// An error that occur when overwriting surface role.
+#[derive(Debug)]
+pub struct RoleOverwrite;
+
+/// Surface role.
+#[derive(Debug, Clone, Copy)]
+pub enum Role {
     None,
-    #[expect(dead_code)]
-    XdgToplevel(XdgToplevel),
+    XdgToplevel,
 }
 
-#[expect(dead_code)]
-#[derive(Debug)]
-pub struct XdgToplevel {
-    pub title: Box<str>,
-    pub app_id: Box<str>,
+impl Role {
+    pub fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
 }
 
 // ===== Region =====

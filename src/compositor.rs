@@ -12,7 +12,7 @@ use todex::wayland::error::WlError;
 use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
-use crate::wayland::{Buffers, ShmPools, Surfaces};
+use crate::wayland::{Buffers, ShmPools, Surfaces, XdgSurfaces};
 
 use traits::MessageHandler;
 
@@ -57,9 +57,10 @@ static GLOBALS: [Global; 5] = {
 
 pub struct Compositor {
     seat: Seat,
-    surfaces: Surfaces,
     buffers: Buffers,
     shm_pools: ShmPools,
+    surfaces: Surfaces,
+    xdg_surfaces: XdgSurfaces,
 }
 
 impl Compositor {
@@ -67,8 +68,9 @@ impl Compositor {
         Ok(Self {
             seat: Seat::new()?,
             buffers: Buffers::new(),
-            surfaces: Surfaces::new(),
             shm_pools: ShmPools::new(),
+            surfaces: Surfaces::new(),
+            xdg_surfaces: XdgSurfaces::new(),
         })
     }
 
@@ -207,11 +209,22 @@ dispatcher! {
         SetWindowGeometry::handle,
         AckConfigure::handle,
     }
-    // XdgToplevel {
-    //     SetTitle::handle,
-    //     SetAppId::handle,
-    //     .. todo_interface,
-    // }
+    XdgToplevel {
+        Destroy::handle,
+        SetParent::handle,
+        SetTitle::handle,
+        SetAppId::handle,
+        ShowWindowMenu::handle,
+        Move::handle,
+        Resize::handle,
+        SetMaxSize::handle,
+        SetMinSize::handle,
+        SetMaximized::handle,
+        UnsetMaximized::handle,
+        SetFullscreen::handle,
+        UnsetFullscreen::handle,
+        SetMinimized::handle,
+    }
 }
 
 // ===== dispatch =====
