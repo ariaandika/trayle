@@ -27,7 +27,7 @@ impl Memmap {
         let ptr = unsafe {
             libc::mmap(
                 ptr::null_mut(),
-                0,
+                size,
                 libc::PROT_READ | libc::PROT_WRITE,
                 libc::MAP_SHARED,
                 fd,
