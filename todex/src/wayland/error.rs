@@ -2,6 +2,7 @@ use crate::wayland::object::ObjectError;
 use crate::wayland::wire::DecodeError;
 use crate::wayland::interface::wl_display::DisplayError as WlDisplayError;
 use crate::wayland::interface::wl_seat;
+use crate::wayland::interface::wl_shm::Error as ShmError;
 
 // ===== BindError =====
 
@@ -39,6 +40,8 @@ pub enum WlError {
     Object(ObjectError),
     /// Registry bind error.
     Bind(BindError),
+    /// Shm operation error.
+    Shm(ShmError),
 }
 
 const SEMANTIC: u32 = WlDisplayError::InvalidObject as u32;
@@ -56,6 +59,7 @@ impl WlError {
             Self::Decode(e) => e.message(),
             Self::Object(e) => e.message(),
             Self::Bind(e) => e.message(),
+            Self::Shm(e) => e.message(),
         }
     }
 
@@ -67,6 +71,7 @@ impl WlError {
             WlError::Decode(_) => MALFORMED,
             WlError::Object(_) => SEMANTIC,
             WlError::Bind(_) => MALFORMED,
+            WlError::Shm(_) => SEMANTIC,
         }
     }
 }
@@ -96,4 +101,5 @@ from! {
     Decode(DecodeError),
     Object(ObjectError),
     Bind(BindError),
+    Shm(ShmError),
 }

@@ -222,6 +222,16 @@ interface! {
     }
 }
 
+impl wl_shm::Error {
+    pub fn message(&self) -> &'static str {
+        match self {
+            wl_shm::Error::InvalidFormat => "unknown buffer format",
+            wl_shm::Error::InvalidStride => "invalid buffer creation argument",
+            wl_shm::Error::InvalidFd => "mmap fd error",
+        }
+    }
+}
+
 interface! {
     pub struct WlShmPool;
 

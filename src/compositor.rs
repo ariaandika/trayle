@@ -12,7 +12,7 @@ use todex::wayland::error::WlError;
 use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
-use crate::wayland::Surfaces;
+use crate::wayland::{Buffers, ShmPools, Surfaces};
 
 use traits::MessageHandler;
 
@@ -53,18 +53,22 @@ static GLOBALS: [Global; 5] = {
     ]
 };
 
-// ===== impl =====
+// ===== Compositor =====
 
 pub struct Compositor {
     seat: Seat,
     surfaces: Surfaces,
+    buffers: Buffers,
+    shm_pools: ShmPools,
 }
 
 impl Compositor {
     pub fn new() -> Result<Self, FatalError> {
         Ok(Self {
             seat: Seat::new()?,
+            buffers: Buffers::new(),
             surfaces: Surfaces::new(),
+            shm_pools: ShmPools::new(),
         })
     }
 
@@ -148,15 +152,17 @@ dispatcher! {
         CreateRegion::handle,
         Release::handle,
     }
+    WlShmPool {
+        CreateBuffer::handle,
+        Destroy::handle,
+        Resize::handle,
+    }
     WlShm {
         CreatePool::handle,
         Release::handle,
     }
-    WlSeat {
-        GetPointer::handle,
-        GetKeyboard::handle,
-        GetTouch::handle,
-        Release::handle,
+    WlBuffer {
+        Destroy::handle,
     }
     WlDataSource {
         Offer::handle,
@@ -181,6 +187,12 @@ dispatcher! {
         DamageBuffer::handle,
         Offset::handle,
         GetRelease::handle,
+    }
+    WlSeat {
+        GetPointer::handle,
+        GetKeyboard::handle,
+        GetTouch::handle,
+        Release::handle,
     }
     XdgWmBase {
         Destroy::handle,
