@@ -1,6 +1,8 @@
 use std::debug_assert_matches;
+use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
 use todex::collections::slab::Slab;
+use todex::sys::memmap::Memmap;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;
 use todex::wayland::object::{Handle, ObjectError};
@@ -23,8 +25,9 @@ impl ShmPools {
         }
     }
 
-    pub fn insert(&mut self, fd: i32, size: i32) -> Handle {
-        Handle::from_idx(self.buf.insert(ShmPool::new(fd, size)).0)
+    /// Create [`ShmPool`].
+    pub fn create_pool(&mut self, fd: i32, size: i32) -> Result<Handle, Error> {
+        Ok(Handle::from_idx(self.buf.insert(ShmPool::new(fd, size)?).0))
     }
 
     pub fn get_mut(&mut self, handle: Handle) -> Result<&mut ShmPool, ObjectError> {
@@ -56,25 +59,32 @@ impl ShmPools {
 // ===== ShmPool =====
 
 pub struct ShmPool {
-    #[expect(dead_code)]
-    fd: i32,
+    mem: Memmap,
+    fd: OwnedFd,
     size: i32,
     ref_count: u32,
 }
 
 impl ShmPool {
-    pub fn new(fd: i32, size: i32) -> Self {
-        // TODO: mmap the shm
-        Self { fd, size, ref_count: 1 }
+    pub fn new(fd: i32, size: i32) -> Result<Self, Error> {
+        let mem = Memmap::new(fd, size as usize).map_err(|_| Error::InvalidFd)?;
+        // SAFETY: mmap call success indicate valid fd
+        let fd = unsafe { OwnedFd::from_raw_fd(fd) };
+        Ok(Self {
+            fd,
+            mem,
+            size,
+            ref_count: 1,
+        })
     }
 
-    pub fn size(&self) -> i32 {
-        self.size
-    }
-
-    pub fn resize(&mut self, size: i32) {
-        debug_assert!(size > self.size);
+    pub fn resize(&mut self, size: i32) -> Result<(), Error> {
+        if size <= self.size {
+            return Err(Error::InvalidStride);
+        }
+        self.mem = Memmap::new(self.fd.as_raw_fd(), size as usize).map_err(|_| Error::InvalidFd)?;
         self.size = size;
+        Ok(())
     }
 
     fn create_buffer(&mut self, handle: Handle, msg: &CreateBuffer) -> Result<Buffer, Error> {

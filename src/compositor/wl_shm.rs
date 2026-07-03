@@ -17,7 +17,7 @@ impl BindEffect<WlShm> for Compositor {
 
 impl MessageHandler<CreatePool> for Compositor {
     fn handle(&mut self, shm_pool: Msg<CreatePool>, client: &mut ClientMut) -> Result<(), WlError> {
-        let handle = self.shm_pools.insert(shm_pool.fd, shm_pool.size);
+        let handle = self.shm_pools.create_pool(shm_pool.fd, shm_pool.size)?;
         client.objects.create_handle(shm_pool, handle)?;
         Ok(())
     }
@@ -34,9 +34,8 @@ impl MessageHandler<ShmRelease> for Compositor {
 
 impl MessageHandler<CreateBuffer> for Compositor {
     fn handle(&mut self, msg: Msg<CreateBuffer>, client: &mut ClientMut) -> Result<(), WlError> {
-        let handle = self
-            .buffers
-            .insert(self.shm_pools.create_buffer(msg.handle(), &msg)?);
+        let buffer = self.shm_pools.create_buffer(msg.handle(), &msg)?;
+        let handle = self.buffers.insert(buffer);
         client.objects.create_handle(msg, handle)?;
         Ok(())
     }
@@ -51,10 +50,7 @@ impl MessageHandler<ShmPoolDestroy> for Compositor {
 
 impl MessageHandler<Resize> for Compositor {
     fn handle(&mut self, msg: Msg<Resize>, _: &mut ClientMut) -> Result<(), WlError> {
-        let shm_pool = self.shm_pools.get_mut(msg.handle())?;
-        if msg.size > shm_pool.size() {
-            shm_pool.resize(msg.size);
-        }
+        self.shm_pools.get_mut(msg.handle())?.resize(msg.size)?;
         Ok(())
     }
 }
