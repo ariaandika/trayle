@@ -1,4 +1,4 @@
-use wl_compositor::{CreateSurface, CreateRegion, Release};
+use wl_compositor::{CreateRegion, CreateSurface, Release};
 use wl_surface::{Attach, Commit, Damage, DamageBuffer, Destroy, Frame, GetRelease, Offset};
 use wl_surface::{SetBufferScale, SetBufferTransform, SetInputRegion, SetOpaqueRegion};
 
@@ -21,9 +21,12 @@ todo_handler!(Destroy);
 
 impl MessageHandler<Attach> for Compositor {
     fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), WlError> {
-        // TODO: buffer storage
-        // self.surfaces.get_mut(msg.handle())?.attach(buffer);
-        self.todo(msg, client)
+        let buffer_handle = match &msg.buffer {
+            Some(buffer) => Some(client.objects.get_mut(buffer)?.handle()),
+            None => None,
+        };
+        self.surfaces.get_mut(msg.handle())?.attach(buffer_handle);
+        Ok(())
     }
 }
 

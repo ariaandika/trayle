@@ -21,9 +21,8 @@ impl Surface {
         &mut self.states[self.current as usize]
     }
 
-    #[expect(dead_code)]
-    pub fn attach(&mut self, buffer: Handle) -> Option<Handle> {
-        self.current_mut().buffer.replace(buffer)
+    pub fn attach(&mut self, buffer: Option<Handle>) {
+        self.current_mut().buffer = buffer;
     }
 
     pub fn damage(&mut self, damage: Damage) {
