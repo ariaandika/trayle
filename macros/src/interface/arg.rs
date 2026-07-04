@@ -16,6 +16,7 @@ use crate::prelude::*;
 // `uint<iface.enum>?` enum arg
 pub struct Arg {
     pub name: Ident,
+    pub span: Span,
     pub ty: Ty,
     pub opt: bool,
 }
@@ -113,7 +114,8 @@ impl Parse for Arg {
             Ok(Ty::Enum { is_signed, path })
         }
 
-        let name = parser.parse::<Ident>()?;
+        let mut name = parser.parse::<Ident>()?;
+        let span = name.unspan();
         parser.punct_of(':')?;
         let ty = parser.parse::<Ident>()?;
         let ty = match ty.as_str() {
@@ -131,6 +133,7 @@ impl Parse for Arg {
         let opt = parser.next_punct_of('?').is_some();
         Ok(Self {
             name,
+            span,
             ty,
             opt,
         })

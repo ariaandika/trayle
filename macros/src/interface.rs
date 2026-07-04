@@ -2,9 +2,8 @@ use crate::prelude::*;
 
 use interface::Interface;
 use arg::Arg;
-use op::{Op, OpKind};
+use op::{Op, Ops, OpKind};
 
-use ops::Ops;
 use opcode::OpCode;
 use constructor::Constructor;
 use message::Message;
@@ -14,7 +13,6 @@ use enums::Enums;
 mod interface;
 mod arg;
 mod op;
-mod ops;
 mod enums;
 
 mod opcode;

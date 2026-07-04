@@ -35,7 +35,8 @@ fn gen_ops(vis: Option<Ident>, ops: &Ops) -> impl Iterator<Item = TokenTree> + C
             g!(#[doc = #doc])
         });
 
-        let args = op.args.iter().flat_map(|Arg { name, opt, ty, .. }|{
+        let args = op.args.iter().flat_map(|Arg { name, span, opt, ty }|{
+            let name = name.clone().spanned(*span);
             let ty = ty.generate();
             let ty = if *opt {
                 Either::Left(g!(Option<#ty>))
