@@ -47,7 +47,7 @@ impl<'a> Message<'a> {
     pub fn gen_as_interface(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let iface_name = &self.iface.iface_name;
         let op_name = &self.op.op_name;
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
         g! {
             impl AsInterface for #op_name @lf_ph {
                 #[inline]
@@ -80,7 +80,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
         let wl_string = Literal::string(self.op.wl_name.as_str());
         let opkind = Ident::new(match self.op.kind {
             OpKind::Request => "RequestOp",
@@ -100,7 +100,7 @@ impl<'a> Message<'a> {
         let iface_name = &self.iface.iface_name;
         let name = &self.op.op_name;
         let is_request = Bool(self.is_request);
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
         let destructor = self.op.is_destructor.then_stream(|| g! {
             const IS_DESTRUCTOR: bool = #TRUE;
         });
@@ -119,7 +119,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_decode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
         let lf = self.op.lf_ph.named();
 
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
@@ -147,7 +147,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_encode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
 
         let sum = encodables(self.op).flat_map(|Arg { name, .. }|{
             g!(+ self.#name.size())
@@ -179,7 +179,7 @@ impl<'a> Message<'a> {
 
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let lf_ph = &self.op.lf_ph;
+        let lf_ph = self.op.lf_ph;
         g! {
             impl display::AsDisplay for #name @lf_ph {
                 #[inline]

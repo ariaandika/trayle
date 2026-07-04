@@ -80,10 +80,10 @@ macro_rules! impl_generate {
 
     // iterator input
     (@$i:ident) => {
-        IntoIterator::into_iter($i.clone())
+        IntoIterator::into_iter($i)
     };
     (@$i:ident $($tt:tt)*) => {
-        IntoIterator::into_iter($i.clone())
+        IntoIterator::into_iter($i)
             .chain(crate::codegen::impl_generate!($($tt)*))
     };
 
