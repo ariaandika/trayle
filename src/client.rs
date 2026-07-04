@@ -8,8 +8,7 @@ use todex::wayland::primitives::AsObjectId;
 use todex::wayland::display;
 use todex::wayland::object::{Objects, Object};
 use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::interface::wl_display::{DeleteId, Error};
-use todex::wayland::interface::DisplayId;
+use todex::wayland::interface::wl_display::{DisplayId, DeleteId, Error};
 use todex::wayland::wire::{Encode, EncodePayload};
 use todex::wayland::error::WlError;
 
@@ -106,7 +105,7 @@ impl<'a> ClientMut<'a> {
 
     pub fn send_error<Id: AsObjectId>(&mut self, id: Id, error: WlError) {
         self.send(Message::new(
-            id.object_id(),
+            DisplayId,
             Error {
                 object_id: Object::new(id.object_id()),
                 code: error.code(),

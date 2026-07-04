@@ -83,19 +83,15 @@ impl AsInterface for Interface {
     }
 }
 
-// ===== wl_display =====
-
-pub use display_id::DisplayId;
-
-mod display_id;
-
 // ===== protocols =====
 
 pub use wl_core::*;
 pub use xdg_shell::*;
+pub use wl_display::WlDisplay;
 
 mod wl_core;
 mod xdg_shell;
+pub mod wl_display;
 
 // ===== protocols =====
 

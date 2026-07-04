@@ -71,14 +71,6 @@ impl<T> OptionExt<T> for Option<T> {
 // ===== iterator ext =====
 
 pub trait IteratorExt: Sized + Iterator<Item = TokenTree> {
-    fn map_group(self, delim: Delimiter) -> OptIter<TokenTree> {
-        Some(Group::new(delim, self.collect()).into()).into_iter()
-    }
-
-    fn chain_back(self, other: impl Iterator<Item = TokenTree>) -> impl Iterator<Item = TokenTree> {
-        other.chain(self)
-    }
-
     fn left<R>(self) -> Either<Self, R> {
         Either::Left(self)
     }

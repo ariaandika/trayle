@@ -5,7 +5,8 @@ use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, global_of, ObjectEntry};
 use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::interface::{self, AsInterface, DisplayId, Interface};
+use todex::wayland::interface::{self, AsInterface, Interface};
+use todex::wayland::interface::wl_display::DisplayId;
 use todex::wayland::wire::{AsOpCode, OpCode, Payload};
 use todex::wayland::error::WlError;
 
