@@ -1,4 +1,5 @@
 use core::fmt;
+use core::mem::ManuallyDrop;
 use core::ptr::{self, NonNull};
 use core::slice;
 
@@ -170,3 +171,78 @@ impl<T: fmt::Debug> fmt::Debug for Slots<T> {
             .finish()
     }
 }
+
+// ===== IntoIterator =====
+
+impl<T> IntoIterator for Slots<T> {
+    type Item = T;
+
+    type IntoIter = IntoIter<T>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        let slots = ManuallyDrop::new(self);
+        IntoIter {
+            current: slots.ptr,
+            end: unsafe { slots.ptr.add(slots.cap) },
+            cap: slots.cap,
+        }
+    }
+}
+
+pub struct IntoIter<T> {
+    current: NonNull<Option<T>>,
+    end: NonNull<Option<T>>,
+    cap: usize,
+}
+
+impl<T> Drop for IntoIter<T> {
+    fn drop(&mut self) {
+        if self.cap == 0 {
+            return;
+        }
+        unsafe {
+            ptr::drop_in_place(ptr::slice_from_raw_parts_mut(
+                self.current.as_ptr(),
+                self.end.offset_from_unsigned(self.current),
+            ));
+            alloc::deallocate(self.end.sub(self.cap));
+        }
+    }
+}
+
+impl<T> Iterator for IntoIter<T> {
+    type Item = T;
+
+    #[inline]
+    fn next(&mut self) -> Option<Self::Item> {
+        // some entry can be `None`, loop to re-iterate if it encountered
+        loop {
+            if self.current == self.end {
+                return None;
+            }
+            let old = self.current;
+            let entry = unsafe {
+                self.current = old.add(1);
+                old.read()
+            };
+            if let Some(some) = entry {
+                break Some(some)
+            }
+        }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        let remain = self.len();
+        (remain, Some(remain))
+    }
+}
+
+impl<T> ExactSizeIterator for IntoIter<T> {
+    #[inline]
+    fn len(&self) -> usize {
+        unsafe { self.end.offset_from_unsigned(self.current) }
+    }
+}
+

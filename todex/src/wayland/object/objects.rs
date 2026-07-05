@@ -1,4 +1,4 @@
-use crate::collections::slots::Slots;
+use crate::collections::slots::{Slots, IntoIter};
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsHandle, AsNewId, Handle, NewId, Object, ObjectError};
 use crate::wayland::interface::{AsInterface, Interface};
@@ -137,5 +137,16 @@ impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for Object<I, M, D> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
         <&Self>::get_object_mut(&self, objects)
+    }
+}
+
+impl IntoIterator for Objects {
+    type Item = ObjectEntry;
+
+    type IntoIter = IntoIter<ObjectEntry>;
+
+    #[inline]
+    fn into_iter(self) -> Self::IntoIter {
+        self.slots.into_iter()
     }
 }
