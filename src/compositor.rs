@@ -7,10 +7,10 @@ use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, ObjectEntry, global_of};
-use todex::wayland::message::{AsOpCode, Message, OpCode, WlMessage};
-use todex::wayland::interface::{self, AsInterface};
+use todex::wayland::message::{Message, OpCode, WlMessage};
+use todex::wayland::interface::{self, AsInterface, WlInterface, InterfaceId};
 use todex::wayland::interface::wl_display::DisplayId;
-use todex::wayland::wire::Payload;
+use todex::wayland::wire::{DecodePayload, Payload};
 use todex::wayland::error::WlError;
 
 use crate::error::FatalError;
@@ -132,6 +132,32 @@ impl Compositor {
                 Ok(S::Disconnect)
             }
         }
+    }
+
+    fn handle_proxy<'a, const N: usize, M>(
+        &mut self,
+        obj: ObjectEntry,
+        msg: Message<Payload<'a>, u16>,
+        client: &mut ClientMut,
+    ) -> Result<(), WlError>
+    where
+        M: WlMessage + DecodePayload<Fd = [i32; N]>,
+        Self: MessageHandler<M::Output<'a>>
+    {
+        log::debug!(
+            "client#{} <- {}::{}(..)",
+            client.id,
+            M::WlInterface::INTERFACE_NAME,
+            M::OPNAME,
+        );
+        let id = msg.object_id();
+        let payload = msg.decode_payload::<_, M>(client.read_fd)?;
+        let msg = Message::from_parts(obj.handle(), payload, obj.version());
+        self.handle(msg, client)?;
+        if M::IS_DESTRUCTOR {
+            client.delete_id(id);
+        }
+        Ok(())
     }
 
     fn todo<T, M: WlMessage>(
@@ -256,26 +282,14 @@ macro_rules! dispatcher {
                 msg: Message<Payload<'_>, u16>,
                 client: &mut ClientMut,
             ) -> Result<(), WlError> {
-                use interface::*;
                 match obj.interface() {
-                    $(Interface::$iface => {
-                        use interface::camel_cased::$iface::{*, RequestOp};
+                    $(InterfaceId::$iface => {
+                        use interface::camel_cased::$iface::*;
                         match <_>::try_from_op(msg.opcode())? {
                             $(RequestOp::$msg => {
-                                log::debug!(
-                                    "client#{} <- {}::{}(..)",
-                                    client.id,
-                                    Interface::$iface,
-                                    $msg::OPNAME,
-                                );
-                                let id = msg.object_id();
-                                let payload = msg.decode_payload::<_, $msg>(client.read_fd)?;
-                                let msg = Message::from_parts(obj.handle(), payload, obj.version());
-                                self.$h(msg, client)?;
-                                if $msg::IS_DESTRUCTOR {
-                                    client.delete_id(id);
-                                }
-                                Ok(())
+                                #[allow(path_statements)]
+                                <Self as MessageHandler<$msg>>::$h;
+                                self.handle_proxy::<_, $msg>(obj, msg, client)
                             })*
                         }
                     })*

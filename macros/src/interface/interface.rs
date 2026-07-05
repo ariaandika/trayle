@@ -3,7 +3,7 @@ use crate::prelude::*;
 pub struct Interface {
     pub iface_name: Ident,
     pub iface_span: Span,
-    pub wl_iface: Ident,
+    pub wl_string: Literal,
     pub global: Option<Literal>,
     pub mod_name: Option<Ident>,
 }
@@ -36,13 +36,13 @@ impl Parse for Interface {
         parser.punct_of(';')?;
 
         let iface_span = iface_name.unspan();
-        let wl_iface = iface_name.to_snake();
-        let mod_name = mod_name.map(|_|wl_iface.clone());
+        let wl_string = iface_name.to_lit_snake();
+        let mod_name = mod_name.map(|_|iface_name.to_snake());
 
         Ok(Self {
             iface_name,
             iface_span,
-            wl_iface,
+            wl_string,
             global,
             mod_name,
         })
@@ -52,10 +52,9 @@ impl Parse for Interface {
 impl Interface {
     pub fn generate(&self) -> impl Iterator<Item = TokenTree> {
         let iface_name_spanned = self.iface_name.clone().spanned(self.iface_span);
-        let iface_name = &self.iface_name;
+        let Self { iface_name, wl_string, .. } = self;
 
         let global = self.global.as_ref().map_stream(|version|{
-            let wl_string = Literal::string(self.wl_iface.as_str());
             g! {
                 impl WlGlobal for #iface_name {
                     const NAME: &str = #wl_string;
@@ -86,6 +85,8 @@ impl Interface {
                 type RequestOp = RequestOp;
 
                 type EventOp = EventOp;
+
+                const INTERFACE_NAME: &str = #wl_string;
             }
 
             @global

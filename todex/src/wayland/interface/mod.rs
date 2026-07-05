@@ -57,6 +57,9 @@ pub trait WlInterface: AsInterface {
     type RequestOp: OpCode;
 
     type EventOp: OpCode;
+
+    /// Interface name.
+    const INTERFACE_NAME: &str;
 }
 
 /// Type that is associated with an interface.
