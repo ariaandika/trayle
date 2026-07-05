@@ -1,11 +1,14 @@
-use std::task::Poll::{self, *};
-
+//! The Compositor.
+//!
+//! This is the mediator that route incoming messages into its respective handler.
+//!
+//! The entry point is [`Compositor::message`].
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, global_of, ObjectEntry};
 use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::interface::{self, AsInterface, Interface};
+use todex::wayland::interface::{self, AsInterface};
 use todex::wayland::interface::wl_display::DisplayId;
 use todex::wayland::wire::{AsOpCode, OpCode, Payload};
 use todex::wayland::error::WlError;
@@ -41,6 +44,21 @@ mod wl_data_source;
 mod wl_data_device_manager;
 mod xdg_shell;
 
+// ===== ClientStatus =====
+
+pub enum ClientStatus {
+    /// Client ok.
+    Ok,
+    /// Client wants to disconnect.
+    Disconnect,
+}
+
+impl ClientStatus {
+    pub fn is_disconnect(&self) -> bool {
+        matches!(self, Self::Disconnect)
+    }
+}
+
 // ===== globals =====
 
 static GLOBALS: [Global; 5] = {
@@ -75,44 +93,43 @@ impl Compositor {
         })
     }
 
-    pub fn message(
+    /// Checks and drains available messages for given client.
+    ///
+    /// Returns [`ClientStatus`].
+    pub fn message(&mut self, read_buf: &mut Bytes, client: &mut ClientMut) -> ClientStatus {
+        use ClientStatus as S;
+        loop {
+            match self.message_inner(read_buf, client) {
+                Ok(S::Ok) => {}
+                Ok(S::Disconnect) => return S::Disconnect,
+                Err(err) => {
+                    log::error!("client#{} failed to handle message: {err}", client.id);
+                    client.send_error(DisplayId, err);
+                    return S::Disconnect;
+                }
+            }
+        }
+    }
+
+    fn message_inner(
         &mut self,
         read_buf: &mut Bytes,
         client: &mut ClientMut,
-    ) -> Poll<Result<(), ()>> {
-        let Ready(result) = Message::get_message(read_buf) else {
-            return Pending;
+    ) -> Result<ClientStatus, WlError> {
+        use ClientStatus as S;
+        let Some(msg) = Message::get_message(read_buf)? else {
+            return Ok(S::Ok);
         };
-
-        let msg = match result {
-            Ok(ok) => ok,
-            Err(err) => {
-                log::error!("client#{} failed to decode: {err}", client.id);
-                client.send_error(DisplayId, err.into());
-                return Ready(Err(()));
-            }
-        };
-
         let id = msg.object_id();
         let op = msg.opcode();
-        let obj = match client.objects.get_anon(id) {
-            Ok(ok) => ok,
-            Err(err) => {
-                log::error!("client#{} failed to lookup object#{id}: {err}", client.id);
-                client.send_error(DisplayId, err.into());
-                return Ready(Err(()));
-            }
-        };
-
+        let obj = client.objects.get_anon(id)?;
         let iface = obj.interface();
         match self.route(obj, msg, client) {
-            Ok(_) => Ready(Ok(())),
+            Ok(()) => Ok(S::Ok),
             Err(err) => {
-                if !matches!(err, WlError::NotYetImplemented) {
-                    log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
-                    client.send_error(id, err);
-                }
-                Ready(Err(()))
+                log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
+                client.send_error(id, err);
+                Ok(S::Disconnect)
             }
         }
     }
@@ -122,21 +139,17 @@ impl Compositor {
         msg: prelude::Msg<M>,
         client: &mut ClientMut,
     ) -> Result<T, WlError> {
-        let iface = msg.interface();
-        let op = M::OPNAME;
-        log::error!("client#{} {iface}::{op} is not yet implemented", client.id);
-        client.send_error(DisplayId, WlError::NotYetImplemented);
+        let _ = (msg, client);
         Err(WlError::NotYetImplemented)
     }
 
-    fn todo_interface<T>(
+    fn todo_interface(
         &mut self,
-        iface: Interface,
-        op: u16,
+        obj: ObjectEntry,
+        msg: Message<Payload<'_>, u16>,
         client: &mut ClientMut,
-    ) -> Result<T, WlError> {
-        log::error!("client#{} {iface}::{op} is not yet implemented", client.id);
-        client.send_error(DisplayId, WlError::NotYetImplemented);
+    ) -> Result<(), WlError> {
+        let _ = (obj, msg, client);
         Err(WlError::NotYetImplemented)
     }
 }
@@ -266,7 +279,7 @@ macro_rules! dispatcher {
                             })*
                         }
                     })*
-                    _ => self.todo_interface(obj.interface(), msg.meta(), client),
+                    _ => self.todo_interface(obj, msg, client),
                 }
             }
         }

@@ -1,5 +1,3 @@
-use std::task::Poll::{*, self};
-
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
 use crate::wayland::primitives::{ObjectId};
@@ -30,22 +28,22 @@ pub struct Payload<'a>(&'a [u8]);
 
 impl<'a> Message<Payload<'a>, u16> {
     #[inline]
-    pub fn get_message(bytes: &'a mut Bytes) -> Poll<Result<Self, DecodeError>> {
+    pub fn get_message(bytes: &'a mut Bytes) -> Result<Option<Self>, DecodeError> {
         let Some(header) = bytes.first_chunk::<8>() else {
-            return Pending;
+            return Ok(None);
         };
         let Some(id) = ObjectId::new(u32::from_ne_bytes(*header.first_chunk().unwrap())) else {
-            return Ready(Err(E::ZeroId));
+            return Err(E::ZeroId);
         };
         let hdr2 = u32::from_ne_bytes(*header.last_chunk().unwrap());
         let len = hdr2 >> u16::BITS;
         let Some(msg) = bytes.split_to(len as usize) else {
-            return Pending;
+            return Ok(None);
         };
         let Some(payload) = msg.get(8..) else {
-            return Ready(Err(E::InsufficientSize));
+            return Err(E::InsufficientSize);
         };
-        Ready(Ok(Message::from_parts(id, Payload(payload), hdr2 as u16)))
+        Ok(Some(Message::from_parts(id, Payload(payload), hdr2 as u16)))
     }
 
     #[inline]
