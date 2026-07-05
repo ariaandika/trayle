@@ -23,11 +23,13 @@ impl Enums {
 
 pub struct Enum {
     is_bitfield: bool,
+    is_error: bool,
     name: Ident,
     variants: Vec<Variant>,
 }
 
 struct Variant {
+    doc: Option<Literal>,
     variant: Ident,
     wl_variant: Literal,
     const_name: Ident,
@@ -37,11 +39,16 @@ struct Variant {
 impl Parse for Enum {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let mut is_bitfield = false;
+        let mut is_error = false;
 
         if let Some(mut parser) = attr(parser)? {
             if parser.next_ident_of("bitfield").is_some() {
                 parser.next_punct_of(',');
                 is_bitfield = true;
+            }
+            if parser.next_ident_of("error").is_some() {
+                parser.next_punct_of(',');
+                is_error = true;
             }
             parser.check_empty()?;
         }
@@ -54,7 +61,23 @@ impl Parse for Enum {
         let mut parser = parser.group_of(Delimiter::Brace)?.body_parser();
         let mut i = 0;
 
-        while let Some(wl_variant) = parser.next_token::<Ident>() {
+        loop {
+            let doc = match parser.call(attr)? {
+                Some(mut parser) => {
+                    parser.ident_of("doc")?;
+                    parser.punct_of('=')?;
+                    Some(parser.parse_full()?)
+                }
+                None => None,
+            };
+            let Some(wl_variant) = parser.next_token::<Ident>() else {
+                break;
+            };
+
+            if is_error && doc.is_none() {
+                return Err(Error::new("`error` enum must have doc comment", wl_variant));
+            }
+
             let disc = if parser.next_punct_of('=').is_some() {
                 parser.parse()?
             } else {
@@ -72,6 +95,7 @@ impl Parse for Enum {
             let wl_variant = Literal::string(variant.as_str());
 
             variants.push(Variant {
+                doc,
                 variant,
                 wl_variant,
                 const_name,
@@ -80,8 +104,13 @@ impl Parse for Enum {
             parser.next_punct_of(',');
         }
 
+        if is_bitfield && is_error {
+            return Err(Error::new("bitfield cannot be an error", name))
+        }
+
         Ok(Self {
             is_bitfield,
+            is_error,
             name,
             variants,
         })
@@ -115,6 +144,21 @@ impl Enum {
             g!(#disc => Some(Self::#variant),)
         });
 
+        let messages = self.is_error.then_stream(||{
+            let empty_doc = Literal::string("");
+            let msgs = variants.iter().flat_map(|v| {
+                let Variant { doc, variant, .. } = v;
+                let doc = doc.as_ref().unwrap_or(&empty_doc);
+                g!(Self::#variant => #doc,)
+            });
+            g! {
+                #[inline]
+                pub const fn message(&self) -> &'static str {
+                    match self { @msgs }
+                }
+            }
+        });
+
         g! {
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
             pub enum #name {
@@ -127,6 +171,8 @@ impl Enum {
                 pub const fn name(&self) -> &'static str {
                     match self { @names }
                 }
+
+                @messages
             }
 
             impl WlEnum for #name {
