@@ -1,7 +1,7 @@
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsNewId, NewId, Handle};
+use crate::wayland::message::AsOpCode;
 use crate::wayland::interface::{AsInterface, Interface, WlInterface};
-use crate::wayland::wire::AsOpCode;
 
 // ===== trait =====
 

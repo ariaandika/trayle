@@ -19,5 +19,8 @@
 //! ```
 //!
 //! [`AsObjectId`]: crate::wayland::primitives::AsObjectId
+pub use opcode::{AsOpCode, OpCode};
 pub use message::{Message, WlMessage};
+
+mod opcode;
 mod message;

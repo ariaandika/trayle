@@ -6,11 +6,11 @@
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
-use todex::wayland::object::{Global, global_of, ObjectEntry};
-use todex::wayland::message::{Message, WlMessage};
+use todex::wayland::object::{Global, ObjectEntry, global_of};
+use todex::wayland::message::{AsOpCode, Message, OpCode, WlMessage};
 use todex::wayland::interface::{self, AsInterface};
 use todex::wayland::interface::wl_display::DisplayId;
-use todex::wayland::wire::{AsOpCode, OpCode, Payload};
+use todex::wayland::wire::Payload;
 use todex::wayland::error::WlError;
 
 use crate::error::FatalError;

@@ -81,7 +81,6 @@ impl<'a> Message<'a> {
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
         let lf_ph = self.op.lf_ph;
-        let wl_string = Literal::string(self.op.wl_name.as_str());
         let opkind = Ident::new(match self.op.kind {
             OpKind::Request => "RequestOp",
             OpKind::Event => "EventOp",
@@ -91,7 +90,7 @@ impl<'a> Message<'a> {
             impl AsOpCode for #name @lf_ph {
                 type OpCode = #opkind;
                 const OPCODE: Self::OpCode = #opkind::#name;
-                const OPNAME: &'static str = #wl_string;
+                const OPNAME: &'static str = Self::OPCODE.name();
             }
         }
     }

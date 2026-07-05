@@ -1,8 +1,8 @@
 use crate::sys::bytes::Bytes;
 use crate::sys::cmsg::Cmsg;
 use crate::wayland::primitives::AsObjectId;
-use crate::wayland::wire::{AsOpCode, OpCode, Writer};
-use crate::wayland::Message;
+use crate::wayland::message::{AsOpCode, Message, OpCode};
+use crate::wayland::wire::Writer;
 
 /// Encode wayland message.
 pub trait Encode: Sized + EncodePayload + AsObjectId + AsOpCode {
