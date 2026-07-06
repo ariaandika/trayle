@@ -7,8 +7,9 @@ use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, ObjectEntry, global_of};
+use todex::wayland::display::AsDisplay;
 use todex::wayland::message::{Message, OpCode, WlMessage};
-use todex::wayland::interface::{self, AsInterface, WlInterface, InterfaceId};
+use todex::wayland::interface::{self, AsInterface, InterfaceId};
 use todex::wayland::interface::wl_display::DisplayId;
 use todex::wayland::wire::{DecodePayload, Payload};
 use todex::wayland::error::WlError;
@@ -94,44 +95,31 @@ impl Compositor {
     }
 
     /// Checks and drains available messages for given client.
-    ///
-    /// Returns [`ClientStatus`].
     pub fn message(&mut self, read_buf: &mut Bytes, client: &mut ClientMut) -> ClientStatus {
         use ClientStatus as S;
-        loop {
-            match self.message_inner(read_buf, client) {
-                Ok(S::Ok) => {}
-                Ok(S::Disconnect) => return S::Disconnect,
-                Err(err) => {
-                    log::error!("client#{} failed to handle message: {err}", client.id);
-                    client.send_error(DisplayId, err);
-                    return S::Disconnect;
-                }
-            }
-        }
-    }
+        let err = loop {
+            let msg = match Message::get_message(read_buf) {
+                Ok(None) => return S::Ok,
+                Ok(Some(ok)) => ok,
+                Err(err) => break err.into(),
+            };
+            let id = msg.object_id();
+            let op = msg.opcode();
+            let obj = match client.objects.get_anon(id) {
+                Ok(ok) => ok,
+                Err(err) => break err.into(),
+            };
+            let iface = obj.interface();
 
-    fn message_inner(
-        &mut self,
-        read_buf: &mut Bytes,
-        client: &mut ClientMut,
-    ) -> Result<ClientStatus, WlError> {
-        use ClientStatus as S;
-        let Some(msg) = Message::get_message(read_buf)? else {
-            return Ok(S::Ok);
-        };
-        let id = msg.object_id();
-        let op = msg.opcode();
-        let obj = client.objects.get_anon(id)?;
-        let iface = obj.interface();
-        match self.route(obj, msg, client) {
-            Ok(()) => Ok(S::Ok),
-            Err(err) => {
+            if let Err(err) = self.route(obj, msg, client) {
                 log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
                 client.send_error(id, err);
-                Ok(S::Disconnect)
+                return S::Disconnect;
             }
-        }
+        };
+        log::error!("client#{} failed to handle message: {err}", client.id);
+        client.send_error(DisplayId, err);
+        S::Disconnect
     }
 
     fn handle_proxy<'a, const N: usize, M>(

@@ -54,7 +54,11 @@ impl ClientService<'_> {
 
             if event.interest.is_read() {
                 loop {
-                    if compositor.message(&mut buffer.read_buf, &mut client).is_disconnect() {
+                    if !buffer.read_buf.is_empty()
+                        && compositor
+                            .message(&mut buffer.read_buf, &mut client)
+                            .is_disconnect()
+                    {
                         return Err(HandleError);
                     }
                     if client.recvmsg(&mut buffer.read_buf)?.is_pending() {
