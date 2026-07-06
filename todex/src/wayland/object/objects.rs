@@ -111,6 +111,14 @@ impl Objects {
             return Ok(WL_DISPLAY);
         };
         self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
+    #[inline]
+    pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, ObjectError> {
+        index
+            .object_id()
+            .to_u32()
+            .checked_sub(2)
+            .and_then(|i| self.slots.remove(i as usize))
+            .ok_or(E::UnknownId)
     }
 }
 
@@ -139,6 +147,8 @@ impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for Object<I, M, D> {
         <&Self>::get_object_mut(&self, objects)
     }
 }
+
+// ===== IntoIterator =====
 
 impl IntoIterator for Objects {
     type Item = ObjectEntry;
