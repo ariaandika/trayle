@@ -5,11 +5,10 @@ use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::{Cmsg, WriteError, ReadError};
 use todex::collections::slab::Slab;
 use todex::wayland::primitives::AsObjectId;
-use todex::wayland::display;
 use todex::wayland::object::{Objects, Object};
-use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::interface::wl_display::{DisplayId, DeleteId, Error};
-use todex::wayland::wire::{Encode, EncodePayload};
+use todex::wayland::message::WlMessage;
+use todex::wayland::interface::wl_display::{DeleteId, Error};
+use todex::wayland::wire::Encode;
 use todex::wayland::error::WlError;
 
 use crate::log;
@@ -95,41 +94,25 @@ pub struct ClientMut<'a> {
 impl<'a> ClientMut<'a> {
     /// Send [`DeleteId`] event.
     pub fn delete_id<O: AsObjectId>(&mut self, object: O) {
-        self.send(Message::new(
-            DisplayId,
-            DeleteId {
-                id: object.object_id().to_u32(),
-            },
-        ));
+        self.send(DeleteId {
+            id: object.object_id().to_u32(),
+        });
     }
 
     pub fn send_error<Id: AsObjectId>(&mut self, id: Id, error: WlError) {
-        self.send(Message::new(
-            DisplayId,
-            Error {
-                object_id: Object::new(id.object_id()),
-                code: error.code(),
-                message: error.message(),
-            },
-        ));
+        self.send(Error {
+            object_id: Object::new(id.object_id()),
+            code: error.code(),
+            message: error.message(),
+        });
     }
 
     /// Send a message.
     ///
     /// Note that automatic version checking is unlikely to be added. Caller must ensure that the
     /// client support following message.
-    pub fn send<T, M, D>(&mut self, msg: Message<T, M, D>)
-    where
-        T: EncodePayload + WlMessage + display::AsDisplay,
-        D: AsObjectId,
-    {
-        log::debug!(
-            "client#{} -> {}::{}({})",
-            self.id,
-            msg.interface(),
-            T::OPNAME,
-            msg.display()
-        );
+    pub fn send<T: Encode + WlMessage + AsObjectId>(&mut self, msg: T) {
+        log::debug!("client#{} -> {}", self.id, msg.display());
         Encode::encode_with(msg, self.write_buf, self.write_fd);
     }
 

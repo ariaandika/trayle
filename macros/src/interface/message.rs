@@ -179,11 +179,23 @@ impl<'a> Message<'a> {
     pub fn gen_display(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
         let lf_ph = self.op.lf_ph;
+
+        let fields = self.op.args.iter().flat_map(|Arg { name, wl_string, .. }|{
+            g!(.field(#wl_string, &self.#name))
+        });
+
         g! {
             impl display::AsDisplay for #name @lf_ph {
                 #[inline]
                 fn display(&self) -> impl std::fmt::Display {
-                    std::fmt::from_fn(|f|std::fmt::Debug::fmt(self, f))
+                    std::fmt::from_fn(|f|{
+                        f.debug_msg(
+                            <Self as WlMessage>::WlInterface::INTERFACE_NAME,
+                            Self::OPNAME,
+                        )
+                            @fields
+                            .finish()
+                    })
                 }
             }
         }

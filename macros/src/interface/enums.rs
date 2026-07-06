@@ -194,10 +194,10 @@ impl Enum {
                 }
             }
 
-            impl display::Display2 for #name {
+            impl FieldDisplay for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    std::fmt::Display::fmt(self, f)
+                    self.name().fmt(f)
                 }
             }
         }
@@ -213,16 +213,16 @@ impl Enum {
             g!(pub const #const_name: Self = Self(#disc);)
         });
 
-        let lt = Literal::character('<');
-        let gt = Literal::character('>');
-        let sepr = Literal::character('|');
+        let open = Literal::string("<");
+        let close = Literal::string(">");
+        let sepr = Literal::string("|");
         let fmt = variants.iter().flat_map(|v|{
             let Variant { wl_variant, disc, .. } = v;
             g! {
                 if self.0 & #disc == #disc {
-                    sepr.fmt(f)?;
+                    f.write_str(sepr)?;
                     sepr = #sepr;
-                    #wl_variant.fmt(f)?;
+                    f.write_str(#wl_variant)?;
                 }
             }
         });
@@ -257,21 +257,20 @@ impl Enum {
             impl std::fmt::Display for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    if self.#ZERO == #ZERO {
-                        "<none>".fmt(f)?;
-                    } else {
-                        let mut sepr = #lt;
-                        @fmt
-                        #gt.fmt(f)?;
-                    }
-                    Ok(())
+                    FieldDisplay::fmt(self, f)
                 }
             }
 
-            impl display::Display2 for #name {
+            impl FieldDisplay for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    std::fmt::Display::fmt(self, f)
+                    if self.0 == 0 {
+                        f.write_str("<none>")
+                    } else {
+                        let mut sepr = #open;
+                        @fmt
+                        f.write_str(#close)
+                    }
                 }
             }
         }

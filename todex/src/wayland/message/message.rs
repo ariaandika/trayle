@@ -1,12 +1,13 @@
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsNewId, NewId, Handle};
+use crate::wayland::display::AsDisplay;
 use crate::wayland::message::AsOpCode;
 use crate::wayland::interface::{AsInterface, Interface, WlInterface};
 
 // ===== trait =====
 
 /// Type that represent wayland message.
-pub trait WlMessage: AsInterface + AsOpCode {
+pub trait WlMessage: AsInterface + AsOpCode + AsDisplay {
     type WlInterface: WlInterface;
 
     const IS_REQUEST: bool;
@@ -117,6 +118,13 @@ impl<T: AsNewId, M, D> AsNewId for Message<T, M, D> {
     #[inline]
     fn new_id(&self) -> NewId<Self::Interface> {
         self.payload.new_id()
+    }
+}
+
+impl<T: AsDisplay, M, D> AsDisplay for Message<T, M, D> {
+    #[inline]
+    fn display(&self) -> impl std::fmt::Display {
+        self.payload().display()
     }
 }
 

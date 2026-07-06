@@ -4,10 +4,10 @@ use macros::interface;
 
 use crate::wayland::primitives::*;
 use crate::wayland::object::{AsNewId, NewId, Object, WlGlobal};
+use crate::wayland::display::{self, FieldDisplay, FormatterExt};
 use crate::wayland::message::{AsOpCode, Message, OpCode, WlMessage};
 use crate::wayland::wire::{DecodeError, DecodePayload, Reader};
 use crate::wayland::wire::{EncodePayload, Sized2, Writer};
-use crate::wayland::display;
 
 // ===== marker =====
 

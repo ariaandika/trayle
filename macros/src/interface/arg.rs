@@ -16,6 +16,7 @@ use crate::prelude::*;
 // `uint<iface.enum>?` enum arg
 pub struct Arg {
     pub name: Ident,
+    pub wl_string: Literal,
     pub span: Span,
     pub ty: Ty,
     pub opt: bool,
@@ -131,8 +132,10 @@ impl Parse for Arg {
             _ => return Err(Error::new("unknown type", ty)),
         };
         let opt = parser.next_punct_of('?').is_some();
+        let wl_string = Literal::string(name.as_str());
         Ok(Self {
             name,
+            wl_string,
             span,
             ty,
             opt,

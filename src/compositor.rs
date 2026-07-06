@@ -142,17 +142,13 @@ impl Compositor {
     ) -> Result<(), WlError>
     where
         M: WlMessage + DecodePayload<Fd = [i32; N]>,
-        Self: MessageHandler<M::Output<'a>>
+        M::Output<'a>: WlMessage,
+        Self: MessageHandler<M::Output<'a>>,
     {
-        log::debug!(
-            "client#{} <- {}::{}(..)",
-            client.id,
-            M::WlInterface::INTERFACE_NAME,
-            M::OPNAME,
-        );
         let id = msg.object_id();
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;
         let msg = Message::from_parts(obj.handle(), payload, obj.version());
+        log::debug!("client#{} <- {}", client.id, msg.display(),);
         self.handle(msg, client)?;
         if M::IS_DESTRUCTOR {
             client.delete_id(id);

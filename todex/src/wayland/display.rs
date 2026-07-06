@@ -1,93 +1,131 @@
-use crate::wayland::primitives::{AsObjectId, Fixed, ObjectId, Version};
-use crate::wayland::object::NewId;
-use crate::wayland::{Message, Object};
+use std::fmt;
 
-#[inline]
-pub fn fmt_me<D: Display2>(value: &D, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-    D::fmt(value, f)
-}
+use crate::wayland::primitives::{AsObjectId, Fixed, Version};
+use crate::wayland::object::{NewId, Object};
 
+// ===== AsDisplay =====
+
+/// Formatting wayland message.
 pub trait AsDisplay {
-    fn display(&self) -> impl std::fmt::Display;
+    /// Returns [`fmt::Display`] implementation which display this message.
+    fn display(&self) -> impl fmt::Display;
 }
 
-impl<T: AsDisplay, M, D> AsDisplay for Message<T, M, D> {
-    fn display(&self) -> impl std::fmt::Display {
-        self.payload().display()
+// the rest are extensions for `Formatter`
+
+// ===== FormatterExt =====
+
+pub trait FormatterExt<'a, 'b> {
+    fn debug_msg(&'a mut self, interface: &str, op: &str) -> DebugMsg<'a, 'b>;
+}
+
+impl<'a, 'b> FormatterExt<'a, 'b> for fmt::Formatter<'b> {
+    #[inline]
+    fn debug_msg(&'a mut self, interface: &str, op: &str) -> DebugMsg<'a, 'b> {
+        let result = self
+            .write_str(interface)
+            .and_then(|_| self.write_str("::"))
+            .and_then(|_| self.write_str(op))
+            .and_then(|_| self.write_str("("));
+        DebugMsg {
+            fmt: self,
+            result,
+            has_fields: false,
+        }
     }
 }
 
-// separate trait to implement display for `Option` type.
+// ===== DebugMsg =====
 
-pub trait Display2 {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result;
+pub struct DebugMsg<'a, 'b> {
+    fmt: &'a mut fmt::Formatter<'b>,
+    result: fmt::Result,
+    has_fields: bool,
 }
 
-macro_rules! delegate {
-    ($me:ident$(<$t:ident>)?) => {
-        impl$(<$t>)? Display2 for $me$(<$t>)? {
+impl<'a, 'b> DebugMsg<'a, 'b> {
+    #[inline]
+    pub fn field(&mut self, name: &str, value: &dyn FieldDisplay) -> &mut Self {
+        self.result = self.result.and_then(|_| {
+            if self.has_fields {
+                self.fmt.write_str(", ")?;
+            }
+            self.fmt.write_str(name)?;
+            self.fmt.write_str("=")?;
+            value.fmt(self.fmt)
+        });
+        self.has_fields = true;
+        self
+    }
+
+    #[inline]
+    pub fn finish(&mut self) -> fmt::Result {
+        self.result = self.result.and_then(|_| self.fmt.write_str(")"));
+        self.result
+    }
+}
+
+// ===== FieldDisplay =====
+
+/// Formattable message field.
+pub trait FieldDisplay {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result;
+}
+
+macro_rules! delegate_display {
+    ($ty:ty) => {
+        impl FieldDisplay for $ty {
             #[inline]
-            fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                std::fmt::Display::fmt(self, f)
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                fmt::Display::fmt(self, f)
             }
         }
     };
 }
 
-delegate!(u32);
-delegate!(i32);
-delegate!(ObjectId);
-delegate!(NewId<T>);
-delegate!(Fixed);
-delegate!(Version);
+delegate_display!(u32);
+delegate_display!(i32);
+delegate_display!(Fixed);
+delegate_display!(&str);
+delegate_display!(Version);
 
-impl Display2 for Option<ObjectId> {
+impl<I> FieldDisplay for NewId<I> {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(self, f)
+    }
+}
+
+impl<I, M> FieldDisplay for Object<I, M> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Display::fmt(&self.object_id(), f)
+    }
+}
+
+impl<I, M> FieldDisplay for Option<Object<I, M>> {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Some(ok) => ok.fmt(f),
-            None => "<none>".fmt(f),
+            Some(o) => o.fmt(f),
+            None => f.write_str("none"),
         }
     }
 }
 
-impl<T: AsObjectId> Display2 for Object<T> {
+impl FieldDisplay for Option<&str> {
     #[inline]
-    fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        self.object_id().fmt(f)
-    }
-}
-
-impl<T: AsObjectId> Display2 for Option<Object<T>> {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Some(ok) => ok.object_id().fmt(f),
-            None => "<none>".fmt(f),
+            Some(s) => s.fmt(f),
+            None => f.write_str("none"),
         }
     }
 }
 
-impl Display2 for &str {
+impl FieldDisplay for &[u8] {
     #[inline]
-    fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        write!(f, "\"{self}\"")
-    }
-}
-
-impl Display2 for &[u8] {
-    #[inline]
-    fn fmt(&self,f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        "<array>".fmt(f)
-    }
-}
-
-impl Display2 for Option<&str> {
-    #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-        match self {
-            Some(ok) => write!(f, "\"{ok}\""),
-            None => "<none>".fmt(f),
-        }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("<bytes>")
     }
 }
