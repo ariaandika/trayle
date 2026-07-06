@@ -31,7 +31,7 @@ pub struct Enum {
 struct Variant {
     doc: Option<Literal>,
     variant: Ident,
-    wl_variant: Literal,
+    wl_string: Literal,
     const_name: Ident,
     disc: Literal,
 }
@@ -92,12 +92,12 @@ impl Parse for Enum {
             let variant = wl_variant.to_camel();
             let const_name =
                 Ident::new_string(wl_variant.as_str().to_uppercase(), Span::call_site());
-            let wl_variant = Literal::string(variant.as_str());
+            let wl_string = variant.to_lit_snake();
 
             variants.push(Variant {
                 doc,
                 variant,
-                wl_variant,
+                wl_string,
                 const_name,
                 disc,
             });
@@ -132,8 +132,8 @@ impl Enum {
         let Self { name, variants, .. } = self;
 
         let names = variants.iter().flat_map(|v| {
-            let Variant { variant, wl_variant, .. } = v;
-            g!(Self::#variant => #wl_variant,)
+            let Variant { variant, wl_string, .. } = v;
+            g!(Self::#variant => #wl_string,)
         });
         let variants_def = variants.iter().flat_map(|v| {
             let Variant { variant, disc, .. } = v;
@@ -197,7 +197,7 @@ impl Enum {
             impl FieldDisplay for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    self.name().fmt(f)
+                    f.write_str(self.name())
                 }
             }
         }
@@ -217,12 +217,12 @@ impl Enum {
         let close = Literal::string(">");
         let sepr = Literal::string("|");
         let fmt = variants.iter().flat_map(|v|{
-            let Variant { wl_variant, disc, .. } = v;
+            let Variant { wl_string, disc, .. } = v;
             g! {
                 if self.0 & #disc == #disc {
-                    f.write_str(sepr)?;
-                    sepr = #sepr;
-                    f.write_str(#wl_variant)?;
+                    f.write_str(prefix)?;
+                    prefix = #sepr;
+                    f.write_str(#wl_string)?;
                 }
             }
         });
@@ -267,7 +267,7 @@ impl Enum {
                     if self.0 == 0 {
                         f.write_str("<none>")
                     } else {
-                        let mut sepr = #open;
+                        let mut prefix = #open;
                         @fmt
                         f.write_str(#close)
                     }
@@ -289,7 +289,7 @@ fn gen_bitops(name: &Ident, trait_: &str, fn_: &str, op: char) -> impl Iterator<
             type Output = Self;
             #[inline]
             fn #f(self, rhs: Self) -> Self::Output {
-                Self(self.#ZERO #op rhs.#ZERO)
+                Self(self.0 #op rhs.0)
             }
         }
     }

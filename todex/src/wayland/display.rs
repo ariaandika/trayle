@@ -8,6 +8,8 @@ use crate::wayland::object::{NewId, Object};
 /// Formatting wayland message.
 pub trait AsDisplay {
     /// Returns [`fmt::Display`] implementation which display this message.
+    ///
+    /// Note that currently some implementation will ignore any `fmt` flags.
     fn display(&self) -> impl fmt::Display;
 }
 
@@ -86,7 +88,6 @@ macro_rules! delegate_display {
 delegate_display!(u32);
 delegate_display!(i32);
 delegate_display!(Fixed);
-delegate_display!(&str);
 delegate_display!(Version);
 
 impl<I> FieldDisplay for NewId<I> {
@@ -108,17 +109,27 @@ impl<I, M> FieldDisplay for Option<Object<I, M>> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Some(o) => o.fmt(f),
-            None => f.write_str("none"),
+            None => f.write_str("<none>"),
         }
+    }
+}
+
+impl FieldDisplay for &str {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use fmt::Write as _;
+        f.write_char('"')?;
+        f.write_str(self)?;
+        f.write_char('"')
     }
 }
 
 impl FieldDisplay for Option<&str> {
     #[inline]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
+        match *self {
             Some(s) => s.fmt(f),
-            None => f.write_str("none"),
+            None => f.write_str("<none>"),
         }
     }
 }
