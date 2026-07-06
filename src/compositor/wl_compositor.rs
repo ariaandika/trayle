@@ -3,6 +3,8 @@ use wl_surface::{Attach, Commit, Damage, DamageBuffer, Destroy, Frame, GetReleas
 use wl_surface::{SetBufferScale, SetBufferTransform, SetInputRegion, SetOpaqueRegion};
 
 use crate::compositor::prelude::*;
+use crate::compositor::traits::CommitEffect;
+use crate::wayland::{Role, RoleError};
 
 impl MessageHandler<CreateSurface> for Compositor {
     fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -41,8 +43,9 @@ impl MessageHandler<Damage> for Compositor {
 
 impl MessageHandler<Frame> for Compositor {
     fn handle(&mut self, msg: Msg<Frame>, client: &mut ClientMut) -> Result<(), WlError> {
-        self.surfaces.get_mut(msg.handle())?.request_frame();
-        client.objects.create(msg)?;
+        self.surfaces
+            .get_mut(msg.handle())?
+            .request_frame(client.objects.create(msg)?);
         Ok(())
     }
 }
@@ -51,8 +54,30 @@ todo_handler!(SetOpaqueRegion);
 todo_handler!(SetInputRegion);
 
 impl MessageHandler<Commit> for Compositor {
-    fn handle(&mut self, msg: Msg<Commit>, _: &mut ClientMut) -> Result<(), WlError> {
-        self.surfaces.get_mut(msg.handle())?.commit();
+    fn handle(&mut self, msg: Msg<Commit>, client: &mut ClientMut) -> Result<(), WlError> {
+        let surface = self.surfaces.get_mut(msg.handle())?;
+
+        if surface.is_configured() {
+            surface.commit();
+            // TODO: temporary implementation
+            if let Some(handle) = surface.release_current_buffer() {
+                let wl_buffer = self.buffers.get_mut(handle).expect("lmao 2").wl_buffer;
+                client.send(wl_buffer.release());
+            }
+            for callback in surface.request_frames() {
+                client.send(callback.done(self.start.elapsed().as_millis() as u32));
+                client.delete_id(callback);
+                client.objects.remove(callback)?;
+            }
+        } else {
+            surface.set_configured();
+            surface.commit();
+            match surface.role() {
+                Role::None => panic!("net yet handled: {}", RoleError::Unset),
+                Role::XdgToplevel(obj) => self.commit(obj, client)?,
+            }
+        }
+
         Ok(())
     }
 }

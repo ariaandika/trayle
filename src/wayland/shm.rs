@@ -5,7 +5,7 @@ use todex::collections::slab::Slab;
 use todex::sys::memmap::Memmap;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;
-use todex::wayland::object::{Handle, ObjectError};
+use todex::wayland::object::{Handle, Object, ObjectError};
 use todex::wayland::error::WlError;
 
 use crate::wayland::buffer::{Buffer, BufferFactory};
@@ -106,6 +106,7 @@ impl ShmPool {
                 self.ref_count += 1;
                 handle
             },
+            wl_buffer: Object::from_new_id(msg.id),
         })
     }
 

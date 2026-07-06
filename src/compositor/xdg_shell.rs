@@ -4,6 +4,7 @@ use xdg_surface::{AckConfigure, GetPopup, GetToplevel, SetWindowGeometry};
 use xdg_toplevel::{*, Destroy as ToplevelDestroy};
 
 use crate::compositor::prelude::*;
+use crate::compositor::traits::CommitEffect;
 
 // ===== xdg_wm_base =====
 
@@ -48,10 +49,13 @@ impl MessageHandler<GetToplevel> for Compositor {
     fn handle(&mut self, msg: Msg<GetToplevel>, client: &mut ClientMut) -> Result<(), WlError> {
         let xdg_surface = self.xdg_surfaces.get_mut(msg.handle())?;
         let surface = self.surfaces.get_mut(xdg_surface.surface_handle())?;
-        // TODO: blocker: change the any error handling
-        xdg_surface.get_toplevel(surface).expect("not yet implemented");
+
         let xdg_handle = msg.handle();
-        client.objects.create_handle(msg, xdg_handle)?;
+        let xdg_toplevel = client.objects.create_handle(msg, xdg_handle)?;
+        // TODO: blocker: change the any error handling
+        xdg_surface
+            .get_toplevel(xdg_toplevel, surface)
+            .expect("not yet implemented");
         Ok(())
     }
 }
@@ -62,9 +66,17 @@ todo_handler!(AckConfigure);
 
 // ===== xdg_toplevel =====
 
+impl CommitEffect<XdgToplevel> for Compositor {
+    fn commit(&mut self, obj: Object<XdgToplevel>, client: &mut ClientMut) -> Result<(), WlError> {
+        client.send(obj.configure(1280, 720, &[]));
+        // TODO: send `XdgSurface::configure`
+        Ok(())
+    }
+}
+
 impl MessageHandler<ToplevelDestroy> for Compositor {
-    fn handle(&mut self, msg: Msg<ToplevelDestroy>, client: &mut ClientMut) -> Result<(), WlError> {
-        self.todo(msg, client)
+    fn handle(&mut self, _: Msg<ToplevelDestroy>, _: &mut ClientMut) -> Result<(), WlError> {
+        Err(WlError::NotYetImplemented)
     }
 }
 

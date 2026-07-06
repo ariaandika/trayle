@@ -1,6 +1,7 @@
 use todex::collections::slab::Slab;
+use todex::wayland::object::{Handle, Object, ObjectError};
 use todex::wayland::interface::wl_shm::FormatEnum;
-use todex::wayland::object::{Handle, ObjectError};
+use todex::wayland::interface::WlBuffer;
 
 // ===== Buffers =====
 
@@ -21,7 +22,6 @@ impl Buffers {
         Handle::from_idx(self.buf.insert(buffer).0)
     }
 
-    #[expect(dead_code)]
     pub fn get_mut(&mut self, handle: Handle) -> Result<&mut Buffer, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
@@ -51,4 +51,5 @@ pub struct Buffer {
     pub format: FormatEnum,
     pub factory: BufferFactory,
     pub factory_handle: Handle,
+    pub wl_buffer: Object<WlBuffer>,
 }

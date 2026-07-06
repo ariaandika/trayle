@@ -5,7 +5,7 @@ use crate::wayland::interface::{AsInterface, Interface};
 
 use ObjectError as E;
 
-pub type ObjectEntry = Object<Interface, Version, Handle>;
+pub type ObjectEntry<I = Interface> = Object<I, Version, Handle>;
 
 const INITIAL_CAP: usize = 32;
 
@@ -35,8 +35,21 @@ impl Objects {
         self.create_handle(msg, Handle::default())
     }
 
-    /// Create new object from constructor message.
+    /// Renamed to [`Objects::create_with`].
     pub fn create_handle<M, H>(
+        &mut self,
+        msg: M,
+        handle: H,
+    ) -> Result<Object<M::Interface>, ObjectError>
+    where
+        M: AsNewId<Interface: AsInterface> + AsVersion,
+        H: AsHandle,
+    {
+        self.create_with(msg, handle)
+    }
+
+    /// Create new object from constructor message.
+    pub fn create_with<M, H>(
         &mut self,
         msg: M,
         handle: H,
@@ -97,8 +110,11 @@ impl Objects {
     }
 
     /// Performs an object lookup.
-    pub fn get_anon(&mut self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
-        self.entry(id)
+    pub fn get_anon(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
+        let Some(idx) = id.to_u32().checked_sub(2) else {
+            return Ok(WL_DISPLAY);
+        };
+        self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
     }
 
     /// Performs an object lookup.
@@ -106,11 +122,6 @@ impl Objects {
         ObjectIndex::get_object_mut(idx, self)
     }
 
-    fn entry(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
-        let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Ok(WL_DISPLAY);
-        };
-        self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
     #[inline]
     pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, ObjectError> {
         index
@@ -132,7 +143,7 @@ pub trait ObjectIndex {
 impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for &Object<I, M, D> {
     #[inline]
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
-        let object = objects.entry(self.object_id())?;
+        let object = objects.get_anon(self.object_id())?;
         if object.interface() == self.interface() {
             Ok(object)
         } else {

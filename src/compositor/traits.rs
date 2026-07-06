@@ -22,8 +22,8 @@ pub trait MessageHandler<M>: Sized {
 macro_rules! todo_handler {
     ($ty:ident) => {
         impl MessageHandler<$ty> for Compositor {
-            fn handle(&mut self, msg: Msg<$ty>, client: &mut ClientMut) -> Result<(), WlError> {
-                self.todo(msg, client)
+            fn handle(&mut self, _: Msg<$ty>, _: &mut ClientMut) -> Result<(), WlError> {
+                Err(WlError::NotYetImplemented)
             }
         }
     };
@@ -33,7 +33,14 @@ pub(crate) use todo_handler;
 
 // ===== BindEffect =====
 
-/// After global `wl_registry::bind` effect.
+/// Side effect for `wl_registry::bind` request.
 pub trait BindEffect<Interface> {
     fn bind(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), WlError>;
+}
+
+/// Side effect for `wl_surface::commit` request.
+//
+// This is assuming all surface role have single corresponding interface.
+pub trait CommitEffect<Interface> {
+    fn commit(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), WlError>;
 }

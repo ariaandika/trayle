@@ -1,9 +1,8 @@
-use todex::wayland::object::Handle;
-use todex::wayland::interface::xdg_surface::Error;
+use todex::wayland::object::{Handle, Object};
+use todex::wayland::interface::xdg_surface::{Error, XdgSurface as IXdgSurface};
+use todex::wayland::interface::XdgToplevel;
 
 use crate::wayland::surface::{Surface, Role};
-
-
 
 pub struct XdgSurface {
     surface_handle: Handle,
@@ -20,9 +19,13 @@ impl XdgSurface {
         }
     }
 
-    pub fn get_toplevel(&mut self, surface: &mut Surface) -> Result<(), Error> {
+    pub fn get_toplevel(
+        &mut self,
+        xdg_toplevel: Object<XdgToplevel>,
+        surface: &mut Surface,
+    ) -> Result<(), Error> {
         surface
-            .set_role(Role::XdgToplevel)
+            .set_role(Role::XdgToplevel(xdg_toplevel))
             .map_err(|_| Error::AlreadyConstructed)
     }
 

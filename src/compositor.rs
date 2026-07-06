@@ -3,6 +3,8 @@
 //! This is the mediator that route incoming messages into its respective handler.
 //!
 //! The entry point is [`Compositor::message`].
+use std::time::Instant;
+
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
@@ -76,6 +78,7 @@ static GLOBALS: [Global; 5] = {
 // ===== Compositor =====
 
 pub struct Compositor {
+    start: Instant,
     seat: Seat,
     buffers: Buffers,
     shm_pools: ShmPools,
@@ -86,6 +89,7 @@ pub struct Compositor {
 impl Compositor {
     pub fn new() -> Result<Self, FatalError> {
         Ok(Self {
+            start: Instant::now(),
             seat: Seat::new()?,
             buffers: Buffers::new(),
             shm_pools: ShmPools::new(),
@@ -142,15 +146,6 @@ impl Compositor {
             client.delete_id(id);
         }
         Ok(())
-    }
-
-    fn todo<T, M: WlMessage>(
-        &mut self,
-        msg: prelude::Msg<M>,
-        client: &mut ClientMut,
-    ) -> Result<T, WlError> {
-        let _ = (msg, client);
-        Err(WlError::NotYetImplemented)
     }
 
     fn todo_interface(
