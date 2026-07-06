@@ -40,8 +40,9 @@ impl MessageHandler<Damage> for Compositor {
 }
 
 impl MessageHandler<Frame> for Compositor {
-    fn handle(&mut self, msg: Msg<Frame>, _: &mut ClientMut) -> Result<(), WlError> {
+    fn handle(&mut self, msg: Msg<Frame>, client: &mut ClientMut) -> Result<(), WlError> {
         self.surfaces.get_mut(msg.handle())?.request_frame();
+        client.objects.create(msg)?;
         Ok(())
     }
 }
