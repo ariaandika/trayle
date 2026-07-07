@@ -4,26 +4,34 @@ use todex::wayland::interface::XdgToplevel;
 
 use crate::surface::{Surface, Role};
 
+// ===== XdgSurface =====
+
 pub struct XdgSurface {
     surface_handle: Handle,
-    title: Option<Box<str>>,
-    app_id: Option<Box<str>>,
+    kind: Kind,
+}
+
+enum Kind {
+    None,
+    Toplevel(Toplevel),
+    // Popup,
 }
 
 impl XdgSurface {
     pub fn new(surface_handle: Handle) -> Self {
         Self {
             surface_handle,
-            title: None,
-            app_id: None,
+            kind: Kind::None,
         }
     }
 
-    pub fn get_toplevel(
+    /// Set role as `XdgToplevel`.
+    pub fn set_toplevel(
         &mut self,
         xdg_toplevel: Object<XdgToplevel>,
         surface: &mut Surface,
     ) -> Result<(), Error> {
+        self.kind = Kind::Toplevel(Toplevel::new());
         surface
             .set_role(Role::XdgToplevel(xdg_toplevel))
             .map_err(|_| Error::AlreadyConstructed)
@@ -31,6 +39,29 @@ impl XdgSurface {
 
     pub fn surface_handle(&self) -> Handle {
         self.surface_handle
+    }
+
+    pub fn as_toplevel(&mut self) -> Option<&mut Toplevel> {
+        match &mut self.kind {
+            Kind::Toplevel(toplevel) => Some(toplevel),
+            _ => None,
+        }
+    }
+}
+
+// ===== Toplevel =====
+
+pub struct Toplevel {
+    title: Option<Box<str>>,
+    app_id: Option<Box<str>>,
+}
+
+impl Toplevel {
+    pub fn new() -> Self {
+        Self {
+            title: None,
+            app_id: None,
+        }
     }
 
     pub fn set_title<S: Into<Box<str>>>(&mut self, title: S) {

@@ -1,6 +1,5 @@
 use todex::collections::slab::Slab;
 use todex::wayland::object::{Handle, ObjectError};
-use todex::wayland::error::WlError;
 
 use crate::surface::XdgSurface;
 
@@ -22,15 +21,15 @@ impl XdgSurfaces {
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut XdgSurface, WlError> {
+    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut XdgSurface, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId.into())
+            .ok_or(ObjectError::UnknownId)
     }
 
-    pub fn remove(&mut self, handle: Handle) -> Result<XdgSurface, WlError> {
+    pub fn remove(&mut self, handle: Handle) -> Result<XdgSurface, ObjectError> {
         self.buf
             .remove(handle.to_idx())
-            .ok_or(ObjectError::UnknownId.into())
+            .ok_or(ObjectError::UnknownId)
     }
 }

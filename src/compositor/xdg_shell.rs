@@ -54,7 +54,7 @@ impl MessageHandler<GetToplevel> for Compositor {
         let xdg_toplevel = client.objects.create_handle(msg, xdg_handle)?;
         // TODO: blocker: change the any error handling
         xdg_surface
-            .get_toplevel(xdg_toplevel, surface)
+            .set_toplevel(xdg_toplevel, surface)
             .expect("not yet implemented");
         Ok(())
     }
@@ -84,14 +84,18 @@ todo_handler!(SetParent);
 
 impl MessageHandler<SetTitle<'_>> for Compositor {
     fn handle(&mut self, msg: Msg<SetTitle<'_>>, _: &mut ClientMut) -> Result<(), WlError> {
-        self.xdg_surfaces.get_mut(msg.handle())?.set_title(msg.title);
+        if let Some(toplevel) = self.xdg_surfaces.get_mut(msg.handle())?.as_toplevel() {
+            toplevel.set_title(msg.title)
+        }
         Ok(())
     }
 }
 
 impl MessageHandler<SetAppId<'_>> for Compositor {
     fn handle(&mut self, msg: Msg<SetAppId<'_>>, _: &mut ClientMut) -> Result<(), WlError> {
-        self.xdg_surfaces.get_mut(msg.handle())?.set_app_id(msg.app_id);
+        if let Some(toplevel) = self.xdg_surfaces.get_mut(msg.handle())?.as_toplevel() {
+            toplevel.set_app_id(msg.app_id)
+        }
         Ok(())
     }
 }

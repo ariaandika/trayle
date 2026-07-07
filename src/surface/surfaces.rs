@@ -1,6 +1,5 @@
 use todex::collections::slab::Slab;
 use todex::wayland::object::{Handle, ObjectError};
-use todex::wayland::error::WlError;
 
 use crate::surface::Surface;
 
@@ -22,9 +21,9 @@ impl Surfaces {
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut Surface, WlError> {
+    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut Surface, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId.into())
+            .ok_or(ObjectError::UnknownId)
     }
 }
