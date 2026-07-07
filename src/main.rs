@@ -11,6 +11,7 @@ use client::{Clients, ClientReactor};
 use compositor::Compositor;
 use error::FatalError;
 
+mod handle;
 mod shm;
 mod surface;
 mod buffer;

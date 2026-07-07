@@ -1,8 +1,9 @@
+use todex::collections::slots::{Slots, IntoIter};
+use todex::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
+use todex::wayland::object::{AsNewId, NewId, Object, ObjectError};
+use todex::wayland::interface::{AsInterface, Interface};
+
 use crate::handle::Handle;
-use crate::collections::slots::{Slots, IntoIter};
-use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
-use crate::wayland::object::{AsNewId, NewId, Object, ObjectError};
-use crate::wayland::interface::{AsInterface, Interface};
 
 use ObjectError as E;
 

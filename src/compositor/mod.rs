@@ -8,7 +8,7 @@ use std::time::Instant;
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
-use todex::wayland::object::{Global, Object, ObjectEntry, global_of};
+use todex::wayland::object::{Global, Object, global_of};
 use todex::wayland::display::AsDisplay;
 use todex::wayland::message::{Message, OpCode, WlMessage};
 use todex::wayland::interface::{self, AsInterface, InterfaceId};
@@ -16,13 +16,13 @@ use todex::wayland::interface::wl_display::DisplayId;
 use todex::wayland::wire::{DecodePayload, Payload};
 use todex::wayland::error::WlError;
 
-use crate::error::FatalError;
+use crate::handle::{AsHandle, WithHandle};
 use crate::seat::Seat;
-use crate::client::ClientMut;
+use crate::client::{ClientMut, ObjectEntry};
 use crate::shm::{Buffers, ShmPools};
 use crate::surface::{Surfaces, XdgSurfaces};
+use crate::error::FatalError;
 
-use handle::WithHandle;
 use traits::{MessageHandler, v2};
 
 mod prelude {
@@ -33,6 +33,7 @@ mod prelude {
     pub(super) use todex::wayland::interface::*;
     pub(super) use todex::wayland::error::WlError;
 
+    pub(super) use crate::handle::AsHandle;
     pub(super) use crate::client::ClientMut;
 
     pub(super) use super::Compositor;

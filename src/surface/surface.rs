@@ -1,8 +1,8 @@
-use todex::handle::Handle;
 use todex::wayland::object::Object;
 use todex::wayland::interface::wl_surface::Damage;
 use todex::wayland::interface::WlCallback;
 
+use crate::handle::Handle;
 use crate::shm::Buffer;
 use crate::surface::{Region, Role, RoleError};
 

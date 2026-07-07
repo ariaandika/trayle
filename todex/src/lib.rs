@@ -34,7 +34,6 @@
 )]
 
 pub mod bitflags;
-pub mod handle;
 
 pub mod sys;
 pub mod alloc;

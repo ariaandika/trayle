@@ -1,6 +1,5 @@
 use std::fmt;
 
-use crate::handle::Handle;
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::NewId;
 use crate::wayland::interface::{InterfaceMarker, AsInterface, Interface};
@@ -147,11 +146,13 @@ impl<I, M, D> Object<I, M, D> {
     pub const fn from_parts(iface: I, marker: M, id: D) -> Self {
         Self { iface, marker, id }
     }
-}
 
-impl<I, M, H> Object<I, M, Handle<H>> {
+    /// This should not be used in general logic code.
     #[inline]
-    pub const fn handle(&self) -> Handle<H> {
+    pub const fn id(&self) -> D
+    where
+        D: Copy,
+    {
         self.id
     }
 }

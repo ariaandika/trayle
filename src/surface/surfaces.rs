@@ -1,7 +1,7 @@
-use todex::handle::Handle;
 use todex::collections::slab::Slab;
 use todex::wayland::object::ObjectError;
 
+use crate::handle::Handle;
 use crate::surface::Surface;
 
 const INITIAL_CAP: usize = 32;

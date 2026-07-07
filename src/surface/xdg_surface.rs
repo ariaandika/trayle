@@ -1,8 +1,8 @@
-use todex::handle::Handle;
 use todex::wayland::object::Object;
 use todex::wayland::interface::xdg_surface::Error;
 use todex::wayland::interface::XdgToplevel;
 
+use crate::handle::Handle;
 use crate::surface::{Surface, Role};
 
 // ===== XdgSurface =====

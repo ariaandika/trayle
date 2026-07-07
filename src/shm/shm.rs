@@ -2,13 +2,13 @@ use std::debug_assert_matches;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
 use todex::sys::memmap::Memmap;
-use todex::handle::Handle;
 use todex::collections::slab::Slab;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;
 use todex::wayland::object::{Object, ObjectError};
 use todex::wayland::error::WlError;
 
+use crate::handle::Handle;
 use crate::shm::buffer::{Buffer, BufferFactory};
 
 // ===== ShmPools =====

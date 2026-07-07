@@ -1,14 +1,8 @@
-pub use todex::handle::Handle;
-
 use todex::wayland::interface::*;
 
+use crate::handle::WithHandle;
 use crate::shm::{Buffer, ShmPool};
 use crate::surface::{Surface, XdgSurface as XdgSurfaceData};
-
-/// Associate interface with a handle type.
-pub trait WithHandle {
-    type Handle;
-}
 
 macro_rules! handle {
     ($ty:ty, $h:ty) => {

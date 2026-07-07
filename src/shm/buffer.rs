@@ -1,12 +1,12 @@
-use todex::handle::Handle;
 use todex::collections::slab::Slab;
 use todex::wayland::object::{Object, ObjectError};
 use todex::wayland::interface::wl_shm::FormatEnum;
 use todex::wayland::interface::WlBuffer;
 
-// ===== Buffers =====
-
+use crate::handle::Handle;
 use crate::shm::ShmPool;
+
+// ===== Buffers =====
 
 const INITIAL_CAP: usize = 8;
 

@@ -3,8 +3,8 @@ use todex::wayland::object::Object;
 use todex::wayland::message::{Message, WlMessage};
 use todex::wayland::error::WlError;
 
+use crate::handle::{Handle, WithHandle};
 use crate::client::ClientMut;
-use crate::compositor::handle::{Handle, WithHandle};
 
 // ===== Handler =====
 

@@ -1,4 +1,3 @@
-use crate::handle::Handle;
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::{AsNewId, NewId};
 use crate::wayland::display::AsDisplay;
@@ -40,7 +39,7 @@ pub trait WlMessage: AsInterface + AsOpCode + AsDisplay {
 /// object that intherent this version.
 ///
 /// The third optional generic usually represent an id or index. The default is [`ObjectId`]. Other
-/// usage is to store [`Handle`] that is occasionally used inside compositor logic.
+/// usage is to store `Handle` that is occasionally used inside compositor logic.
 #[derive(Debug)]
 pub struct Message<T, M = (), D = ObjectId> {
     payload: T,
@@ -70,6 +69,15 @@ impl<T, M, D> Message<T, M, D> {
         M: Copy,
     {
         self.meta
+    }
+
+    /// Returns the second generic parameter value.
+    #[inline]
+    pub fn id(&self) -> D
+    where
+        D: Copy,
+    {
+        self.id
     }
 
     /// Returns reference of the message payload.
@@ -154,13 +162,5 @@ impl<T, D> AsVersion for Message<T, Version, D> {
     #[inline]
     fn version(&self) -> Version {
         self.meta
-    }
-}
-
-impl<T, M, H> Message<T, M, Handle<H>> {
-    /// Returns the associated [`Handle`].
-    #[inline]
-    pub fn handle(&self) -> Handle<H> {
-        self.id
     }
 }

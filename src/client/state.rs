@@ -4,13 +4,13 @@ use std::task::Poll;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::{Cmsg, WriteError, ReadError};
 use todex::wayland::primitives::AsObjectId;
-use todex::wayland::object::{Objects, Object};
+use todex::wayland::object::Object;
 use todex::wayland::message::WlMessage;
 use todex::wayland::interface::wl_display::{DeleteId, Error};
 use todex::wayland::wire::Encode;
 use todex::wayland::error::WlError;
 
-use crate::client::ClientId;
+use crate::client::{ClientId, Objects};
 use crate::log;
 
 // ===== Client =====
