@@ -1,6 +1,6 @@
 use std::fmt;
 
-use crate::wayland::primitives::{AsObjectId, Fixed, Version};
+use crate::wayland::primitives::{AsObjectId, Fixed, ObjectId, Version};
 use crate::wayland::object::{NewId, Object};
 
 // ===== AsDisplay =====
@@ -87,6 +87,7 @@ macro_rules! delegate_display {
 
 delegate_display!(u32);
 delegate_display!(i32);
+delegate_display!(ObjectId);
 delegate_display!(Fixed);
 delegate_display!(Version);
 

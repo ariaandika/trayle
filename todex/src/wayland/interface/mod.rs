@@ -31,10 +31,6 @@ pub(crate) mod sealed {
         /// Caller must ensure correctness for creating this marker.
         const MARKER: Self;
     }
-
-    impl Sealed for () {
-        const MARKER: Self = ();
-    }
 }
 
 pub trait InterfaceMarker: sealed::Sealed {
@@ -46,13 +42,11 @@ pub trait InterfaceMarker: sealed::Sealed {
     fn from_interface(interface: Interface) -> Self;
 }
 
-impl InterfaceMarker for () {
-    #[inline]
-    fn from_interface(_: Interface) -> Self { }
-}
-
 // ===== interface =====
 
+/// Wayland interface.
+///
+/// This trait is implemented by a marker type.
 pub trait WlInterface: AsInterface + InterfaceMarker {
     type RequestOp: OpCode;
 
@@ -60,6 +54,13 @@ pub trait WlInterface: AsInterface + InterfaceMarker {
 
     /// Interface name.
     const INTERFACE_NAME: &str;
+
+    // /// Create this interface.
+    // ///
+    // /// # Panics
+    // ///
+    // /// Panics if the interface type does not match with given [`Interface`].
+    // fn from_interface(interface: Interface) -> Option<Self>;
 }
 
 /// Type that is associated with an interface.

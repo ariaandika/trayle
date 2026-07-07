@@ -59,8 +59,9 @@ pub enum Ty {
     },
     Fixed,
     String,
-    Object(Option<Ident>),
-    NewId(Option<Ident>),
+    ObjectId,
+    Object(Ident),
+    NewId(Ident),
     Array,
     Fd,
     /// only used by wl_registry::bind
@@ -78,7 +79,7 @@ impl Ty {
 
     pub fn as_new_id(&self) -> Option<&Ident> {
         match self {
-            Ty::NewId(id) => id.as_ref(),
+            Ty::NewId(id) => Some(id),
             _ => None,
         }
     }
@@ -86,14 +87,12 @@ impl Ty {
 
 impl Parse for Arg {
     fn parse(parser: &mut Parser) -> Result<Self, Error> {
-        fn opt_iface(parser: &mut Parser) -> Result<Option<Ident>, Error> {
-            let Some(_) = parser.next_punct_of('<') else {
-                return Ok(None);
-            };
+        fn iface(parser: &mut Parser) -> Result<Ident, Error> {
+            parser.punct_of('<')?;
             let wl_name = parser.parse::<Ident>()?;
             let name = wl_name.to_camel();
             parser.punct_of('>')?;
-            Ok(Some(name))
+            Ok(name)
         }
         fn opt_enum(is_signed: bool, parser: &mut Parser) -> Result<Ty, Error> {
             let Some(_) = parser.next_punct_of('<') else {
@@ -124,8 +123,9 @@ impl Parse for Arg {
             "uint" => opt_enum(false, parser)?,
             "fixed" => Ty::Fixed,
             "string" => Ty::String,
-            "object" => Ty::Object(opt_iface(parser)?),
-            "new_id" => Ty::NewId(opt_iface(parser)?),
+            "object_id" => Ty::ObjectId,
+            "object" => Ty::Object(iface(parser)?),
+            "new_id" => Ty::NewId(iface(parser)?),
             "array" => Ty::Array,
             "fd" => Ty::Fd,
             "version" => Ty::Version,
@@ -161,10 +161,9 @@ impl Ty {
             Ty::Enum { path, .. } => path.clone().into(),
             Ty::Fixed => id!(Fixed),
             Ty::String => gr!(&'a str),
-            Ty::Object(None) => id!(Object),
-            Ty::Object(Some(i)) => gr!(Object<#i>),
-            Ty::NewId(None) => id!(NewId),
-            Ty::NewId(Some(i)) => gr!(NewId<#i>),
+            Ty::ObjectId => id!(ObjectId),
+            Ty::Object(i) => gr!(Object<#i>),
+            Ty::NewId(i) => gr!(NewId<#i>),
             Ty::Array => gr!(&'a [u8]),
             Ty::Fd => id!(RawFd),
             Ty::Version => id!(Version),

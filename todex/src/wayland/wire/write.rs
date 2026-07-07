@@ -1,4 +1,4 @@
-use crate::wayland::primitives::{AsObjectId, Fixed, Version, WlEnum};
+use crate::wayland::primitives::{AsObjectId, Fixed, ObjectId, Version, WlEnum};
 use crate::wayland::object::{NewId, Object};
 
 // ===== PrimitiveWrite =====
@@ -70,6 +70,7 @@ macro_rules! sized4 {
 }
 sized4!(impl Sized2 for u32);
 sized4!(impl Sized2 for i32);
+sized4!(impl Sized2 for ObjectId);
 sized4!(impl Sized2 for Fixed);
 sized4!(impl Sized2 for Version);
 sized4!(impl<T> Sized2 for NewId<T>);
@@ -84,6 +85,13 @@ impl private::Sealed for u32 {
 }
 
 impl private::Sealed for i32 {
+    #[inline]
+    fn write(self, writer: Writer) -> Writer {
+        writer.write_ne(self.to_ne_bytes())
+    }
+}
+
+impl private::Sealed for ObjectId {
     #[inline]
     fn write(self, writer: Writer) -> Writer {
         writer.write_ne(self.to_ne_bytes())

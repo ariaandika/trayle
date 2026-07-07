@@ -4,7 +4,7 @@ interface! {
     pub struct WlRegistry;
 
     impl Request {
-        pub fn bind(name: uint, id_name: string, id_version: version, new_id: new_id);
+        pub fn bind(name: uint, id_name: string, id_version: version, new_id: object_id);
     }
 
     impl Event {

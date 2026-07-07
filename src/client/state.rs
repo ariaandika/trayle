@@ -4,7 +4,6 @@ use std::task::Poll;
 use todex::sys::bytes::Bytes;
 use todex::sys::cmsg::{Cmsg, WriteError, ReadError};
 use todex::wayland::primitives::AsObjectId;
-use todex::wayland::object::Object;
 use todex::wayland::message::WlMessage;
 use todex::wayland::interface::wl_display::{DeleteId, Error};
 use todex::wayland::wire::Encode;
@@ -52,7 +51,7 @@ impl<'a> ClientMut<'a> {
     /// Send `wl_display::error` event.
     pub fn send_error<Id: AsObjectId>(&mut self, id: Id, error: WlError) {
         self.send(Error {
-            object_id: Object::new(id.object_id()),
+            object_id: id.object_id(),
             code: error.code(),
             message: error.message(),
         });

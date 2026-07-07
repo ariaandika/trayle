@@ -26,7 +26,7 @@ impl<I: AsNewId> AsNewId for &I {
 
 /// A new id for an object.
 #[derive(Clone, Copy)]
-pub struct NewId<I = ()> {
+pub struct NewId<I> {
     pub id: ObjectId,
     pub interface: I,
 }

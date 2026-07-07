@@ -53,18 +53,6 @@ pub struct Object<I = (), M = (), D = ObjectId> {
     id: D,
 }
 
-impl Object {
-    /// Create new untyped `Object`.
-    #[inline]
-    pub const fn new(object_id: ObjectId) -> Self {
-        Self {
-            iface: (),
-            marker: (),
-            id: object_id,
-        }
-    }
-}
-
 impl<I> Object<I> {
     /// Create new typed `Object`.
     #[inline]
@@ -94,12 +82,12 @@ impl<I: InterfaceMarker> Object<I> {
     ///
     /// Panics if the interface type does not match with given [`Interface`].
     #[inline]
-    pub fn from_dynamic(new_id: NewId, interface: Interface) -> Self {
+    pub fn from_dynamic(object_id: ObjectId, interface: Interface) -> Self {
         // yes the method name sucks
         Self {
             iface: I::from_interface(interface),
             marker: (),
-            id: new_id.id,
+            id: object_id,
         }
     }
 }

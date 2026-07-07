@@ -71,9 +71,9 @@ impl Objects {
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    pub fn insert_parts<I>(
+    pub fn insert_parts(
         &mut self,
-        new_id: NewId<I>,
+        new_id: ObjectId,
         interface: Interface,
         version: Version,
     ) -> Result<(), ObjectError> {

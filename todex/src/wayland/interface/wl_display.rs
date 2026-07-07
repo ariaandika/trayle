@@ -10,7 +10,7 @@ interface! {
     }
 
     impl Event {
-        pub fn error(object_id: object, code: uint, message: string);
+        pub fn error(object_id: object_id, code: uint, message: string);
         pub fn delete_id(id: uint);
     }
 
@@ -19,16 +19,6 @@ interface! {
         invalid_method,
         no_memory,
         implementation,
-    }
-}
-
-impl<'a> Error<'a> {
-    pub fn new(object_id: Object, code: u32, message: &'a str) -> Self {
-        Self {
-            object_id,
-            code,
-            message,
-        }
     }
 }
 

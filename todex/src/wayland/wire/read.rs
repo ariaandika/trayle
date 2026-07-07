@@ -80,15 +80,21 @@ impl Read<'_> for Fixed {
     }
 }
 
-// generic
-
-impl<T: InterfaceMarker> Read<'_> for Object<T> {
+impl Read<'_> for ObjectId {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
         reader
             .read_ne_bytes()
             .and_then(|id| ObjectId::new(u32::from_ne_bytes(id)).ok_or(E::ZeroId))
-            .map(|id| Object::new_typed(id, T::MARKER))
+    }
+}
+
+// generic
+
+impl<T: InterfaceMarker> Read<'_> for Object<T> {
+    #[inline]
+    fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
+        ObjectId::read(reader).map(|id| Object::new_typed(id, T::MARKER))
     }
 }
 
