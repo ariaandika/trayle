@@ -44,14 +44,14 @@ impl Surface {
     }
 
     pub fn commit(&mut self) {
-        self.flags &= !(self.flags & COMMITED_FLAG);
+        self.flags &= !self.flags & COMMITED_FLAG;
     }
 }
 
 /// Pending
 impl Surface {
     fn pending_mut(&mut self) -> &mut State {
-        &mut self.states[!(self.flags & COMMITED_FLAG) as usize]
+        &mut self.states[(!self.flags & COMMITED_FLAG) as usize]
     }
 
     pub fn attach(&mut self, buffer: Option<Handle>) {
