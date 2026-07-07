@@ -2,7 +2,7 @@ use std::fmt;
 
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use crate::wayland::object::NewId;
-use crate::wayland::interface::{InterfaceMarker, AsInterface, Interface};
+use crate::wayland::interface::{AsInterface, Interface, WlInterface};
 
 // ===== Object =====
 
@@ -75,7 +75,7 @@ impl<I> Object<I> {
     }
 }
 
-impl<I: InterfaceMarker> Object<I> {
+impl<I: WlInterface> Object<I> {
     /// Create new typed `Object` from [`NewId`] and [`Interface`].
     ///
     /// # Panics
@@ -108,7 +108,7 @@ impl<M, D> Object<Interface, M, D> {
     ///
     /// Panics if the interface type does not match with the contained `Interface`.
     #[inline]
-    pub fn with_type<I2: InterfaceMarker>(self) -> Object<I2, M, D> {
+    pub fn with_type<I2: WlInterface>(self) -> Object<I2, M, D> {
         Object {
             iface: I2::from_interface(self.iface),
             marker: self.marker,

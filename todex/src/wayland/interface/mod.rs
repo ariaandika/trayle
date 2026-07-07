@@ -11,20 +11,6 @@ use crate::wayland::wire::{EncodePayload, Sized2, Writer};
 
 // ===== marker =====
 
-macro_rules! assert_iface {
-    ($i:ident, $ty:ident) => {
-        if !matches!($i, InterfaceId::$ty) {
-            invalid_interface();
-        }
-    };
-}
-
-#[cold]
-#[inline(never)]
-fn invalid_interface() {
-    panic!("unchecked interface marker creation")
-}
-
 pub(crate) mod sealed {
     /// Internal usage only
     pub trait Sealed: std::fmt::Debug + Clone + Copy {
@@ -33,21 +19,12 @@ pub(crate) mod sealed {
     }
 }
 
-pub trait InterfaceMarker: sealed::Sealed {
-    /// Create this interface marker.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the interface type does not match with given [`Interface`].
-    fn from_interface(interface: Interface) -> Self;
-}
-
 // ===== interface =====
 
 /// Wayland interface.
 ///
 /// This trait is implemented by a marker type.
-pub trait WlInterface: AsInterface + InterfaceMarker {
+pub trait WlInterface: Sized + Copy + AsInterface + sealed::Sealed {
     type RequestOp: OpCode;
 
     type EventOp: OpCode;
@@ -55,12 +32,25 @@ pub trait WlInterface: AsInterface + InterfaceMarker {
     /// Interface name.
     const INTERFACE_NAME: &str;
 
-    // /// Create this interface.
-    // ///
-    // /// # Panics
-    // ///
-    // /// Panics if the interface type does not match with given [`Interface`].
-    // fn from_interface(interface: Interface) -> Option<Self>;
+    /// Create this interface.
+    ///
+    /// Returns `None` if the interface type does not match with given [`Interface`].
+    fn try_from_interface(interface: Interface) -> Option<Self>;
+
+    /// Create this interface marker.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the interface type does not match with given [`Interface`].
+    #[inline]
+    fn from_interface(interface: Interface) -> Self {
+        #[cold]
+        #[inline(never)]
+        fn invalid_interface() -> ! {
+            panic!("unchecked interface marker creation")
+        }
+        Self::try_from_interface(interface).unwrap_or_else(|| invalid_interface())
+    }
 }
 
 /// Type that is associated with an interface.

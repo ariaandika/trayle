@@ -70,13 +70,6 @@ impl Interface {
 
             pub type InterfaceType = #iface_name;
 
-            impl InterfaceMarker for #iface_name {
-                fn from_interface(iface: InterfaceId) -> Self {
-                    assert_iface!(iface, #iface_name);
-                    <Self as sealed::Sealed>::MARKER
-                }
-            }
-
             impl sealed::Sealed for #iface_name {
                 const MARKER: Self = Self(());
             }
@@ -87,6 +80,14 @@ impl Interface {
                 type EventOp = EventOp;
 
                 const INTERFACE_NAME: &str = #wl_string;
+
+                fn try_from_interface(iface: InterfaceId) -> Option<Self> {
+                    if iface == Interface::#iface_name {
+                        Some(<Self as sealed::Sealed>::MARKER)
+                    } else {
+                        None
+                    }
+                }
             }
 
             @global

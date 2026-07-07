@@ -1,7 +1,7 @@
 use std::fmt;
 
 use crate::wayland::primitives::{AsObjectId, ObjectId};
-use crate::wayland::interface::InterfaceMarker;
+use crate::wayland::interface::WlInterface;
 
 // ===== traits =====
 
@@ -46,12 +46,12 @@ impl<T> AsObjectId for NewId<T> {
     }
 }
 
-impl<I: InterfaceMarker> AsNewId for NewId<I> {
+impl<I: WlInterface> AsNewId for NewId<I> {
     type Interface = I;
 
     #[inline]
     fn new_id(&self) -> NewId<Self::Interface> {
-        NewId::new(self.id, I::MARKER)
+        *self
     }
 }
 

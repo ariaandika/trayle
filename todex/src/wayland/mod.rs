@@ -47,3 +47,44 @@ pub mod interface;
 pub mod wire;
 pub mod display;
 pub mod error;
+
+#[cfg(doc)]
+pub mod cheatsheet {
+    //! Cheatsheet
+    //!
+    //! # Common
+    //!
+    //! APIs that used in compositor logic.
+    //!
+    //! ## Traits
+    //!
+    //! - [`AsObjectId`], [`AsVersion`], [`AsNewId`], [`AsInterface`]: associated data
+    //! - [`WlMessage`]: constant props for message (`AsInterface` + `AsOpCode`)
+    //! - [`WlInterface`]:
+    //! - [`InterfaceMarker`]:
+    //!
+    //! ## Wrappers
+    //!
+    //! - [`ObjectId`], [`Version`], [`NewId`]
+    //!
+    //! ## Shared struct
+    //!
+    //! - [`Object`]
+    //! - [`Message`]
+    //!
+    //! # Encoding
+    //!
+    //! APIs that used in decoding/encoding.
+    //!
+    //! - [`AsOpCode`], [`OpCode`]
+    //! - [`Payload`]
+    //! - [`DecodePayload`], [`Encode`]
+    //!
+    use super::primitives::*;
+    use super::object::*;
+    use super::message::*;
+    use super::interface::*;
+    use super::wire::*;
+    use super::display::*;
+    use super::error::*;
+}

@@ -1,6 +1,6 @@
 use crate::wayland::primitives::{Fixed, ObjectId, Version, WlEnum};
 use crate::wayland::object::{NewId, Object};
-use crate::wayland::interface::InterfaceMarker;
+use crate::wayland::interface::WlInterface;
 use crate::wayland::wire::DecodeError;
 
 use DecodeError as E;
@@ -91,14 +91,14 @@ impl Read<'_> for ObjectId {
 
 // generic
 
-impl<T: InterfaceMarker> Read<'_> for Object<T> {
+impl<T: WlInterface> Read<'_> for Object<T> {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
         ObjectId::read(reader).map(|id| Object::new_typed(id, T::MARKER))
     }
 }
 
-impl<T: InterfaceMarker> Read<'_> for Option<Object<T>> {
+impl<T: WlInterface> Read<'_> for Option<Object<T>> {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
         reader
@@ -108,7 +108,7 @@ impl<T: InterfaceMarker> Read<'_> for Option<Object<T>> {
     }
 }
 
-impl<T: InterfaceMarker> Read<'_> for NewId<T> {
+impl<T: WlInterface> Read<'_> for NewId<T> {
     #[inline]
     fn read(reader: &mut Reader) -> Result<Self, DecodeError> {
         reader
