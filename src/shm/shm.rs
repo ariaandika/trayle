@@ -1,11 +1,12 @@
 use std::debug_assert_matches;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
-use todex::collections::slab::Slab;
 use todex::sys::memmap::Memmap;
+use todex::handle::Handle;
+use todex::collections::slab::Slab;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;
-use todex::wayland::object::{Handle, Object, ObjectError};
+use todex::wayland::object::{Object, ObjectError};
 use todex::wayland::error::WlError;
 
 use crate::shm::buffer::{Buffer, BufferFactory};
@@ -26,21 +27,21 @@ impl ShmPools {
     }
 
     /// Create [`ShmPool`].
-    pub fn create_pool(&mut self, fd: i32, size: i32) -> Result<Handle, Error> {
+    pub fn create_pool(&mut self, fd: i32, size: i32) -> Result<Handle<ShmPool>, Error> {
         Ok(Handle::from_idx(self.buf.insert(ShmPool::new(fd, size)?).0))
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut ShmPool, ObjectError> {
+    pub fn get_mut(&mut self, handle: Handle<ShmPool>) -> Result<&mut ShmPool, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
             .ok_or(ObjectError::UnknownId)
     }
 
-    pub fn create_buffer(&mut self, handle: Handle, msg: &CreateBuffer) -> Result<Buffer, WlError> {
+    pub fn create_buffer(&mut self, handle: Handle<ShmPool>, msg: &CreateBuffer) -> Result<Buffer, WlError> {
         self.get_mut(handle)?.create_buffer(handle, msg).map_err(<_>::into)
     }
 
-    pub fn destroy(&mut self, handle: Handle) -> Result<(), ObjectError> {
+    pub fn destroy(&mut self, handle: Handle<ShmPool>) -> Result<(), ObjectError> {
         if self.get_mut(handle)?.destroy() {
             self.buf.remove(handle.to_idx());
         }
@@ -48,7 +49,7 @@ impl ShmPools {
     }
 
     pub fn destroy_buffer(&mut self, buffer: Buffer) -> Result<(), ObjectError> {
-        let handle = buffer.factory_handle;
+        let BufferFactory::ShmPool(handle) = buffer.factory;
         if self.get_mut(handle)?.destroy_buffer(buffer) {
             self.buf.remove(handle.to_idx());
         }
@@ -90,7 +91,11 @@ impl ShmPool {
         Ok(())
     }
 
-    fn create_buffer(&mut self, handle: Handle, msg: &CreateBuffer) -> Result<Buffer, Error> {
+    fn create_buffer(
+        &mut self,
+        handle: Handle<ShmPool>,
+        msg: &CreateBuffer,
+    ) -> Result<Buffer, Error> {
         // let end = offset + stride * (height - 1) + width * bytes_per_pixel;
         fn map_e<T>(_: T) -> Error {
             Error::InvalidFormat
@@ -101,10 +106,9 @@ impl ShmPool {
             height: msg.height.try_into().map_err(map_e)?,
             stride: msg.stride.try_into().map_err(map_e)?,
             format: msg.format,
-            factory: BufferFactory::ShmPool,
-            factory_handle: {
+            factory: {
                 self.ref_count += 1;
-                handle
+                BufferFactory::ShmPool(handle)
             },
             wl_buffer: Object::from_new_id(msg.id),
         })
@@ -116,7 +120,7 @@ impl ShmPool {
     }
 
     fn destroy_buffer(&mut self, buffer: Buffer) -> bool {
-        debug_assert_matches!(buffer.factory, BufferFactory::ShmPool);
+        debug_assert_matches!(buffer.factory, BufferFactory::ShmPool(_));
         self.ref_count -= 1;
         self.ref_count == 0
     }

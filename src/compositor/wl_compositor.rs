@@ -6,10 +6,12 @@ use crate::compositor::prelude::*;
 use crate::compositor::traits::CommitEffect;
 use crate::surface::{Role, RoleError};
 
+// ===== wl_compositor =====
+
 impl MessageHandler<CreateSurface> for Compositor {
     fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
         let handle = self.surfaces.create();
-        let _ = client.objects.create_handle(req, handle)?;
+        let _ = client.objects.create_with(req, handle)?;
         Ok(())
     }
 }
@@ -23,8 +25,9 @@ todo_handler!(Destroy);
 
 impl MessageHandler<Attach> for Compositor {
     fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), WlError> {
-        let buffer_handle = match &msg.buffer {
-            Some(buffer) => Some(client.objects.get_mut(buffer)?.handle()),
+        let buffer_handle = match msg.buffer {
+            // TODO: add Objects extension to get with typed handle
+            Some(buffer) => Some(client.objects.get_mut(buffer)?.handle().cast()),
             None => None,
         };
         self.surfaces.get_mut(msg.handle())?.attach(buffer_handle);

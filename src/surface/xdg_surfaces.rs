@@ -1,7 +1,8 @@
+use todex::handle::Handle;
 use todex::collections::slab::Slab;
-use todex::wayland::object::{Handle, ObjectError};
+use todex::wayland::object::ObjectError;
 
-use crate::surface::XdgSurface;
+use crate::surface::{XdgSurface, Surface};
 
 const INITIAL_CAP: usize = 16;
 
@@ -16,18 +17,18 @@ impl XdgSurfaces {
         }
     }
 
-    pub fn create(&mut self, surface_handle: Handle) -> Handle {
+    pub fn create(&mut self, surface_handle: Handle<Surface>) -> Handle<XdgSurface> {
         let (idx, _) = self.buf.insert(XdgSurface::new(surface_handle));
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut XdgSurface, ObjectError> {
+    pub fn get_mut(&mut self, handle: Handle<XdgSurface>) -> Result<&mut XdgSurface, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
             .ok_or(ObjectError::UnknownId)
     }
 
-    pub fn remove(&mut self, handle: Handle) -> Result<XdgSurface, ObjectError> {
+    pub fn remove(&mut self, handle: Handle<XdgSurface>) -> Result<XdgSurface, ObjectError> {
         self.buf
             .remove(handle.to_idx())
             .ok_or(ObjectError::UnknownId)

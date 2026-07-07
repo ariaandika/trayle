@@ -22,6 +22,7 @@ use crate::client::ClientMut;
 use crate::shm::{Buffers, ShmPools};
 use crate::surface::{Surfaces, XdgSurfaces};
 
+use handle::WithHandle;
 use traits::{MessageHandler, v2};
 
 mod prelude {
@@ -38,6 +39,7 @@ mod prelude {
     pub(super) use super::traits::{MessageHandler, Msg, todo_handler};
 }
 
+mod handle;
 mod traits;
 
 mod wl_display;
@@ -136,11 +138,12 @@ impl Compositor {
     where
         M: WlMessage + DecodePayload<Fd = [i32; N]>,
         M::Output<'a>: WlMessage,
+        <M::Output<'a> as WlMessage>::WlInterface: WithHandle,
         Self: MessageHandler<M::Output<'a>>,
     {
         let id = msg.object_id();
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;
-        let msg = Message::from_parts(obj.handle(), payload, obj.version());
+        let msg = Message::from_parts(obj.handle().cast(), payload, obj.version());
         let obj = Object::from_parts(obj.interface(), (), id).with_type();
         log::debug!("client#{} <- {}", client.id, msg.display(),);
         v2::MessageHandler::handle(self, obj, msg, client)?;

@@ -1,4 +1,3 @@
-use wayland::object::Handle;
 use wayland::error::BindError;
 
 use wl_display::{GetRegistry, Sync};
@@ -40,12 +39,9 @@ impl MessageHandler<Bind<'_>> for Compositor {
         }
 
         let interface = global.interface();
-        client.objects.insert_parts(
-            bind.new_id,
-            interface,
-            bind.id_version,
-            Handle::default(),
-        )?;
+        client
+            .objects
+            .insert_parts(bind.new_id, interface, bind.id_version)?;
 
         // some interface has side-effect after binding
         macro_rules! dispatch {

@@ -1,7 +1,8 @@
 use std::fmt;
 
+use crate::handle::Handle;
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
-use crate::wayland::object::{Handle, NewId};
+use crate::wayland::object::NewId;
 use crate::wayland::interface::{InterfaceMarker, AsInterface, Interface};
 
 // ===== Object =====
@@ -148,9 +149,9 @@ impl<I, M, D> Object<I, M, D> {
     }
 }
 
-impl<I, M> Object<I, M, Handle> {
+impl<I, M, H> Object<I, M, Handle<H>> {
     #[inline]
-    pub const fn handle(&self) -> Handle {
+    pub const fn handle(&self) -> Handle<H> {
         self.id
     }
 }

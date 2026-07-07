@@ -1,11 +1,12 @@
+use crate::handle::Handle;
 use crate::collections::slots::{Slots, IntoIter};
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
-use crate::wayland::object::{AsHandle, AsNewId, Handle, NewId, Object, ObjectError};
+use crate::wayland::object::{AsNewId, NewId, Object, ObjectError};
 use crate::wayland::interface::{AsInterface, Interface};
 
 use ObjectError as E;
 
-pub type ObjectEntry<I = Interface> = Object<I, Version, Handle>;
+pub type ObjectEntry<I = Interface, H = ()> = Object<I, Version, Handle<H>>;
 
 const INITIAL_CAP: usize = 32;
 
@@ -32,18 +33,17 @@ impl Objects {
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
     {
-        self.create_handle(msg, Handle::default())
+        self.create_with(msg, Handle::<()>::from_idx(0))
     }
 
     /// Renamed to [`Objects::create_with`].
     pub fn create_handle<M, H>(
         &mut self,
         msg: M,
-        handle: H,
+        handle: Handle<H>,
     ) -> Result<Object<M::Interface>, ObjectError>
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
-        H: AsHandle,
     {
         self.create_with(msg, handle)
     }
@@ -52,18 +52,17 @@ impl Objects {
     pub fn create_with<M, H>(
         &mut self,
         msg: M,
-        handle: H,
+        handle: Handle<H>,
     ) -> Result<Object<M::Interface>, ObjectError>
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
-        H: AsHandle,
     {
         let new_id = msg.new_id();
         self.insert_inner(
             new_id.object_id(),
             new_id.interface.interface(),
             msg.version(),
-            handle.to_handle(),
+            handle.cast::<()>(),
         )?;
         Ok(Object::from_new_id(new_id))
     }
@@ -71,14 +70,13 @@ impl Objects {
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    pub fn insert_parts<I, H: AsHandle>(
+    pub fn insert_parts<I>(
         &mut self,
         new_id: NewId<I>,
         interface: Interface,
         version: Version,
-        handle: H,
     ) -> Result<(), ObjectError> {
-        self.insert_inner(new_id.object_id(), interface, version, handle.to_handle())
+        self.insert_inner(new_id.object_id(), interface, version, Handle::from_idx(0))
     }
 
     // detach the generics
@@ -87,7 +85,7 @@ impl Objects {
         object_id: ObjectId,
         interface: Interface,
         version: Version,
-        handle: Handle,
+        handle: Handle<()>,
     ) -> Result<(), ObjectError> {
         let entry = ObjectEntry::from_parts(interface, version, handle);
         let Some(idx) = object_id.to_u32().checked_sub(2).map(|e| e as usize) else {
@@ -134,7 +132,7 @@ impl Objects {
 }
 
 const WL_DISPLAY: ObjectEntry =
-    ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::from_raw(0));
+    ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::from_idx(0));
 
 pub trait ObjectIndex {
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;

@@ -1,9 +1,10 @@
 use todex::wayland::primitives::Version;
-use todex::wayland::object::{Handle, Object};
+use todex::wayland::object::Object;
 use todex::wayland::message::{Message, WlMessage};
 use todex::wayland::error::WlError;
 
 use crate::client::ClientMut;
+use crate::compositor::handle::{Handle, WithHandle};
 
 // ===== Handler =====
 
@@ -15,10 +16,15 @@ pub type Obj<I> = Object<I>;
 /// Contains payload, version, and object id.
 ///
 /// Version is used for creating object with new id.
-pub type Msg<M> = Message<M, Version, Handle>;
+pub type Msg<M> =
+    Message<M, Version, Handle<<<M as WlMessage>::WlInterface as WithHandle>::Handle>>;
 
 /// Handle incoming message.
-pub trait MessageHandler<M>: Sized {
+pub trait MessageHandler<M>: Sized
+where
+    M: WlMessage,
+    M::WlInterface: WithHandle,
+{
     fn handle(&mut self, msg: Msg<M>, client: &mut ClientMut) -> Result<(), WlError>;
 }
 
@@ -29,6 +35,7 @@ pub mod v2 {
     pub trait MessageHandler<M>: Sized
     where
         M: WlMessage,
+        M::WlInterface: WithHandle,
     {
         fn handle(
             &mut self,
@@ -41,6 +48,7 @@ pub mod v2 {
     impl<C, M> MessageHandler<M> for C
     where
         M: WlMessage,
+        M::WlInterface: WithHandle,
         C: super::MessageHandler<M>,
     {
         fn handle(

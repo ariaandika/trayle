@@ -1,5 +1,6 @@
+use todex::handle::Handle;
 use todex::collections::slab::Slab;
-use todex::wayland::object::{Handle, ObjectError};
+use todex::wayland::object::ObjectError;
 
 use crate::surface::Surface;
 
@@ -16,12 +17,12 @@ impl Surfaces {
         }
     }
 
-    pub fn create(&mut self) -> Handle {
+    pub fn create(&mut self) -> Handle<Surface> {
         let (idx, _) = self.buf.insert(Surface::new());
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle) -> Result<&mut Surface, ObjectError> {
+    pub fn get_mut(&mut self, handle: Handle<Surface>) -> Result<&mut Surface, ObjectError> {
         self.buf
             .get_mut(handle.to_idx())
             .ok_or(ObjectError::UnknownId)

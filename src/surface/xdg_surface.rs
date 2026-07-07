@@ -1,4 +1,5 @@
-use todex::wayland::object::{Handle, Object};
+use todex::handle::Handle;
+use todex::wayland::object::Object;
 use todex::wayland::interface::xdg_surface::Error;
 use todex::wayland::interface::XdgToplevel;
 
@@ -7,7 +8,7 @@ use crate::surface::{Surface, Role};
 // ===== XdgSurface =====
 
 pub struct XdgSurface {
-    surface_handle: Handle,
+    surface_handle: Handle<Surface>,
     kind: Kind,
 }
 
@@ -18,7 +19,7 @@ enum Kind {
 }
 
 impl XdgSurface {
-    pub fn new(surface_handle: Handle) -> Self {
+    pub fn new(surface_handle: Handle<Surface>) -> Self {
         Self {
             surface_handle,
             kind: Kind::None,
@@ -37,7 +38,7 @@ impl XdgSurface {
             .map_err(|_| Error::AlreadyConstructed)
     }
 
-    pub fn surface_handle(&self) -> Handle {
+    pub fn surface_handle(&self) -> Handle<Surface> {
         self.surface_handle
     }
 

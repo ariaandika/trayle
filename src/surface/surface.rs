@@ -1,7 +1,9 @@
-use todex::wayland::object::{Object, Handle};
+use todex::handle::Handle;
+use todex::wayland::object::Object;
 use todex::wayland::interface::wl_surface::Damage;
 use todex::wayland::interface::WlCallback;
 
+use crate::shm::Buffer;
 use crate::surface::{Region, Role, RoleError};
 
 pub struct Surface {
@@ -55,7 +57,7 @@ impl Surface {
         &mut self.states[(!self.flags & COMMITED_FLAG) as usize]
     }
 
-    pub fn attach(&mut self, buffer: Option<Handle>) {
+    pub fn attach(&mut self, buffer: Option<Handle<Buffer>>) {
         self.pending_mut().buffer = buffer;
     }
 
@@ -81,7 +83,7 @@ impl Surface {
         self.current_mut().request_frames.take().into_iter()
     }
 
-    pub fn release_current_buffer(&mut self) -> Option<Handle> {
+    pub fn release_current_buffer(&mut self) -> Option<Handle<Buffer>> {
         self.current_mut().buffer.take()
     }
 }
@@ -90,7 +92,7 @@ impl Surface {
 
 struct State {
     request_frames: Option<Object<WlCallback>>,
-    buffer: Option<Handle>,
+    buffer: Option<Handle<Buffer>>,
     damage: Region,
     // opaque region,
     // input region,

@@ -20,8 +20,11 @@ todo_handler!(CreatePositioner);
 impl MessageHandler<GetXdgSurface> for Compositor {
     fn handle(&mut self, msg: Msg<GetXdgSurface>, client: &mut ClientMut) -> Result<(), WlError> {
         let surface_handle = client.objects.get_mut(msg.surface)?.handle();
-        let xdg_handle = self.xdg_surfaces.create(surface_handle);
-        client.objects.create_handle(msg, xdg_handle)?;
+        // TODO: blocker: objects get with typed handle
+        let xdg_handle = self
+            .xdg_surfaces
+            .create(surface_handle.cast::<crate::surface::Surface>());
+        client.objects.create_with(msg, xdg_handle)?;
         Ok(())
     }
 }

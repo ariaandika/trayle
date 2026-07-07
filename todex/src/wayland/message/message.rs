@@ -1,5 +1,6 @@
+use crate::handle::Handle;
 use crate::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
-use crate::wayland::object::{AsNewId, NewId, Handle};
+use crate::wayland::object::{AsNewId, NewId};
 use crate::wayland::display::AsDisplay;
 use crate::wayland::message::AsOpCode;
 use crate::wayland::interface::{AsInterface, Interface, WlInterface};
@@ -88,12 +89,6 @@ impl<T, M, D> Message<T, M, D> {
     pub fn with_version(self, version: Version) -> Message<T, Version, D> {
         Message::from_parts(self.id, self.payload, version)
     }
-
-    /// Drop the third generic parameter value and replace it with [`Handle`].
-    #[inline]
-    pub fn with_handle(self, handle: Handle) -> Message<T, M, Handle> {
-        Message::from_parts(handle, self.payload, self.meta)
-    }
 }
 
 impl<T, M, D: AsObjectId> AsObjectId for Message<T, M, D> {
@@ -162,10 +157,10 @@ impl<T, D> AsVersion for Message<T, Version, D> {
     }
 }
 
-impl<T, M> Message<T, M, Handle> {
+impl<T, M, H> Message<T, M, Handle<H>> {
     /// Returns the associated [`Handle`].
     #[inline]
-    pub fn handle(&self) -> Handle {
+    pub fn handle(&self) -> Handle<H> {
         self.id
     }
 }
