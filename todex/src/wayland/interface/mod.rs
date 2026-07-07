@@ -53,7 +53,7 @@ impl InterfaceMarker for () {
 
 // ===== interface =====
 
-pub trait WlInterface: AsInterface {
+pub trait WlInterface: AsInterface + InterfaceMarker {
     type RequestOp: OpCode;
 
     type EventOp: OpCode;

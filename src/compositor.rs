@@ -8,7 +8,7 @@ use std::time::Instant;
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
-use todex::wayland::object::{Global, ObjectEntry, global_of};
+use todex::wayland::object::{Global, Object, ObjectEntry, global_of};
 use todex::wayland::display::AsDisplay;
 use todex::wayland::message::{Message, OpCode, WlMessage};
 use todex::wayland::interface::{self, AsInterface, InterfaceId};
@@ -21,7 +21,7 @@ use crate::seat::Seat;
 use crate::client::ClientMut;
 use crate::wayland::{Buffers, ShmPools, Surfaces, XdgSurfaces};
 
-use traits::MessageHandler;
+use traits::{MessageHandler, v2};
 
 mod prelude {
     pub(super) use todex::wayland;
@@ -140,8 +140,9 @@ impl Compositor {
         let id = msg.object_id();
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;
         let msg = Message::from_parts(obj.handle(), payload, obj.version());
+        let obj = Object::from_parts(obj.interface(), (), id).with_type();
         log::debug!("client#{} <- {}", client.id, msg.display(),);
-        self.handle(msg, client)?;
+        v2::MessageHandler::handle(self, obj, msg, client)?;
         if M::IS_DESTRUCTOR {
             client.delete_id(id);
         }
