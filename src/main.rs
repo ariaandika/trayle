@@ -1,4 +1,4 @@
-#![allow(refining_impl_trait)]
+#![allow(refining_impl_trait, clippy::module_inception)]
 use std::process::ExitCode;
 use todex::sys::epoll::Epoll;
 use todex::sys::listener::{Listener, SocketPath};
@@ -13,15 +13,13 @@ use service::listener::ListenerService;
 use service::clients::ClientService;
 use error::FatalError;
 
-mod wayland;
-
+mod shm;
+mod surface;
 mod buffer;
 mod seat;
 mod client;
-
 mod compositor;
 mod service;
-
 mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
@@ -45,7 +43,7 @@ pub fn event_loop() -> Result<(), FatalError> {
     epoll.add(LISTENER_KEY, &listener);
     epoll.add(SIGFD_KEY, &sigfd);
 
-    // ===== states =====
+    // ===== components =====
     let mut clients = Clients::new();
     let mut buffer = BufferPool::new();
     let mut compositor = Compositor::new()?;

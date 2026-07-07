@@ -1,8 +1,8 @@
 use todex::wayland::object::{Handle, Object};
-use todex::wayland::interface::xdg_surface::{Error, XdgSurface as IXdgSurface};
+use todex::wayland::interface::xdg_surface::Error;
 use todex::wayland::interface::XdgToplevel;
 
-use crate::wayland::surface::{Surface, Role};
+use crate::surface::{Surface, Role};
 
 pub struct XdgSurface {
     surface_handle: Handle,

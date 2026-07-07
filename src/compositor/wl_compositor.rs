@@ -4,7 +4,7 @@ use wl_surface::{SetBufferScale, SetBufferTransform, SetInputRegion, SetOpaqueRe
 
 use crate::compositor::prelude::*;
 use crate::compositor::traits::CommitEffect;
-use crate::wayland::{Role, RoleError};
+use crate::surface::{Role, RoleError};
 
 impl MessageHandler<CreateSurface> for Compositor {
     fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {

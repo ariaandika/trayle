@@ -8,7 +8,7 @@ use todex::wayland::interface::wl_shm_pool::CreateBuffer;
 use todex::wayland::object::{Handle, Object, ObjectError};
 use todex::wayland::error::WlError;
 
-use crate::wayland::buffer::{Buffer, BufferFactory};
+use crate::shm::buffer::{Buffer, BufferFactory};
 
 // ===== ShmPools =====
 

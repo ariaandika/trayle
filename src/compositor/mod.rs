@@ -19,7 +19,8 @@ use todex::wayland::error::WlError;
 use crate::error::FatalError;
 use crate::seat::Seat;
 use crate::client::ClientMut;
-use crate::wayland::{Buffers, ShmPools, Surfaces, XdgSurfaces};
+use crate::shm::{Buffers, ShmPools};
+use crate::surface::{Surfaces, XdgSurfaces};
 
 use traits::{MessageHandler, v2};
 

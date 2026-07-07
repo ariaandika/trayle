@@ -1,6 +1,5 @@
-use todex::wayland::primitives::ObjectId;
 use todex::wayland::object::{Object, Handle};
-use todex::wayland::interface::wl_surface::{Damage, Error};
+use todex::wayland::interface::wl_surface::Damage;
 use todex::wayland::interface::{WlCallback, XdgToplevel};
 
 pub struct Surface {
