@@ -3,7 +3,7 @@ use todex::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
 use todex::wayland::object::{AsNewId, NewId, Object, ObjectError};
 use todex::wayland::interface::{AsInterface, Interface};
 
-use crate::handle::Handle;
+use crate::handle::{Handle, WithHandle};
 
 use ObjectError as E;
 
@@ -22,7 +22,6 @@ pub struct Objects {
 }
 
 impl Objects {
-    #[inline]
     pub fn new() -> Self {
         Self {
             slots: Slots::with_capacity(INITIAL_CAP),
@@ -34,29 +33,25 @@ impl Objects {
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
     {
-        self.create_with(msg, Handle::<()>::from_idx(0))
+        let new_id = msg.new_id();
+        self.insert_inner(
+            new_id.object_id(),
+            new_id.interface.interface(),
+            msg.version(),
+            Handle::from_idx(0),
+        )?;
+        Ok(Object::from_new_id(new_id))
     }
 
-    /// Renamed to [`Objects::create_with`].
-    pub fn create_handle<M, H>(
+    /// Create new object from constructor message with a handle.
+    pub fn create_with<M>(
         &mut self,
         msg: M,
-        handle: Handle<H>,
+        handle: Handle<<M::Interface as WithHandle>::Handle>,
     ) -> Result<Object<M::Interface>, ObjectError>
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
-    {
-        self.create_with(msg, handle)
-    }
-
-    /// Create new object from constructor message.
-    pub fn create_with<M, H>(
-        &mut self,
-        msg: M,
-        handle: Handle<H>,
-    ) -> Result<Object<M::Interface>, ObjectError>
-    where
-        M: AsNewId<Interface: AsInterface> + AsVersion,
+        M::Interface: WithHandle,
     {
         let new_id = msg.new_id();
         self.insert_inner(
@@ -121,6 +116,22 @@ impl Objects {
         ObjectIndex::get_object_mut(idx, self)
     }
 
+    /// Performs an object lookup.
+    pub fn get_with<I: AsObjectId + WithHandle>(
+        &mut self,
+        id: I,
+    ) -> Result<ObjectEntry<Interface, I::Handle>, ObjectError> {
+        let Some(idx) = id.object_id().to_u32().checked_sub(2) else {
+            return Ok(wl_display());
+        };
+        self.slots
+            .get(idx as usize)
+            .copied()
+            // this casting is fine, because its based on static type definition
+            .map(|o| o.map_id(Handle::cast))
+            .ok_or(E::UnknownId)
+    }
+
     #[inline]
     pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, ObjectError> {
         index
@@ -134,6 +145,10 @@ impl Objects {
 
 const WL_DISPLAY: ObjectEntry =
     ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::from_idx(0));
+
+fn wl_display<H>() -> Object<Interface, Version, Handle<H>> {
+    ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::<H>::from_idx(0))
+}
 
 pub trait ObjectIndex {
     fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;

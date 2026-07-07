@@ -27,6 +27,14 @@ pub trait WithHandle {
     type Handle;
 }
 
+impl<I: WithHandle, M, H> WithHandle for Object<I, M, H> {
+    type Handle = I::Handle;
+}
+
+impl<I: WithHandle, M, H> WithHandle for Message<I, M, H> {
+    type Handle = I::Handle;
+}
+
 // ===== Handle =====
 
 pub struct Handle<T> {

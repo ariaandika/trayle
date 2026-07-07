@@ -18,7 +18,7 @@ impl BindEffect<WlShm> for Compositor {
 impl MessageHandler<CreatePool> for Compositor {
     fn handle(&mut self, shm_pool: Msg<CreatePool>, client: &mut ClientMut) -> Result<(), WlError> {
         let handle = self.shm_pools.create_pool(shm_pool.fd, shm_pool.size)?;
-        client.objects.create_handle(shm_pool, handle)?;
+        client.objects.create_with(shm_pool, handle)?;
         Ok(())
     }
 }
@@ -36,7 +36,7 @@ impl MessageHandler<CreateBuffer> for Compositor {
     fn handle(&mut self, msg: Msg<CreateBuffer>, client: &mut ClientMut) -> Result<(), WlError> {
         let buffer = self.shm_pools.create_buffer(msg.handle(), &msg)?;
         let handle = self.buffers.insert(buffer);
-        client.objects.create_handle(msg, handle)?;
+        client.objects.create_with(msg, handle)?;
         Ok(())
     }
 }

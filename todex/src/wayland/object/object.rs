@@ -143,6 +143,16 @@ impl<I, M, D> Object<I, M, D> {
     {
         self.id
     }
+
+    /// This should not be used in general logic code.
+    #[inline]
+    pub fn map_id<D2, F: FnOnce(D) -> D2>(self, f: F) -> Object<I, M, D2> {
+        Object {
+            iface: self.iface,
+            marker: self.marker,
+            id: f(self.id),
+        }
+    }
 }
 
 impl<I, M> Object<I, M, &'static str> {

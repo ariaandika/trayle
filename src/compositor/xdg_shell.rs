@@ -19,11 +19,8 @@ todo_handler!(CreatePositioner);
 
 impl MessageHandler<GetXdgSurface> for Compositor {
     fn handle(&mut self, msg: Msg<GetXdgSurface>, client: &mut ClientMut) -> Result<(), WlError> {
-        let surface_handle = client.objects.get_mut(msg.surface)?.handle();
-        // TODO: blocker: objects get with typed handle
-        let xdg_handle = self
-            .xdg_surfaces
-            .create(surface_handle.cast::<crate::surface::Surface>());
+        let surface_handle = client.objects.get_with(msg.surface)?.handle();
+        let xdg_handle = self.xdg_surfaces.create(surface_handle);
         client.objects.create_with(msg, xdg_handle)?;
         Ok(())
     }
@@ -54,7 +51,7 @@ impl MessageHandler<GetToplevel> for Compositor {
         let surface = self.surfaces.get_mut(xdg_surface.surface_handle())?;
 
         let xdg_handle = msg.handle();
-        let xdg_toplevel = client.objects.create_handle(msg, xdg_handle)?;
+        let xdg_toplevel = client.objects.create_with(msg, xdg_handle)?;
         // TODO: blocker: change the any error handling
         xdg_surface
             .set_toplevel(xdg_toplevel, surface)

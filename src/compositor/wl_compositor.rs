@@ -26,8 +26,7 @@ todo_handler!(Destroy);
 impl MessageHandler<Attach> for Compositor {
     fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), WlError> {
         let buffer_handle = match msg.buffer {
-            // TODO: add Objects extension to get with typed handle
-            Some(buffer) => Some(client.objects.get_mut(buffer)?.handle().cast()),
+            Some(buffer) => Some(client.objects.get_with(buffer)?.handle()),
             None => None,
         };
         self.surfaces.get_mut(msg.handle())?.attach(buffer_handle);
