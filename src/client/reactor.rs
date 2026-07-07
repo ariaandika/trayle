@@ -1,25 +1,27 @@
+use std::task::Poll::Ready;
 use todex::sys::epoll::Epoll;
 use todex::sys::cmsg;
 use todex::poller::Event;
+use todex::sys::listener::Listener;
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, Clients};
 use crate::compositor::Compositor;
 use crate::log;
 
-pub struct ClientService<'a> {
+pub struct ClientReactor<'a> {
     epoll: &'a Epoll,
+    listener: &'a Listener,
 }
 
-impl<'a> ClientService<'a> {
-    pub fn new(epoll: &'a Epoll) -> Self {
-        Self { epoll }
+impl<'a> ClientReactor<'a> {
+    pub fn new(epoll: &'a Epoll, listener: &'a Listener) -> Self {
+        Self { epoll, listener }
     }
-
 }
 
-impl ClientService<'_> {
-    pub fn serve(
+impl ClientReactor<'_> {
+    pub fn handle_socket(
         &mut self,
         event: Event,
         buffer: &mut BufferPool,
@@ -93,7 +95,8 @@ impl ClientService<'_> {
             // socket, it will be stored in dedicated storage
             if let Some((read, write)) = buffer.store_pending(id.to_raw()) {
                 id = id.set_pending();
-                self.epoll.modify(event.interest.is_write(), id.to_raw(), state);
+                self.epoll
+                    .modify(event.interest.is_write(), id.to_raw(), state);
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message, read: {read}, write: {write}",
@@ -110,6 +113,23 @@ impl ClientService<'_> {
         }
 
         buffer.clear();
+    }
+}
+
+impl ClientReactor<'_> {
+    pub fn handle_listener(&mut self, clients: &mut Clients) {
+        while let Ready(result) = self.listener.poll_accept() {
+            match result {
+                Ok(fd) => {
+                    let (id, sock) = clients.insert(fd);
+                    self.epoll.add(id.to_raw(), sock);
+                    log::debug!(target: format_args!("client#{id}"), "connected");
+                }
+                Err(err) => {
+                    log::error!(target: "listener", "{err}")
+                }
+            }
+        }
     }
 }
 
@@ -138,3 +158,4 @@ impl From<()> for HandleError {
         Self
     }
 }
+

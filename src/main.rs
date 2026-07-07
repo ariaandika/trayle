@@ -7,10 +7,8 @@ use todex::poller::Poller;
 use todex::log;
 
 use buffer::BufferPool;
-use client::Clients;
+use client::{Clients, ClientReactor};
 use compositor::Compositor;
-use service::listener::ListenerService;
-use service::clients::ClientService;
 use error::FatalError;
 
 mod shm;
@@ -19,7 +17,6 @@ mod buffer;
 mod seat;
 mod client;
 mod compositor;
-mod service;
 mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
@@ -40,20 +37,22 @@ pub fn event_loop() -> Result<(), FatalError> {
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
-    epoll.add(LISTENER_KEY, &listener);
-    epoll.add(SIGFD_KEY, &sigfd);
 
     // ===== components =====
     let mut clients = Clients::new();
     let mut buffer = BufferPool::new();
+
+    // ===== domain =====
     let mut compositor = Compositor::new()?;
 
-    // ===== services =====
-    let mut listener_service = ListenerService::new(&listener, &epoll);
-    let mut client_service = ClientService::new(&epoll);
+    // ===== reactor =====
+    let mut client_reactor = ClientReactor::new(&epoll, &listener);
 
     // ===== poller =====
     let mut poll = Poller::new(EVENT_BUF, &epoll);
+
+    epoll.add(LISTENER_KEY, &listener);
+    epoll.add(SIGFD_KEY, &sigfd);
 
     loop {
         let Some(event) = poll.next_event() else {
@@ -68,11 +67,11 @@ pub fn event_loop() -> Result<(), FatalError> {
                     log::info!("{} signal received", sigfd.read());
                     break Ok(());
                 }
-                LISTENER_KEY => listener_service.serve(&mut clients),
+                LISTENER_KEY => client_reactor.handle_listener(&mut clients),
                 _ => {}
             }
         } else {
-            client_service.serve(event, &mut buffer, &mut clients, &mut compositor);
+            client_reactor.handle_socket(event, &mut buffer, &mut clients, &mut compositor);
         }
     }
 }
