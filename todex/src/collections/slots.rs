@@ -73,9 +73,16 @@ impl<T> Slots<T> {
 }
 
 impl<T> Slots<T> {
+    /// Returns `true` whether given index can be used in insertion.
+    #[inline]
+    pub const fn check_index(&self, idx: usize) -> bool {
+        idx <= self.len && unsafe { self.ptr.add(idx).as_ref().is_none() }
+    }
+
     /// Insert element at given index.
     ///
     /// Note on max index rule in the struct [documentation][Slots].
+    #[inline]
     pub fn insert(&mut self, idx: usize, value: T) -> Result<(), T> {
         if self.len == self.cap {
             self.grow_one();

@@ -27,6 +27,16 @@ impl Objects {
             slots: Slots::with_capacity(INITIAL_CAP),
         }
     }
+    /// Returns true whether given id can be used in insertion.
+    pub fn checks_id(&self, id: ObjectId) -> Result<(), ObjectError> {
+        let Some(idx) = id.to_u32().checked_sub(2) else {
+            return Err(E::InvalidNewId);
+        };
+        match self.slots.check_index(idx as usize) {
+            true => Ok(()),
+            false => Err(E::OccupiedNewId),
+        }
+    }
 
     /// Create new object from constructor message.
     pub fn create<M>(&mut self, msg: M) -> Result<Object<M::Interface>, ObjectError>
