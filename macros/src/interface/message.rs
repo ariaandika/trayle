@@ -59,23 +59,21 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_as_newid(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        self.op
-            .args
-            .iter()
-            .find_map(|a| a.ty.as_new_id().map(|i| (&a.name, i)))
-            .map_stream(|(field, new_iface)| {
-                let name = &self.op.op_name;
-                g! {
-                    impl AsNewId for #name {
-                        type Interface = #new_iface;
+        self.op.new_id().map_stream(|a|{
+            let opname = &self.op.op_name;
+            let new_iface = a.as_new_id().unwrap();
+            let field = &a.name;
+            g! {
+                impl AsNewId for #opname {
+                    type Interface = #new_iface;
 
-                        #[inline]
-                        fn new_id(&self) -> NewId<Self::Interface> {
-                            self.#field
-                        }
+                    #[inline]
+                    fn new_id(&self) -> NewId<Self::Interface> {
+                        self.#field
                     }
                 }
-            })
+            }
+        })
     }
 
     pub fn gen_as_opcode(&self) -> impl Iterator<Item = TokenTree> + use<> {
@@ -106,12 +104,22 @@ impl<'a> Message<'a> {
         let since = self.op.since.as_ref().map_stream(|since| {
             g!(const SINCE: Version = Version::new(#since).unwrap();)
         });
+        let new_id = self.op.new_id().map_stream(|a|{
+            let field = &a.name;
+            g! {
+                #[inline]
+                fn get_new_id(&self) -> Option<ObjectId> {
+                    Some(self.#field.object_id())
+                }
+            }
+        });
         g! {
             impl WlMessage for #name @lf_ph {
                 type WlInterface = #iface_name;
                 const IS_REQUEST: bool = #is_request;
                 @destructor
                 @since
+                @new_id
             }
         }
     }

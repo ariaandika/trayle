@@ -17,6 +17,12 @@ pub trait WlMessage: AsInterface + AsOpCode + AsDisplay {
     const IS_DESTRUCTOR: bool = false;
 
     const SINCE: Version = Version::new(1).unwrap();
+
+    /// Returns `Some` if this message contains [`NewId`].
+    #[inline]
+    fn get_new_id(&self) -> Option<ObjectId> {
+        None
+    }
 }
 
 // ===== message =====

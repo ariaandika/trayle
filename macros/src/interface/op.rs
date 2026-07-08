@@ -70,11 +70,18 @@ pub struct Op {
     pub kind: OpKind,
     pub since: Option<LitInt>,
     pub is_destructor: bool,
+    pub new_id: Option<usize>,
 
     pub lf_ph: LfPh,
     pub fd_idx: Option<usize>,
 
     pub args: Vec<Arg>,
+}
+
+impl Op {
+    pub fn new_id(&self) -> Option<&Arg> {
+        self.new_id.map(|i|&self.args[i]).inspect(|a|assert!(a.as_new_id().is_some()))
+    }
 }
 
 impl Op {
@@ -104,8 +111,9 @@ impl Op {
         let op_span = wl_name.unspan();
         let op_name = wl_name.to_camel();
 
+        let mut i = 0;
         let mut lf_ph = LfPh::new(false);
-        let mut has_new_id = false;
+        let mut new_id = None;
         let mut fd_idx = None;
 
         let mut args = vec![];
@@ -118,20 +126,21 @@ impl Op {
                 lf_ph = LfPh::new(true);
             }
             if arg.ty.as_new_id().is_some() {
-                if has_new_id {
-                    return Err(Error::new("only one new_id is supported", arg.name));
+                if new_id.is_some() {
+                    return Err(Error::new("only one new_id is allowed", arg.name));
                 }
-                has_new_id = true;
+                new_id = Some(i);
             }
             if arg.ty.is_fd() {
                 if fd_idx.is_some() {
-                    return Err(Error::new("only one fd is supported", arg.name));
+                    return Err(Error::new("only one fd is allowed", arg.name));
                 }
                 fd_idx = Some(args.len());
             }
 
             args.push(arg);
             arg_parser.next_punct_of(',');
+            i += 1;
         }
 
         parser.punct_of(';')?;
@@ -143,6 +152,7 @@ impl Op {
             kind,
             since,
             is_destructor,
+            new_id,
             args,
             lf_ph,
             fd_idx,
