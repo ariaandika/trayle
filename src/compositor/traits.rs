@@ -5,17 +5,15 @@ use todex::wayland::error::WlError;
 
 use crate::handle::{Handle, WithHandle};
 use crate::client::ClientMut;
+use crate::compositor::error::HandleResult;
 
 // ===== Handler =====
 
-/// Request object.
-pub type Obj<I> = Object<I>;
-
-/// Request message.
-///
-/// Contains payload, version, and object id.
+/// Message payload, version, and resource handle.
 ///
 /// Version is used for creating object with new id.
+///
+/// Resource [`Handle`] are safely typed with [`WithHandle`].
 pub type Msg<M> =
     Message<M, Version, Handle<<<M as WlMessage>::WlInterface as WithHandle>::Handle>>;
 
@@ -25,41 +23,11 @@ where
     M: WlMessage,
     M::WlInterface: WithHandle,
 {
-    fn handle(&mut self, msg: Msg<M>, client: &mut ClientMut) -> Result<(), WlError>;
-}
-
-pub mod v2 {
-    use super::*;
-
-    /// Handle incoming message.
-    pub trait MessageHandler<M>: Sized
-    where
-        M: WlMessage,
-        M::WlInterface: WithHandle,
-    {
-        fn handle(
-            &mut self,
-            obj: Obj<M::WlInterface>,
-            msg: Msg<M>,
-            client: &mut ClientMut,
-        ) -> Result<(), WlError>;
-    }
-
-    impl<C, M> MessageHandler<M> for C
-    where
-        M: WlMessage,
-        M::WlInterface: WithHandle,
-        C: super::MessageHandler<M>,
-    {
-        fn handle(
-            &mut self,
-            _: Obj<M::WlInterface>,
-            msg: Msg<M>,
-            client: &mut ClientMut,
-        ) -> Result<(), WlError> {
-            super::MessageHandler::handle(self, msg, client)
-        }
-    }
+    // note on the `use<Self, M>`:
+    // in 2024 edition, by default rust capture all lifetime and generic in `impl TraitMe`, but in
+    // this case, `HandleResult` does not capture anything, therefore one must explicitly opt out of
+    // lifetime capturing
+    fn handle(&mut self, msg: Msg<M>, client: &mut ClientMut) -> impl HandleResult + use<Self, M>;
 }
 
 macro_rules! todo_handler {
@@ -74,7 +42,7 @@ macro_rules! todo_handler {
 
 pub(crate) use todo_handler;
 
-// ===== BindEffect =====
+// ===== Effects =====
 
 /// Side effect for `wl_registry::bind` request.
 pub trait BindEffect<Interface> {

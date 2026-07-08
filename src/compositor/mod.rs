@@ -8,7 +8,7 @@ use std::time::Instant;
 use todex::log;
 use todex::sys::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
-use todex::wayland::object::{Global, Object, global_of};
+use todex::wayland::object::{Global, global_of};
 use todex::wayland::display::AsDisplay;
 use todex::wayland::message::{Message, OpCode, WlMessage};
 use todex::wayland::interface::{self, AsInterface, InterfaceId};
@@ -23,7 +23,8 @@ use crate::shm::{Buffers, ShmPools};
 use crate::surface::{Surfaces, XdgSurfaces};
 use crate::error::FatalError;
 
-use traits::{MessageHandler, v2};
+use traits::MessageHandler;
+use error::HandleResult;
 
 mod prelude {
     pub(super) use todex::wayland;
@@ -41,6 +42,7 @@ mod prelude {
 }
 
 mod handle;
+mod error;
 mod traits;
 
 mod wl_display;
@@ -105,29 +107,27 @@ impl Compositor {
     /// Checks and drains available messages for given client.
     pub fn message(&mut self, read_buf: &mut Bytes, client: &mut ClientMut) -> ClientStatus {
         use ClientStatus as S;
-        let err = loop {
-            let msg = match Message::get_message(read_buf) {
-                Ok(None) => return S::Ok,
-                Ok(Some(ok)) => ok,
-                Err(err) => break err.into(),
-            };
-            let id = msg.object_id();
-            let op = msg.opcode();
-            let obj = match client.objects.get_anon(id) {
-                Ok(ok) => ok,
-                Err(err) => break err.into(),
-            };
-            let iface = obj.interface();
-
-            if let Err(err) = self.route(obj, msg, client) {
-                log::error!("client#{} failed to handle {iface}::{op}: {err}", client.id);
-                client.send_error(id, err);
-                return S::Disconnect;
+        // cope and seeth: https://github.com/rust-lang/rust/issues/31436
+        let result = (|| {
+            loop {
+                let Some(msg) = Message::get_message(read_buf)? else {
+                    return Ok(S::Ok);
+                };
+                let id = msg.object_id();
+                let obj = client.objects.get_anon(id)?;
+                if self.route(obj, msg, client)?.is_disconnect() {
+                    return Ok(S::Disconnect)
+                }
             }
-        };
-        log::error!("client#{} failed to handle message: {err}", client.id);
-        client.send_error(DisplayId, err);
-        S::Disconnect
+        })();
+        match result {
+            Ok(status) => status,
+            Err(err) => {
+                log::error!("client#{} failed to decode message: {err}", client.id);
+                client.send_error(DisplayId, err);
+                S::Disconnect
+            }
+        }
     }
 
     fn handle_proxy<'a, const N: usize, M>(
@@ -135,7 +135,7 @@ impl Compositor {
         obj: ObjectEntry,
         msg: Message<Payload<'a>, u16>,
         client: &mut ClientMut,
-    ) -> Result<(), WlError>
+    ) -> Result<ClientStatus, WlError>
     where
         M: WlMessage + DecodePayload<Fd = [i32; N]>,
         M::Output<'a>: WlMessage,
@@ -145,23 +145,12 @@ impl Compositor {
         let id = msg.object_id();
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;
         let msg = Message::from_parts(obj.handle().cast(), payload, obj.version());
-        let obj = Object::from_parts(obj.interface(), (), id).with_type();
         log::debug!("client#{} <- {}", client.id, msg.display(),);
-        v2::MessageHandler::handle(self, obj, msg, client)?;
+        let status = self.handle(msg, client).handle_result(id, client);
         if M::IS_DESTRUCTOR {
             client.delete_id(id);
         }
-        Ok(())
-    }
-
-    fn todo_interface(
-        &mut self,
-        obj: ObjectEntry,
-        msg: Message<Payload<'_>, u16>,
-        client: &mut ClientMut,
-    ) -> Result<(), WlError> {
-        let _ = (obj, msg, client);
-        Err(WlError::NotYetImplemented)
+        Ok(status)
     }
 }
 
@@ -266,7 +255,7 @@ macro_rules! dispatcher {
                 obj: ObjectEntry,
                 msg: Message<Payload<'_>, u16>,
                 client: &mut ClientMut,
-            ) -> Result<(), WlError> {
+            ) -> Result<ClientStatus, WlError> {
                 match obj.interface() {
                     $(InterfaceId::$iface => {
                         use interface::camel_cased::$iface::*;
@@ -278,7 +267,7 @@ macro_rules! dispatcher {
                             })*
                         }
                     })*
-                    _ => self.todo_interface(obj, msg, client),
+                    _ => Err(WlError::NotYetImplemented),
                 }
             }
         }
