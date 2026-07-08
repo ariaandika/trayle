@@ -1,4 +1,6 @@
-use std::ptr::{self, NonNull};
+use core::hint;
+use core::mem;
+use core::ptr::{self, NonNull};
 
 use crate::alloc;
 
@@ -23,6 +25,7 @@ impl<T> Drop for Slab<T> {
 }
 
 impl<T> Slab<T> {
+    #[inline]
     pub fn with_capacity(cap: usize) -> Self {
         Self {
             ptr: alloc::allocate(cap),
@@ -45,6 +48,7 @@ impl<T> Slab<T> {
     /// Insert new value, returns the associated `key`.
     ///
     /// `key` is used for other slab operation.
+    #[inline]
     pub fn insert(&mut self, value: T) -> (usize, &mut T) {
         if self.len == self.cap {
             self.grow();
@@ -77,7 +81,7 @@ impl<T> Slab<T> {
         let client_mut = unsafe {
             match target_ptr.as_mut() {
                 Entry::Some(client) => client,
-                Entry::None(_) => std::hint::unreachable_unchecked(),
+                Entry::None(_) => hint::unreachable_unchecked(),
             }
         };
 
@@ -86,12 +90,27 @@ impl<T> Slab<T> {
 }
 
 impl<T> Slab<T> {
+    /// Returns shared reference of an element with associated `key`.
+    #[inline]
+    pub fn get(&self, key: usize) -> Option<&T> {
+        if key < self.len {
+            // SAFETY: `idx < self.len`
+            match unsafe { self.ptr.add(key).as_ref() } {
+                Entry::Some(ok) => Some(ok),
+                Entry::None(_) => None,
+            }
+        } else {
+            None
+        }
+    }
+
     /// Returns mutable reference of an element with associated `key`.
+    #[inline]
     pub fn get_mut(&mut self, key: usize) -> Option<&mut T> {
         if key < self.len {
             // SAFETY: `idx < self.len`
             match unsafe { self.ptr.add(key).as_mut() } {
-                Entry::Some(state) => Some(state),
+                Entry::Some(ok) => Some(ok),
                 Entry::None(_) => None,
             }
         } else {
@@ -102,6 +121,7 @@ impl<T> Slab<T> {
     /// Removes and returns element with associated `key`.
     ///
     /// The `key` will be released and may be associated with future element.
+    #[inline]
     pub fn remove(&mut self, key: usize) -> Option<T> {
         if key >= self.len {
             return None;
@@ -110,7 +130,7 @@ impl<T> Slab<T> {
         // SAFETY: `idx < self.len`
         let target = unsafe { self.ptr.add(key).as_mut() };
         let mut deleted = Entry::None(self.last_delete);
-        std::mem::swap(target, &mut deleted);
+        mem::swap(target, &mut deleted);
 
         match deleted {
             Entry::Some(client) => {
@@ -119,7 +139,7 @@ impl<T> Slab<T> {
             }
             Entry::None(_) => {
                 // dangling id, restore the entry
-                std::mem::swap(target, &mut deleted);
+                mem::swap(target, &mut deleted);
                 None
             }
         }
