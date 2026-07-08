@@ -74,9 +74,12 @@ impl CommitEffect<XdgToplevel> for Compositor {
     }
 }
 
-impl MessageHandler<ToplevelDestroy> for Compositor {
-    fn handle(&mut self, _: Msg<ToplevelDestroy>, _: &mut ClientMut) -> Result<(), WlError> {
-        Err(WlError::NotYetImplemented)
+impl MessageHandler<xdg_toplevel::Destroy> for Compositor {
+    fn handle(&mut self, msg: Msg<ToplevelDestroy>, _: &mut ClientMut) -> Result<(), WlError> {
+        let xdg_surface = self.xdg_surfaces.get_mut(msg.handle())?;
+        let surface = self.surfaces.get_mut(xdg_surface.surface_handle())?;
+        xdg_surface.remove_role(surface);
+        Ok(())
     }
 }
 

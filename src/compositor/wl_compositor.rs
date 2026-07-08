@@ -1,14 +1,14 @@
-use wl_compositor::{CreateRegion, CreateSurface, Release};
-use wl_surface::{Attach, Commit, Damage, DamageBuffer, Destroy, Frame, GetRelease, Offset};
-use wl_surface::{SetBufferScale, SetBufferTransform, SetInputRegion, SetOpaqueRegion};
+use wl_compositor::*;
+use wl_surface::*;
+use wl_surface::Error as SurfaceError;
 
 use crate::compositor::prelude::*;
 use crate::compositor::traits::CommitEffect;
-use crate::surface::{Role, RoleError};
+use crate::surface::Role;
 
 // ===== wl_compositor =====
 
-impl MessageHandler<CreateSurface> for Compositor {
+impl MessageHandler<wl_compositor::CreateSurface> for Compositor {
     fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) -> Result<(), WlError> {
         let handle = self.surfaces.create();
         let _ = client.objects.create_with(req, handle)?;
@@ -17,11 +17,24 @@ impl MessageHandler<CreateSurface> for Compositor {
 }
 
 todo_handler!(CreateRegion);
-todo_handler!(Release);
+
+impl MessageHandler<wl_compositor::Release> for Compositor {
+    fn handle(&mut self, _: Msg<Release>, _: &mut ClientMut) -> Result<(), WlError> {
+        Ok(())
+    }
+}
 
 // ===== wl_surface =====
 
-todo_handler!(Destroy);
+impl MessageHandler<Destroy> for Compositor {
+    fn handle(&mut self, msg: Msg<Destroy>, _: &mut ClientMut) -> Result<(), WlError> {
+        let surface = self.surfaces.remove(msg.handle())?;
+        if !surface.is_role_removed() {
+            panic!("not yet handled: {}", SurfaceError::DefunctRoleObject)
+        }
+        Ok(())
+    }
+}
 
 impl MessageHandler<Attach> for Compositor {
     fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), WlError> {
@@ -74,8 +87,7 @@ impl MessageHandler<Commit> for Compositor {
         } else {
             surface.set_configured();
             surface.commit();
-            match surface.role() {
-                Role::None => panic!("net yet handled: {}", RoleError::Unset),
+            match surface.role().expect("not yet handled") {
                 Role::XdgToplevel(obj) => self.commit(obj, client)?,
             }
         }

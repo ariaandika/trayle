@@ -10,7 +10,19 @@ pub struct Surface {
     states: [State; 2],
     /// [.., configured, current]
     flags: u8,
-    role: Role,
+    role: RoleInner,
+}
+
+enum RoleInner {
+    None,
+    Role(Role),
+    Removed,
+}
+
+impl RoleInner {
+    fn is_none(&self) -> bool {
+        matches!(self, Self::None)
+    }
 }
 
 const COMMITED_FLAG: u8 = 1;
@@ -21,7 +33,7 @@ impl Surface {
         Self {
             states: [State::new(), State::new()],
             flags: 0,
-            role: Role::None,
+            role: RoleInner::None,
         }
     }
 
@@ -33,17 +45,29 @@ impl Surface {
         self.flags &= IS_CONFIGURED_FLAG;
     }
 
-    pub fn role(&self) -> Role {
-        self.role
+    pub fn role(&self) -> Result<Role, RoleError> {
+        match self.role {
+            RoleInner::Role(role) => Ok(role),
+            RoleInner::None => Err(RoleError::Unset),
+            RoleInner::Removed => Err(RoleError::Removed),
+        }
     }
 
-    pub fn set_role(&mut self, role: Role) -> Result<(), RoleError> {
-        if self.role.is_none() && !role.is_none() {
-            self.role = role;
+    pub fn is_role_removed(&self) -> bool {
+        matches!(self.role, RoleInner::Removed)
+    }
+
+    pub(super) fn set_role(&mut self, role: Role) -> Result<(), RoleError> {
+        if self.role.is_none() {
+            self.role = RoleInner::Role(role);
             Ok(())
         } else {
             Err(RoleError::Overwrite)
         }
+    }
+
+    pub fn remove_role(&mut self) {
+        self.role = RoleInner::Removed;
     }
 
     pub fn commit(&mut self) {

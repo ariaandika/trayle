@@ -27,4 +27,10 @@ impl Surfaces {
             .get_mut(handle.to_idx())
             .ok_or(ObjectError::UnknownId)
     }
+
+    pub fn remove(&mut self, handle: Handle<Surface>) -> Result<Surface, ObjectError> {
+        self.buf
+            .remove(handle.to_idx())
+            .ok_or(ObjectError::UnknownId)
+    }
 }

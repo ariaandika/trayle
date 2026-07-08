@@ -16,6 +16,7 @@ enum Kind {
     None,
     Toplevel(Toplevel),
     // Popup,
+    Removed,
 }
 
 impl XdgSurface {
@@ -36,6 +37,11 @@ impl XdgSurface {
         surface
             .set_role(Role::XdgToplevel(xdg_toplevel))
             .map_err(|_| Error::AlreadyConstructed)
+    }
+
+    pub fn remove_role(&mut self, surface: &mut Surface) {
+        self.kind = Kind::Removed;
+        surface.remove_role();
     }
 
     pub fn surface_handle(&self) -> Handle<Surface> {

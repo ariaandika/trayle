@@ -4,14 +4,7 @@ use todex::wayland::interface::XdgToplevel;
 /// Surface role.
 #[derive(Debug, Clone, Copy)]
 pub enum Role {
-    None,
     XdgToplevel(Object<XdgToplevel>),
-}
-
-impl Role {
-    pub fn is_none(&self) -> bool {
-        matches!(self, Self::None)
-    }
 }
 
 // ===== Error =====
@@ -23,6 +16,8 @@ pub enum RoleError {
     Unset,
     /// Role is overwritten.
     Overwrite,
+    /// Role has been removed.
+    Removed,
 }
 
 impl std::fmt::Display for RoleError {
@@ -30,6 +25,7 @@ impl std::fmt::Display for RoleError {
         match self {
             Self::Unset => write!(f, "role is unset"),
             Self::Overwrite => write!(f, "role is overwritten"),
+            Self::Removed => write!(f, "role has been removed"),
         }
     }
 }
