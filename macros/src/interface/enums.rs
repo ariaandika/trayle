@@ -145,11 +145,12 @@ impl Enum {
         });
 
         let messages = self.is_error.then_stream(||{
-            let empty_doc = Literal::string("");
             let msgs = variants.iter().flat_map(|v| {
                 let Variant { doc, variant, .. } = v;
-                let doc = doc.as_ref().unwrap_or(&empty_doc);
-                g!(Self::#variant => #doc,)
+                let mut doc = doc.as_ref().expect("error are asserted to have doc").to_string();
+                doc.make_ascii_lowercase();
+                let message = Literal::string(doc.trim_start().trim_end_matches('.'));
+                g!(Self::#variant => #message,)
             });
             g! {
                 #[inline]
