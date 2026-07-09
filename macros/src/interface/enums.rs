@@ -5,10 +5,10 @@ pub struct Enums {
     pub enums: Vec<Enum>,
 }
 
-impl Parse for Enums {
-    fn parse(parser: &mut Parser) -> Result<Self, Error> {
+impl Enums {
+    pub fn parse(parser: &mut Parser) -> Result<Self, Error> {
         let mut enums = vec![];
-        while parser.peek().is_some() {
+        while parser.has_remaining() {
             enums.push(parser.parse()?);
         }
         Ok(Self { enums })
@@ -25,6 +25,7 @@ pub struct Enum {
     is_bitfield: bool,
     is_error: bool,
     name: Ident,
+    name_span: Span,
     variants: Vec<Variant>,
 }
 
@@ -55,7 +56,7 @@ impl Parse for Enum {
 
         parser.next_ident_of("pub");
         parser.ident_of("enum")?;
-        let name = parser.parse()?;
+        let mut name = parser.parse::<Ident>()?;
 
         let mut variants = vec![];
         let mut parser = parser.group_of(Delimiter::Brace)?.body_parser();
@@ -99,10 +100,13 @@ impl Parse for Enum {
             return Err(Error::new("bitfield cannot be an error", name))
         }
 
+        let name_span = name.unspan();
+
         Ok(Self {
             is_bitfield,
             is_error,
             name,
+            name_span,
             variants,
         })
     }
@@ -120,9 +124,10 @@ impl Enum {
 
 impl Enum {
     fn gen_enum(&self) -> impl Iterator<Item = TokenTree> {
-        let Self { name, variants, .. } = self;
+        let Self { name, name_span, variants, .. } = self;
+        let name_spanned = name.clone().spanned(*name_span);
 
-        let names = variants.iter().flat_map(|v| {
+        let as_strs = variants.iter().flat_map(|v| {
             let Variant { variant, wl_string, .. } = v;
             g!(Self::#variant => #wl_string,)
         });
@@ -140,7 +145,10 @@ impl Enum {
                 let Variant { doc, variant, .. } = v;
                 let mut doc = doc.as_ref().expect("error are asserted to have doc").to_string();
                 doc.make_ascii_lowercase();
-                let message = Literal::string(doc.trim_start().trim_end_matches('.'));
+                let doc = doc
+                    .trim_start_matches("\" ")
+                    .trim_end_matches(".\"");
+                let message = Literal::string(doc);
                 g!(Self::#variant => #message,)
             });
             g! {
@@ -153,15 +161,15 @@ impl Enum {
 
         g! {
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-            pub enum #name {
+            pub enum #name_spanned {
                 @variants_def
             }
 
             impl #name {
-                /// Returns the wayland name.
+                /// Returns the variant as snake cased `str`.
                 #[inline]
-                pub const fn name(&self) -> &'static str {
-                    match self { @names }
+                pub const fn as_str(&self) -> &'static str {
+                    match self { @as_strs }
                 }
 
                 @messages
@@ -182,14 +190,14 @@ impl Enum {
             impl std::fmt::Display for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    self.name().fmt(f)
+                    self.as_str().fmt(f)
                 }
             }
 
             impl FieldDisplay for #name {
                 #[inline]
                 fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
-                    f.write_str(self.name())
+                    self.as_str().fmt(f)
                 }
             }
         }
@@ -198,7 +206,8 @@ impl Enum {
 
 impl Enum {
     fn gen_bitfield(&self) -> impl Iterator<Item = TokenTree> {
-        let Self { name, variants, .. } = self;
+        let Self { name, name_span, variants, .. } = self;
+        let name_spanned = name.clone().spanned(*name_span);
 
         let consts = variants.iter().flat_map(|v|{
             let Variant { const_name, disc, .. } = v;
@@ -221,7 +230,7 @@ impl Enum {
 
         g! {
             #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-            pub struct #name(u32);
+            pub struct #name_spanned(u32);
 
             impl #name {
                 @consts
