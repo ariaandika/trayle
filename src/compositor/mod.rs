@@ -133,10 +133,8 @@ impl Compositor {
         client: &mut ClientMut,
     ) -> Result<ClientStatus, MessageError>
     where
-        M: WlMessage + DecodePayload<Fd = [i32; N]>,
-        M::Output<'a>: WlMessage,
-        <M::Output<'a> as WlMessage>::WlInterface: WithHandle,
-        Self: MessageHandler<M::Output<'a>>,
+        M: WlMessage<WlInterface: WithHandle> + DecodePayload<'a, N>,
+        Self: MessageHandler<M>,
     {
         let id = msg.object_id();
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;

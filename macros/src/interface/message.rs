@@ -158,7 +158,6 @@ impl<'a> Message<'a> {
 
     pub fn gen_decode_payload(&self) -> impl Iterator<Item = TokenTree> + use<> {
         let name = &self.op.op_name;
-        let lf_ph = self.op.lf_ph;
         let lf = self.op.lf_ph.named();
 
         let ret = self.op.args.iter().flat_map(|Arg { name, ty, .. }|{
@@ -166,18 +165,23 @@ impl<'a> Message<'a> {
             g!(#name @read,)
         });
 
-        let fd_len = Literal::usize_unsuffixed(self.fd.is_some() as usize);
-        let fd_arg = self.fd.map(|arg|arg.name.clone());
+        let fd_len = match self.fd {
+            Some(_) => gentoken!(1),
+            None => gentoken!(0),
+        };
+        let fd_arg = self.fd.map(|arg| arg.name.clone());
+        let fd_arg = g!([?fd_arg]: [i32; @fd_len]);
+
+        let fd_len = match self.fd {
+            Some(_) => gentoken!(1),
+            None => gentoken!(0),
+        };
         let reader_mut = (!self.op.args.is_empty()).then(||Ident::new("mut", Span::call_site()));
 
         g! {
-            impl DecodePayload for #name @lf_ph {
-                type Output<'a> = #name @lf;
-
-                type Fd = [i32; #fd_len];
-
+            impl<'a> DecodePayload<'a, @fd_len> for #name @lf {
                 #[inline]
-                fn decode_payload<'a>(?reader_mut reader: Reader<'a>, [?fd_arg]: Self::Fd) -> Result<Self::Output<'a>, DecodeError> {
+                fn decode_payload(?reader_mut reader: Reader<'a>, @fd_arg) -> Result<Self, DecodeError> {
                     Ok(#name { @ret })
                 }
             }

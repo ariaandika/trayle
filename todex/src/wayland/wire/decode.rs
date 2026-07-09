@@ -9,16 +9,9 @@ use DecodeError as E;
 // ===== DecodePayload =====
 
 /// Decode message payload.
-pub trait DecodePayload {
-    type Output<'a>;
-
-    type Fd;
-
+pub trait DecodePayload<'a, const FD: usize>: Sized {
     /// Decode the payload.
-    fn decode_payload<'a>(
-        reader: Reader<'a>,
-        fd: Self::Fd,
-    ) -> Result<Self::Output<'a>, DecodeError>;
+    fn decode_payload(reader: Reader<'a>, fd: [i32; FD]) -> Result<Self, DecodeError>;
 }
 
 // ===== Payload =====
@@ -47,13 +40,10 @@ impl<'a> Message<Payload<'a>, u16> {
     }
 
     #[inline]
-    pub fn decode_payload<const N: usize, P>(
+    pub fn decode_payload<const N: usize, P: DecodePayload<'a, N>>(
         self,
         cmsg: &mut Cmsg,
-    ) -> Result<P::Output<'a>, DecodeError>
-    where
-        P: DecodePayload<Fd = [i32; N]>,
-    {
+    ) -> Result<P, DecodeError> {
         P::decode_payload(
             Reader::new(self.into_payload().0),
             cmsg.read_chunk().ok_or(DecodeError::MissingFd)?,
