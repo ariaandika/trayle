@@ -59,7 +59,6 @@ impl Parse for Enum {
 
         let mut variants = vec![];
         let mut parser = parser.group_of(Delimiter::Brace)?.body_parser();
-        let mut i = 0;
 
         loop {
             let doc = match parser.call(attr)? {
@@ -78,16 +77,9 @@ impl Parse for Enum {
                 return Err(Error::new("`error` enum must have doc comment", wl_variant));
             }
 
-            let disc = if parser.next_punct_of('=').is_some() {
-                parser.parse()?
-            } else {
-                if is_bitfield {
-                    return Err(Error::new("bitfield enum must have explicit value", wl_variant))
-                }
-                let i_ = i;
-                i += 1;
-                Literal::u32_unsuffixed(i_)
-            };
+            parser.punct_of('=')?;
+            let disc = parser.parse()?;
+            parser.next_punct_of(',');
 
             let variant = wl_variant.to_camel();
             let const_name =
@@ -101,7 +93,6 @@ impl Parse for Enum {
                 const_name,
                 disc,
             });
-            parser.next_punct_of(',');
         }
 
         if is_bitfield && is_error {

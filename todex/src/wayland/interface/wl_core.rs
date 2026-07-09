@@ -256,7 +256,7 @@ interface! {
     #[error]
     pub enum Error {
         /// Missing seat capability.
-        missing_capability
+        missing_capability = 0,
     }
 }
 
