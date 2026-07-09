@@ -110,7 +110,7 @@ impl ShmPool {
                 self.ref_count += 1;
                 BufferFactory::ShmPool(handle)
             },
-            wl_buffer: Object::from_new_id(msg.id),
+            wl_buffer: Object::from_new_id(msg.new_id),
         })
     }
 

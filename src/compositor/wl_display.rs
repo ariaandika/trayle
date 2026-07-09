@@ -9,7 +9,7 @@ use crate::compositor::traits::BindEffect;
 
 impl MessageHandler<Sync> for Compositor {
     fn handle(&mut self, sync: Msg<Sync>, client: &mut ClientMut) -> Result<(), WlError> {
-        let wl_callback = client.objects.use_one(sync.callback);
+        let wl_callback = client.objects.use_one(sync.callback_id);
         client.send(wl_callback.done(0));
         client.delete_id(wl_callback);
         Ok(())

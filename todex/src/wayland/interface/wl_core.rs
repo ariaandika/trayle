@@ -42,8 +42,8 @@ interface! {
     pub struct WlCompositor;
 
     impl Request {
-        pub fn create_surface(id: new_id<wl_surface>);
-        pub fn create_region(id: new_id<wl_region>);
+        pub fn create_surface(new_id: new_id<wl_surface>);
+        pub fn create_region(new_id: new_id<wl_region>);
         #[since = 7, destructor]
         pub fn release();
     }
@@ -57,7 +57,7 @@ interface! {
         pub fn destroy();
         pub fn attach(buffer: object<wl_buffer>?, x: int, y: int);
         pub fn damage(x: int, y: int, width: int, height: int);
-        pub fn frame(callback: new_id<wl_callback>);
+        pub fn frame(callback_id: new_id<wl_callback>);
         pub fn set_opaque_region(region: object<wl_region>?);
         pub fn set_input_region(region: object<wl_region>?);
         pub fn commit();
@@ -70,7 +70,7 @@ interface! {
         #[since = 5]
         pub fn offset(x: int, y: int);
         #[since = 7]
-        pub fn get_release(callback: new_id<wl_callback>);
+        pub fn get_release(callback_id: new_id<wl_callback>);
     }
 
     impl Event {
@@ -81,13 +81,20 @@ interface! {
         pub fn preferred_buffer_transform(transform: uint<wl_output.transform>);
     }
 
+    #[error]
     pub enum Error {
-        invalid_scale,
-        invalid_transform,
-        invalid_size,
-        invalid_offset,
-        defunct_role_object,
-        no_buffer,
+        /// Invalid buffer scale.
+        invalid_scale = 0,
+        /// Invalid buffer transform.
+        invalid_transform = 1,
+        /// Invalid buffer size.
+        invalid_size = 2,
+        /// Invalid buffer offset.
+        invalid_offset = 3,
+        /// Surface destroyed before its role object.
+        defunct_role_object = 4,
+        /// No buffer attached.
+        no_buffer = 5,
     }
 }
 
@@ -124,29 +131,43 @@ interface! {
     }
 
     pub enum Subpixel {
-        unknown,
-        none,
-        horizontal_rgb,
-        horizontal_bgr,
-        vertical_rgb,
-        vertical_bgr,
+        /// Unknown geometry.
+        unknown = 0,
+        /// No geometry.
+        none = 1,
+        /// Horizontal RGB.
+        horizontal_rgb = 2,
+        /// Horizontal BGR.
+        horizontal_bgr = 3,
+        /// Vertical RGB.
+        vertical_rgb = 4,
+        /// Vertical BGR.
+        vertical_bgr = 5,
     }
 
     pub enum Transform {
-        normal,
-        d90,
-        d180,
-        d270,
-        flipped,
-        flipped_90,
-        flipped_180,
-        flipped_270,
+        /// No transform.
+        normal = 0,
+        /// 90 degrees counter-clockwise.
+        d90 = 1,
+        /// 180 degrees counter-clockwise.
+        d180 = 2,
+        /// 270 degrees counter-clockwise.
+        d270 = 3,
+        /// 180 degree flip around a vertical axis.
+        flipped = 4,
+        /// Flip and rotate 90 degrees counter-clockwise.
+        flipped_90 = 5,
+        /// flip and rotate 180 degrees counter-clockwise.
+        flipped_180 = 6,
+        /// flip and rotate 270 degrees counter-clockwise.
+        flipped_270 = 7,
     }
 
     #[bitfield]
     pub enum Mode {
-        current = 1,
-        preferred = 2,
+        current = 0x1,
+        preferred = 0x2,
     }
 }
 
@@ -157,7 +178,7 @@ interface! {
     pub struct WlShm;
 
     impl Request {
-        pub fn create_pool(id: new_id<wl_shm_pool>, fd: fd, size: int);
+        pub fn create_pool(new_id: new_id<wl_shm_pool>, fd: fd, size: int);
         #[since = 2, destructor]
         pub fn release();
     }
@@ -167,25 +188,21 @@ interface! {
         pub fn format(format: uint<wl_shm.format_enum>);
     }
 
+    #[error]
     pub enum Error {
-        invalid_format,
-        invalid_stride,
-        invalid_fd,
+        /// Unknown buffer format.
+        invalid_format = 0,
+        /// Invalid size or stride during pool or buffer creation.
+        invalid_stride = 1,
+        /// `mmap`-ing the file descriptor failed.
+        invalid_fd = 2,
     }
 
     pub enum FormatEnum {
-        argb8888,
-        xrgb8888,
-    }
-}
-
-impl wl_shm::Error {
-    pub fn message(&self) -> &'static str {
-        match self {
-            wl_shm::Error::InvalidFormat => "unknown buffer format",
-            wl_shm::Error::InvalidStride => "invalid buffer creation argument",
-            wl_shm::Error::InvalidFd => "mmap fd error",
-        }
+        /// 32-bit ARGB format, [31:0] A:R:G:B 8:8:8:8 little endian.
+        argb8888 = 0,
+        /// 32-bit RGB format, [31:0] x:R:G:B 8:8:8:8 little endian.
+        xrgb8888 = 1,
     }
 }
 
@@ -194,7 +211,7 @@ interface! {
 
     impl Request {
         pub fn create_buffer(
-            id: new_id<wl_buffer>,
+            new_id: new_id<wl_buffer>,
             offset: int,
             width: int, height: int,
             stride: int,
@@ -213,9 +230,9 @@ interface! {
     pub struct WlSeat;
 
     impl Request {
-        pub fn get_pointer(id: new_id<wl_pointer>);
-        pub fn get_keyboard(id: new_id<wl_keyboard>);
-        pub fn get_touch(id: new_id<wl_touch>);
+        pub fn get_pointer(new_id: new_id<wl_pointer>);
+        pub fn get_keyboard(new_id: new_id<wl_keyboard>);
+        pub fn get_touch(new_id: new_id<wl_touch>);
         #[since = 5, destructor]
         pub fn release();
     }
@@ -228,12 +245,17 @@ interface! {
 
     #[bitfield]
     pub enum Capability {
+        /// The seat has pointer devices.
         pointer = 1,
+        /// The seat has keyboard devices.
         keyboard = 2,
+        /// The seat has touch devices.
         touch = 4,
     }
 
+    #[error]
     pub enum Error {
+        /// Missing seat capability.
         missing_capability
     }
 }
@@ -268,31 +290,33 @@ interface! {
         );
     }
 
+    #[error]
     pub enum Error {
-        role,
+        /// Given wl_surface has another role.
+        role = 0,
     }
 
     pub enum ButtonState {
-        released,
-        pressed,
+        released = 0,
+        pressed = 1,
     }
 
     pub enum AxisEnum {
-        vertical_scroll,
-        horizontal_scroll,
+        vertical_scroll = 0,
+        horizontal_scroll = 1,
     }
 
     pub enum AxisSourceEnum {
-        wheel,
-        finger,
-        continuous,
+        wheel = 0,
+        finger = 1,
+        continuous = 2,
         // since 6
-        wheel_tilt,
+        wheel_tilt = 3,
     }
 
     pub enum AxisRelativeDirectionEnum {
-        identical,
-        inverted,
+        identical = 0,
+        inverted = 1,
     }
 }
 
@@ -315,15 +339,20 @@ interface! {
     }
 
     pub enum KeymapFormat {
-        no_keymap,
-        xkb_v1,
+        /// No keymap; client must understand how to interpret the raw keycode.
+        no_keymap = 0,
+        /// `libxkbcommon` compatible, null-terminated string; to determine the xkb keycode, clients must add 8 to the key event keycode.
+        xkb_v1 = 1,
     }
 
     pub enum KeyState {
-        released,
-        pressed,
+        /// Key is not pressed.
+        released = 0,
+        /// Key is pressed.
+        pressed = 1,
         // since 10
-        repeated,
+        /// Key was repeated.
+        repeated = 2,
     }
 }
 
@@ -354,17 +383,23 @@ interface! {
     pub struct WlDataDeviceManager;
 
     impl Request {
-        pub fn create_data_source(id: new_id<wl_data_source>);
-        pub fn get_data_device(id: new_id<wl_data_device>, seat: object<wl_seat>);
+        pub fn create_data_source(new_id: new_id<wl_data_source>);
+        pub fn get_data_device(new_id: new_id<wl_data_device>, seat: object<wl_seat>);
         #[since = 4, destructor]
         pub fn release();
     }
 
+    // #[since = 3]
+    #[bitfield]
     pub enum DndAction {
-        none,
-        copy,
-        move,
-        ask,
+        /// No action.
+        none = 0,
+        /// Copy action.
+        copy = 1,
+        /// Move action.
+        move = 2,
+        /// Ask action.
+        ask = 4,
     }
 }
 
@@ -389,9 +424,12 @@ interface! {
         pub fn action(dnd_action: uint<wl_data_device_manager.dnd_action>);
     }
 
+    #[error]
     pub enum Error {
-        invalid_action_mask,
-        invalid_source,
+        /// Action mask contains invalid values.
+        invalid_action_mask = 0,
+        /// Source does not accept this request.
+        invalid_source = 1,
     }
 }
 
@@ -411,7 +449,7 @@ interface! {
     }
 
     impl Event {
-        pub fn data_offer(id: new_id<wl_data_offer>);
+        pub fn data_offer(new_id: new_id<wl_data_offer>);
         pub fn enter(serial: uint, surface: object<wl_surface>, x: fixed, y: fixed, id: object<wl_data_offer>?);
         pub fn leave();
         pub fn motion(time: uint, x: fixed, y: fixed);
@@ -419,9 +457,12 @@ interface! {
         pub fn selection(id: object<wl_data_offer>?);
     }
 
+    #[error]
     pub enum Error {
-        role,
-        used_source,
+        /// Given wl_surface has another role.
+        role = 0,
+        /// Source has already been used.
+        used_source = 1,
     }
 }
 
@@ -448,11 +489,16 @@ interface! {
         pub fn action(dnd_action: uint<wl_data_device_manager.dnd_action>);
     }
 
+    #[error]
     pub enum Error {
-        invalid_finish,
-        invalid_action_mask,
-        invalid_action,
-        invalid_offer,
+        /// Finish request was called untimely.
+        invalid_finish = 0,
+        /// Action mask contains invalid values.
+        invalid_action_mask = 1,
+        /// Action argument has an invalid value.
+        invalid_action = 2,
+        /// Offer does not accept this request.
+        invalid_offer = 3,
     }
 }
 
@@ -468,9 +514,12 @@ interface! {
         pub fn get_subsurface(id: new_id<wl_subsurface>, surface: object<wl_surface>, parent: object<wl_surface>);
     }
 
+    #[error]
     pub enum Error {
-        bad_surface,
-        bad_parent,
+        /// The to-be sub-surface is invalid.
+        bad_surface = 0,
+        /// The to-be sub-surface parent is invalid.
+        bad_parent = 1,
     }
 }
 
@@ -487,7 +536,9 @@ interface! {
         pub fn set_desync();
     }
 
+    #[error]
     pub enum Error {
-        bad_surface,
+        /// wl_surface is not a sibling or the parent.
+        bad_surface = 0,
     }
 }

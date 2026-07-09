@@ -7,8 +7,8 @@ interface! {
     impl Request {
         #[destructor]
         pub fn destroy();
-        pub fn create_positioner(id: new_id<xdg_positioner>);
-        pub fn get_xdg_surface(id: new_id<xdg_surface>, surface: object<wl_surface>);
+        pub fn create_positioner(new_id: new_id<xdg_positioner>);
+        pub fn get_xdg_surface(new_id: new_id<xdg_surface>, surface: object<wl_surface>);
         pub fn pong(serial: uint);
     }
 
@@ -16,14 +16,22 @@ interface! {
         pub fn ping(serial: uint);
     }
 
+    #[error]
     pub enum Error {
-        role,
-        defunct_surfaces,
-        not_the_topmost_popup,
-        invalid_popup_parent,
-        invalid_surface_state,
-        invalid_positioner,
-        unresponsive,
+        /// Given wl_surface has another role.
+        role = 0,
+        /// xdg_wm_base was destroyed before children.
+        defunct_surfaces = 1,
+        /// The client tried to map or destroy a non-topmost popup.
+        not_the_topmost_popup = 2,
+        /// The client specified an invalid popup parent surface.
+        invalid_popup_parent = 3,
+        /// The client provided an invalid surface state.
+        invalid_surface_state = 4,
+        /// The client provided an invalid positioner.
+        invalid_positioner = 5,
+        /// The client did not respond to a ping event in time.
+        unresponsive = 6,
     }
 }
 
@@ -45,32 +53,34 @@ interface! {
         pub fn set_parent_configure(serial: uint);
     }
 
+    #[error]
     pub enum Error {
-        invalid_input,
+        /// Invalid input provided.
+        invalid_input = 0,
     }
 
     pub enum Anchor {
-        none,
-        top,
-        bottom,
-        left,
-        right,
-        top_left,
-        bottom_left,
-        top_right,
-        bottom_right,
+        none = 0,
+        top = 1,
+        bottom = 2,
+        left = 3,
+        right = 4,
+        top_left = 5,
+        bottom_left = 6,
+        top_right = 7,
+        bottom_right = 8,
     }
 
     pub enum Gravity {
-        none,
-        top,
-        bottom,
-        left,
-        right,
-        top_left,
-        bottom_left,
-        top_right,
-        bottom_right,
+        none = 0,
+        top = 1,
+        bottom = 2,
+        left = 3,
+        right = 4,
+        top_left = 5,
+        bottom_left = 6,
+        top_right = 7,
+        bottom_right = 8,
     }
 
     #[bitfield]
@@ -91,8 +101,12 @@ interface! {
     impl Request {
         #[destructor]
         pub fn destroy();
-        pub fn get_toplevel(id: new_id<xdg_toplevel>);
-        pub fn get_popup(id: new_id<xdg_popup>, parent: object<xdg_surface>?, positioner: object<xdg_positioner>);
+        pub fn get_toplevel(new_id: new_id<xdg_toplevel>);
+        pub fn get_popup(
+            new_id: new_id<xdg_popup>,
+            parent: object<xdg_surface>?,
+            positioner: object<xdg_positioner>,
+        );
         pub fn set_window_geometry(x: int, y: int, width: int, height: int);
         pub fn ack_configure(serial: uint);
     }
@@ -101,13 +115,20 @@ interface! {
         pub fn configure(serial: uint);
     }
 
+    #[error]
     pub enum Error {
-        not_constructed,
-        already_constructed,
-        unconfigured_buffer,
-        invalid_serial,
-        invalid_size,
-        defunct_role_object,
+        /// Surface was not fully constructed.
+        not_constructed = 1,
+        /// Surface was already constructed.
+        already_constructed = 2,
+        /// Attaching a buffer to an unconfigured surface.
+        unconfigured_buffer = 3,
+        /// Invalid serial number when acking a configure event.
+        invalid_serial = 4,
+        /// Width or height was zero or negative.
+        invalid_size = 5,
+        /// Surface was destroyed before its role object.
+        defunct_role_object = 6,
     }
 }
 
@@ -141,10 +162,14 @@ interface! {
         pub fn wm_capabilities(capabilities: array);
     }
 
+    #[error]
     pub enum Error {
-        invalid_resize_edge,
-        invalid_parent,
-        invalid_size,
+        /// Provided value is not a valid variant of the resize_edge enum.
+        invalid_resize_edge = 0,
+        /// Invalid parent toplevel.
+        invalid_parent = 1,
+        /// Client provided an invalid min or max size.
+        invalid_size = 2,
     }
 
     pub enum ResizeEdge {
@@ -160,29 +185,34 @@ interface! {
     }
 
     pub enum State {
-        maximized,
-        fullscreen,
-        resizing,
-        activated,
+        maximized = 1,
+        fullscreen = 2,
+        resizing = 3,
+        activated = 4,
         // #[since = 2]
-        tiled_left,
-        tiled_right,
-        tiled_top,
-        tiled_bottom,
+        tiled_left = 5,
+        tiled_right = 6,
+        tiled_top = 7,
+        tiled_bottom = 8,
         // #[since = 6]
-        suspended,
+        suspended = 9,
         // #[since = 7]
-        constrained_left,
-        constrained_right,
-        constrained_top,
-        constrained_bottom,
+        constrained_left = 10,
+        constrained_right = 11,
+        constrained_top = 12,
+        constrained_bottom = 13,
     }
 
+    // #[since = 5]
     pub enum WmCapabilitiesEnum {
-        window_menu,
-        maximize,
-        fullscreen,
-        minimize,
+        /// `show_window_menu` is available.
+        window_menu = 1,
+        /// `set_maximized` and `unset_maximized` are available.
+        maximize = 2,
+        /// `set_fullscreen` and `unset_fullscreen` are available.
+        fullscreen = 3,
+        /// `set_minimized` is available.
+        minimize = 4,
     }
 }
 
@@ -204,7 +234,9 @@ interface! {
         pub fn repositioned(token: uint);
     }
 
+    #[error]
     pub enum Error {
-        invalid_grab,
+        /// Tried to grab after being mapped.
+        invalid_grab = 0,
     }
 }

@@ -5,8 +5,8 @@ interface! {
     pub struct WlDisplay;
 
     impl Request {
-        pub fn sync(callback: new_id<wl_callback>);
-        pub fn get_registry(registry: new_id<wl_registry>);
+        pub fn sync(callback_id: new_id<wl_callback>);
+        pub fn get_registry(registry_id: new_id<wl_registry>);
     }
 
     impl Event {
@@ -14,21 +14,28 @@ interface! {
         pub fn delete_id(id: uint);
     }
 
+    #[error]
     pub enum DisplayError {
-        invalid_object,
-        invalid_method,
-        no_memory,
-        implementation,
+        /// Server could not find object.
+        invalid_object = 0,
+        /// Method does not exist on the specified interface or malformed request.
+        invalid_method = 1,
+        /// Server is out of memory.
+        no_memory = 2,
+        /// Implementation error in compositor.
+        implementation = 3,
     }
 }
 
 impl AsObjectId for Error<'_> {
+    #[inline]
     fn object_id(&self) -> ObjectId {
         ObjectId::wl_display()
     }
 }
 
 impl AsObjectId for DeleteId {
+    #[inline]
     fn object_id(&self) -> ObjectId {
         ObjectId::wl_display()
     }
@@ -56,12 +63,14 @@ impl AsObjectId for DisplayId {
 }
 
 impl std::fmt::Display for DisplayId {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         1u8.fmt(f)
     }
 }
 
 impl std::fmt::Debug for DisplayId {
+    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         1u8.fmt(f)
     }
