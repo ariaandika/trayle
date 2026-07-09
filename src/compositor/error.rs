@@ -35,7 +35,7 @@ impl<E: WlError + std::fmt::Display> HandleResult for Result<(), E> {
             Ok(()) => S::Ok,
             Err(err) => {
                 log::error!("client#{} failed to handle request: {err}", client.id);
-                client.send_error(id, err.code(), err.message());
+                client.send_error(id, err);
                 S::Disconnect
             }
         }
@@ -51,7 +51,7 @@ impl<M: todex::wayland::WlMessage> HandleResult for Todo<M> {
             M::OPNAME,
             client.id,
         );
-        client.send_error(id, 3, "not yet implemented");
+        client.send_error(id, DisplayError::Implementation);
         S::Disconnect
     }
 }

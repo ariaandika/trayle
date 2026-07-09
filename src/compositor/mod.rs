@@ -23,7 +23,7 @@ use crate::surface::{Surfaces, XdgSurfaces};
 use crate::error::FatalError;
 
 use traits::MessageHandler;
-use error::{HandleResult, MessageError, WlError};
+use error::{HandleResult, MessageError};
 
 mod prelude {
     pub(super) use todex::wayland::primitives::AsVersion;
@@ -120,7 +120,7 @@ impl Compositor {
             Ok(status) => status,
             Err(err) => {
                 log::error!("client#{} failed to handle message: {err}", client.id);
-                client.send_error(DisplayId, err.code(), err.message());
+                client.send_error(DisplayId, err);
                 S::Disconnect
             }
         }
