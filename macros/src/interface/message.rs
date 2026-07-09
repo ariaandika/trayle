@@ -25,8 +25,9 @@ impl<'a> Message<'a> {
     }
 
     pub fn gen_struct(&self) -> impl Iterator<Item = TokenTree> + use<> {
-        let name = &self.op.op_name;
-        let fields = self.op.args.iter().flat_map(|Arg { name, opt, ty, .. }| {
+        let op @ Op { op_name, wl_name, .. } = self.op;
+
+        let fields = op.args.iter().flat_map(|Arg { name, opt, ty, .. }| {
             let ty = ty.generate();
             let ty = if *opt {
                 Either::Left(g!(Option<#ty>))
@@ -35,10 +36,41 @@ impl<'a> Message<'a> {
             };
             g!(pub #name: @ty,)
         });
-        let lf = self.op.lf_ph.named();
+        let lf = op.lf_ph.named();
+
+        let doc = {
+            use std::fmt::Write;
+            let mut docs = self.iface.wl_string.to_string();
+            // for some ceremonial reason the `Display` implementation of `Literal` string
+            // surrounded with quote
+            docs.replace_range(..1, " `");
+            docs.replace_range(docs.len() - 1.., "::");
+            let kind = match op.kind {
+                OpKind::Request => "` request",
+                OpKind::Event => "` event",
+            };
+            let _ = write!(docs, "{wl_name}{kind}");
+
+            if op.new_id.is_some() {
+                let _ = write!(docs, ", with new_id");
+            }
+            if self.fd.is_some() {
+                let _ = write!(docs, ", with fd");
+            }
+            if let Some(since) = op.since.as_ref() {
+                let _ = write!(docs, ", since={}", since.get());
+            }
+            if op.is_destructor {
+                let _ = write!(docs, ", type=destructor");
+            }
+            let doc = Literal::string(&docs);
+            g!(#[doc = #doc])
+        };
+
         g! {
+            @doc
             #[derive(Debug, Clone)]
-            pub struct #name @lf {
+            pub struct #op_name @lf {
                 @fields
             }
         }
