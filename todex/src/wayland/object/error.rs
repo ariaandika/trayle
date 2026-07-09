@@ -1,33 +1,53 @@
-#[derive(Debug, Clone, Copy)]
-pub enum ObjectError {
-    /// Unknown object id.
-    UnknownId,
-    /// Missmatch interface for given object id.
-    InvalidId,
-    /// Invalid new id of `1`.
-    InvalidNewId,
-    /// Out of bounds new id.
-    OutOfBoundsNewId,
-    /// Occupied new id.
-    OccupiedNewId,
-}
+use std::fmt;
 
-impl ObjectError {
+use crate::wayland::error::WlError;
+
+// ===== UnknownId =====
+
+#[derive(Debug, Clone, Copy)]
+pub struct UnknownId;
+
+impl WlError for UnknownId {
     #[inline]
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::UnknownId => "unknown object id",
-            Self::InvalidId => "missmatch interface for given object id",
-            Self::InvalidNewId => "invalid new id",
-            Self::OutOfBoundsNewId => "out of bounds new id",
-            Self::OccupiedNewId => "occupied new id",
-        }
+    fn code(&self) -> u32 {
+        // wl_display::invalid_object
+        0
+    }
+
+    #[inline]
+    fn message(&self) -> &str {
+        "unknown object id"
     }
 }
 
-impl std::fmt::Display for ObjectError {
+impl fmt::Display for UnknownId {
     #[inline]
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.message().fmt(f)
+    }
+}
+
+// ===== OccupiedNewId =====
+
+#[derive(Debug, Clone, Copy)]
+pub struct OccupiedNewId;
+
+impl WlError for OccupiedNewId {
+    #[inline]
+    fn code(&self) -> u32 {
+        // wl_display::invalid_method
+        1
+    }
+
+    #[inline]
+    fn message(&self) -> &str {
+        "occupied new id"
+    }
+}
+
+impl fmt::Display for OccupiedNewId {
+    #[inline]
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         self.message().fmt(f)
     }
 }

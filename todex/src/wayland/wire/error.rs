@@ -1,3 +1,5 @@
+use crate::wayland::error::WlError;
+
 /// An error that can occur during decoding operation.
 #[derive(Debug, Clone, Copy)]
 pub enum DecodeError {
@@ -21,9 +23,15 @@ pub enum DecodeError {
     InvalidVersion,
 }
 
-impl DecodeError {
+impl WlError for DecodeError {
     #[inline]
-    pub fn message(&self) -> &'static str {
+    fn code(&self) -> u32 {
+        // wl_display::invalid_object
+        0
+    }
+
+    #[inline]
+    fn message(&self) -> &str {
         match self {
             Self::InsufficientSize => "insufficient payload size",
             Self::ExcessiveSize => "excessize message size",

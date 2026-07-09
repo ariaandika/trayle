@@ -9,7 +9,7 @@ impl MessageHandler<CreateDataSource> for Compositor {
 }
 
 impl MessageHandler<GetDataDevice> for Compositor {
-    fn handle(&mut self, req: Msg<GetDataDevice>, client: &mut ClientMut) -> Result<(), ObjectError> {
+    fn handle(&mut self, req: Msg<GetDataDevice>, client: &mut ClientMut) -> Result<(), UnknownId> {
         let _ = client.objects.get_with(req.seat)?;
         client.objects.create(req);
         self.seat.set_data_device(client.id.to_raw());

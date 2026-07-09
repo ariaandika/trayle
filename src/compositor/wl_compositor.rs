@@ -38,7 +38,7 @@ impl MessageHandler<Destroy> for Compositor {
 }
 
 impl MessageHandler<Attach> for Compositor {
-    fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), ObjectError> {
+    fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), UnknownId> {
         let buffer_handle = match msg.buffer {
             Some(buffer) => Some(client.objects.get_with(buffer)?.handle()),
             None => None,

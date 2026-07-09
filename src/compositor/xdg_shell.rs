@@ -17,7 +17,7 @@ impl MessageHandler<XdgWmDestroy> for Compositor {
 todo_handler!(CreatePositioner);
 
 impl MessageHandler<GetXdgSurface> for Compositor {
-    fn handle(&mut self, msg: Msg<GetXdgSurface>, client: &mut ClientMut) -> Result<(), ObjectError> {
+    fn handle(&mut self, msg: Msg<GetXdgSurface>, client: &mut ClientMut) -> Result<(), UnknownId> {
         let surface_handle = client.objects.get_with(msg.surface)?.handle();
         let xdg_handle = self.xdg_surfaces.create(surface_handle);
         client.objects.create_with(msg, xdg_handle);

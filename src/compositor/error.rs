@@ -1,7 +1,6 @@
-use std::assert_matches;
 use todex::log;
 use todex::wayland::primitives::ObjectId;
-use todex::wayland::object::ObjectError;
+use todex::wayland::object::{OccupiedNewId, UnknownId};
 use todex::wayland::interface::wl_display::DisplayError;
 use todex::wayland::wire::DecodeError;
 
@@ -42,14 +41,14 @@ impl<E: WlError + std::fmt::Display> HandleResult for Result<(), E> {
     }
 }
 
-impl<M: todex::wayland::WlMessage> HandleResult for Todo<M> {
+impl<M: todex::wayland::message::WlMessage> HandleResult for Todo<M> {
     fn handle_result(self, id: ObjectId, client: &mut ClientMut) -> ClientStatus {
         use todex::wayland::interface::WlInterface;
         log::error!(
             "client#{} {}::{} is not yet implemented",
+            client.id,
             <M::WlInterface as WlInterface>::INTERFACE_NAME,
             M::OPNAME,
-            client.id,
         );
         client.send_error(id, DisplayError::Implementation);
         S::Disconnect
@@ -69,21 +68,24 @@ impl<M> Todo<M> {
 // ===== MessageError =====
 
 pub enum MessageError {
-    Object(ObjectError),
+    UnknownId(UnknownId),
+    OccupiedNewId(OccupiedNewId),
     Decode(DecodeError),
 }
 
 impl WlError for MessageError {
     fn code(&self) -> u32 {
         match self {
-            Self::Object(err) => err.code(),
+            Self::UnknownId(err) => err.code(),
+            Self::OccupiedNewId(err) => err.code(),
             Self::Decode(err) => err.code(),
         }
     }
 
     fn message(&self) -> &str {
         match self {
-            Self::Object(err) => err.message(),
+            Self::UnknownId(err) => err.message(),
+            Self::OccupiedNewId(err) => err.message(),
             Self::Decode(err) => err.message(),
         }
     }
@@ -95,16 +97,23 @@ impl From<DecodeError> for MessageError {
     }
 }
 
-impl From<ObjectError> for MessageError {
-    fn from(v: ObjectError) -> Self {
-        Self::Object(v)
+impl From<UnknownId> for MessageError {
+    fn from(v: UnknownId) -> Self {
+        Self::UnknownId(v)
+    }
+}
+
+impl From<OccupiedNewId> for MessageError {
+    fn from(v: OccupiedNewId) -> Self {
+        Self::OccupiedNewId(v)
     }
 }
 
 impl std::fmt::Display for MessageError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Object(err) => err.fmt(f),
+            Self::UnknownId(err) => err.fmt(f),
+            Self::OccupiedNewId(err) => err.fmt(f),
             Self::Decode(err) => err.fmt(f),
         }
     }
@@ -165,10 +174,8 @@ impl std::fmt::Display for CommitError {
     }
 }
 
-impl From<ObjectError> for CommitError {
-    fn from(value: ObjectError) -> Self {
-        assert_matches!(value, ObjectError::UnknownId);
-        // this is assuming only error from removing object of callback can happens
+impl From<UnknownId> for CommitError {
+    fn from(_: UnknownId) -> Self {
         panic!("dangling `callback` id")
     }
 }

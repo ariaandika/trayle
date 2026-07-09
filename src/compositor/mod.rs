@@ -27,7 +27,7 @@ use error::{HandleResult, MessageError};
 
 mod prelude {
     pub(super) use todex::wayland::primitives::AsVersion;
-    pub(super) use todex::wayland::object::{Object, ObjectError};
+    pub(super) use todex::wayland::object::{Object, UnknownId};
     pub(super) use todex::wayland::message::WlMessage;
     pub(super) use todex::wayland::interface::*;
 

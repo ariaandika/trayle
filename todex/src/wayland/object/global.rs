@@ -1,5 +1,6 @@
 use crate::wayland::primitives::Version;
-use crate::wayland::{Interface, Object};
+use crate::wayland::object::Object;
+use crate::wayland::interface::Interface;
 
 pub type Global = Object<Interface, Version, &'static str>;
 

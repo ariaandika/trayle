@@ -29,24 +29,19 @@
 //!
 //! These traits are not meant to be implemented by application.
 
-pub use object::Object;
-pub use message::{Message, WlMessage};
-pub use interface::{AsInterface, Interface};
-pub use error::WlError;
-
 macro_rules! roundup4 {
     ($e:expr) => {
         ($e + 3) & (u16::MAX << 2)
     };
 }
 
+pub mod error;
 pub mod primitives;
 pub mod object;
 pub mod message;
 pub mod interface;
 pub mod wire;
 pub mod display;
-pub mod error;
 
 #[cfg(doc)]
 pub mod cheatsheet {

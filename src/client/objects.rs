@@ -1,11 +1,9 @@
 use todex::collections::slots::{Slots, IntoIter};
 use todex::wayland::primitives::{AsObjectId, AsVersion, ObjectId, Version};
-use todex::wayland::object::{AsNewId, NewId, Object, ObjectError};
+use todex::wayland::object::{AsNewId, NewId, Object, UnknownId, OccupiedNewId};
 use todex::wayland::interface::{AsInterface, Interface};
 
 use crate::handle::{Handle, WithHandle};
-
-use ObjectError as E;
 
 pub type ObjectEntry<I = Interface, H = ()> = Object<I, Version, Handle<H>>;
 
@@ -31,13 +29,13 @@ impl Objects {
 
 impl Objects {
     /// Returns true whether given id can be used in insertion.
-    pub fn checks_id(&self, id: ObjectId) -> Result<(), ObjectError> {
+    pub fn checks_id(&self, id: ObjectId) -> Result<(), OccupiedNewId> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Err(E::InvalidNewId);
+            return Err(OccupiedNewId);
         };
         match self.slots.check_index(idx as usize) {
             true => Ok(()),
-            false => Err(E::OccupiedNewId),
+            false => Err(OccupiedNewId),
         }
     }
 
@@ -126,15 +124,15 @@ impl Objects {
     }
 
     /// Performs an object lookup.
-    pub fn get(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
+    pub fn get(&self, id: ObjectId) -> Result<ObjectEntry, UnknownId> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
             return Ok(wl_display());
         };
-        self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
+        self.slots.get(idx as usize).copied().ok_or(UnknownId)
     }
 
     /// Performs an object lookup.
-    pub fn get_with<I>(&mut self, id: I) -> Result<ObjectEntry<Interface, I::Handle>, ObjectError>
+    pub fn get_with<I>(&mut self, id: I) -> Result<ObjectEntry<Interface, I::Handle>, UnknownId>
     where
         I: AsObjectId + WithHandle,
     {
@@ -146,16 +144,16 @@ impl Objects {
             .copied()
             // this casting is fine, because its based on static type definition
             .map(|o| o.map_id(Handle::cast))
-            .ok_or(E::UnknownId)
+            .ok_or(UnknownId)
     }
 
-    pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, ObjectError> {
+    pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, UnknownId> {
         index
             .object_id()
             .to_u32()
             .checked_sub(2)
             .and_then(|i| self.slots.remove(i as usize))
-            .ok_or(E::UnknownId)
+            .ok_or(UnknownId)
     }
 }
 
