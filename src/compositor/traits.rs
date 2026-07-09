@@ -1,11 +1,12 @@
 use todex::wayland::primitives::Version;
 use todex::wayland::object::Object;
 use todex::wayland::message::{Message, WlMessage};
-use todex::wayland::error::WlError;
 
 use crate::handle::{Handle, WithHandle};
-use crate::client::ClientMut;
 use crate::compositor::error::HandleResult;
+use crate::client::ClientMut;
+
+pub use crate::compositor::error::CommitError;
 
 // ===== Handler =====
 
@@ -31,10 +32,10 @@ where
 }
 
 macro_rules! todo_handler {
-    ($ty:ident) => {
+    ($ty:ty) => {
         impl MessageHandler<$ty> for Compositor {
-            fn handle(&mut self, _: Msg<$ty>, _: &mut ClientMut) -> Result<(), WlError> {
-                Err(WlError::NotYetImplemented)
+            fn handle(&mut self, _: Msg<$ty>, _: &mut ClientMut) -> Todo<$ty> {
+                Todo::new()
             }
         }
     };
@@ -46,12 +47,12 @@ pub(crate) use todo_handler;
 
 /// Side effect for `wl_registry::bind` request.
 pub trait BindEffect<Interface> {
-    fn bind(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), WlError>;
+    fn bind(&mut self, obj: Object<Interface>, client: &mut ClientMut);
 }
 
 /// Side effect for `wl_surface::commit` request.
 //
 // This is assuming all surface role have single corresponding interface.
 pub trait CommitEffect<Interface> {
-    fn commit(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), WlError>;
+    fn commit(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), CommitError>;
 }

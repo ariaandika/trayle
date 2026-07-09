@@ -1,105 +1,46 @@
-use crate::wayland::object::ObjectError;
-use crate::wayland::wire::DecodeError;
-use crate::wayland::interface::wl_display::DisplayError as WlDisplayError;
-use crate::wayland::interface::wl_seat;
-use crate::wayland::interface::wl_shm::Error as ShmError;
+pub use crate::wayland::interface::wl_display::DisplayError;
+pub use crate::wayland::object::ObjectError;
+pub use crate::wayland::wire::DecodeError;
 
-// ===== BindError =====
+pub trait WlError {
+    fn code(&self) -> u32;
 
-#[derive(Debug, Clone, Copy)]
-pub enum BindError {
-    /// Unknown bind name.
-    UnknownName,
-    /// Missmatch bind name.
-    MissmatchName,
-    /// Unsupported bind version.
-    UnsupportedVersion,
+    fn message(&self) -> &str;
 }
 
-impl BindError {
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::UnknownName => "unknown bind name",
-            Self::MissmatchName => "missmatch bind name",
-            Self::UnsupportedVersion => "unsupported bind version"
-        }
+impl WlError for ObjectError {
+    fn code(&self) -> u32 {
+        DisplayError::InvalidObject as u32
+    }
+
+    fn message(&self) -> &str {
+        self.message()
     }
 }
 
-// ===== WlError =====
+impl WlError for DecodeError {
+    fn code(&self) -> u32 {
+        DisplayError::InvalidMethod as u32
+    }
 
-#[derive(Debug, Clone, Copy)]
-pub enum WlError {
-    /// Not yet implemented.
-    NotYetImplemented,
-    /// Seat error.
-    Seat(wl_seat::Error),
-    /// Decode error.
-    Decode(DecodeError),
-    /// Object error.
-    Object(ObjectError),
-    /// Registry bind error.
-    Bind(BindError),
-    /// Shm operation error.
-    Shm(ShmError),
+    fn message(&self) -> &str {
+        self.message()
+    }
 }
 
-const SEMANTIC: u32 = WlDisplayError::InvalidObject as u32;
-const MALFORMED: u32 = WlDisplayError::InvalidMethod as u32;
-const IMPLEMENTATION: u32 = WlDisplayError::Implementation as u32;
-
-impl WlError {
-    #[inline]
-    pub fn message(&self) -> &'static str {
-        match self {
-            Self::NotYetImplemented => "not yet implemented",
-            Self::Seat(e) => match e {
-                wl_seat::Error::MissingCapability => "seat missing capability",
+macro_rules! delegate_protocol_error {
+    ($wl_ty:ident) => {
+        impl WlError for crate::wayland::interface::$wl_ty::Error {
+            fn code(&self) -> u32 {
+                *self as u32
             }
-            Self::Decode(e) => e.message(),
-            Self::Object(e) => e.message(),
-            Self::Bind(e) => e.message(),
-            Self::Shm(e) => e.message(),
-        }
-    }
 
-    #[inline]
-    pub fn code(&self) -> u32 {
-        match self {
-            WlError::NotYetImplemented => IMPLEMENTATION,
-            WlError::Seat(_) => IMPLEMENTATION,
-            WlError::Decode(_) => MALFORMED,
-            WlError::Object(_) => SEMANTIC,
-            WlError::Bind(_) => MALFORMED,
-            WlError::Shm(_) => SEMANTIC,
-        }
-    }
-}
-
-impl std::error::Error for WlError { }
-
-impl std::fmt::Display for WlError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}", self.message())
-    }
-}
-
-macro_rules! from {
-    ($($v:ident($e:ty)),* $(,)?) => {
-        $(
-            impl From<$e> for WlError {
-                #[inline]
-                fn from(v: $e) -> Self {
-                    Self::$v(v)
-                }
+            fn message(&self) -> &str {
+                self.message()
             }
-        )*
+        }
     };
 }
-from! {
-    Seat(wl_seat::Error),
-    Decode(DecodeError),
-    Object(ObjectError),
-    Bind(BindError),
-    Shm(ShmError),
-}
+delegate_protocol_error!(wl_surface);
+delegate_protocol_error!(wl_shm);
+delegate_protocol_error!(wl_seat);

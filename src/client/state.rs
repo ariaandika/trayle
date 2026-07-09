@@ -7,7 +7,6 @@ use todex::wayland::primitives::AsObjectId;
 use todex::wayland::message::WlMessage;
 use todex::wayland::interface::wl_display::{DeleteId, Error};
 use todex::wayland::wire::Encode;
-use todex::wayland::error::WlError;
 
 use crate::client::{ClientId, Objects};
 use crate::log;
@@ -49,11 +48,11 @@ impl<'a> ClientMut<'a> {
     }
 
     /// Send `wl_display::error` event.
-    pub fn send_error<Id: AsObjectId>(&mut self, id: Id, error: WlError) {
+    pub fn send_error<Id: AsObjectId>(&mut self, id: Id, code: u32, message: &str) {
         self.send(Error {
             object_id: id.object_id(),
-            code: error.code(),
-            message: error.message(),
+            code,
+            message,
         });
     }
 

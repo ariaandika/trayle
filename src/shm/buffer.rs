@@ -1,5 +1,5 @@
 use todex::collections::slab::Slab;
-use todex::wayland::object::{Object, ObjectError};
+use todex::wayland::object::Object;
 use todex::wayland::interface::wl_shm::FormatEnum;
 use todex::wayland::interface::WlBuffer;
 
@@ -25,16 +25,28 @@ impl Buffers {
         Handle::from_idx(self.buf.insert(buffer).0)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<Buffer>) -> Result<&mut Buffer, ObjectError> {
-        self.buf
-            .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
-    }
-
-    pub fn remove(&mut self, handle: Handle<Buffer>) -> Result<Buffer, ObjectError> {
+    pub fn remove(&mut self, handle: Handle<Buffer>) -> Buffer {
         self.buf
             .remove(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::Index<Handle<Buffer>> for Buffers {
+    type Output = Buffer;
+
+    fn index(&self, handle: Handle<Buffer>) -> &Self::Output {
+        self.buf
+            .get(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::IndexMut<Handle<Buffer>> for Buffers {
+    fn index_mut(&mut self, handle: Handle<Buffer>) -> &mut Self::Output {
+        self.buf
+            .get_mut(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
     }
 }
 

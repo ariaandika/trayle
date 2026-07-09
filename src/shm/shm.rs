@@ -5,8 +5,7 @@ use todex::sys::memmap::Memmap;
 use todex::collections::slab::Slab;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;
-use todex::wayland::object::{Object, ObjectError};
-use todex::wayland::error::WlError;
+use todex::wayland::object::Object;
 
 use crate::handle::Handle;
 use crate::shm::buffer::{Buffer, BufferFactory};
@@ -31,29 +30,39 @@ impl ShmPools {
         Ok(Handle::from_idx(self.buf.insert(ShmPool::new(fd, size)?).0))
     }
 
-    pub fn get_mut(&mut self, handle: Handle<ShmPool>) -> Result<&mut ShmPool, ObjectError> {
+    pub fn create_buffer(&mut self, handle: Handle<ShmPool>, msg: &CreateBuffer) -> Result<Buffer, Error> {
+        self[handle].create_buffer(handle, msg)
+    }
+
+    pub fn destroy(&mut self, handle: Handle<ShmPool>) {
+        if self[handle].destroy() {
+            self.buf.remove(handle.to_idx());
+        }
+    }
+
+    pub fn destroy_buffer(&mut self, buffer: Buffer) {
+        let BufferFactory::ShmPool(handle) = buffer.factory;
+        if self[handle].destroy_buffer(buffer) {
+            self.buf.remove(handle.to_idx());
+        }
+    }
+}
+
+impl std::ops::Index<Handle<ShmPool>> for ShmPools {
+    type Output = ShmPool;
+
+    fn index(&self, handle: Handle<ShmPool>) -> &Self::Output {
+        self.buf
+            .get(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::IndexMut<Handle<ShmPool>> for ShmPools {
+    fn index_mut(&mut self, handle: Handle<ShmPool>) -> &mut Self::Output {
         self.buf
             .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
-    }
-
-    pub fn create_buffer(&mut self, handle: Handle<ShmPool>, msg: &CreateBuffer) -> Result<Buffer, WlError> {
-        self.get_mut(handle)?.create_buffer(handle, msg).map_err(<_>::into)
-    }
-
-    pub fn destroy(&mut self, handle: Handle<ShmPool>) -> Result<(), ObjectError> {
-        if self.get_mut(handle)?.destroy() {
-            self.buf.remove(handle.to_idx());
-        }
-        Ok(())
-    }
-
-    pub fn destroy_buffer(&mut self, buffer: Buffer) -> Result<(), ObjectError> {
-        let BufferFactory::ShmPool(handle) = buffer.factory;
-        if self.get_mut(handle)?.destroy_buffer(buffer) {
-            self.buf.remove(handle.to_idx());
-        }
-        Ok(())
+            .unwrap_or_else(|| handle.dangling())
     }
 }
 

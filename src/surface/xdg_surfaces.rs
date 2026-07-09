@@ -1,5 +1,4 @@
 use todex::collections::slab::Slab;
-use todex::wayland::object::ObjectError;
 
 use crate::handle::Handle;
 use crate::surface::{XdgSurface, Surface};
@@ -22,15 +21,27 @@ impl XdgSurfaces {
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<XdgSurface>) -> Result<&mut XdgSurface, ObjectError> {
-        self.buf
-            .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
-    }
-
-    pub fn remove(&mut self, handle: Handle<XdgSurface>) -> Result<XdgSurface, ObjectError> {
+    pub fn remove(&mut self, handle: Handle<XdgSurface>) -> XdgSurface {
         self.buf
             .remove(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
+            .unwrap_or_else(||handle.dangling())
+    }
+}
+
+impl std::ops::Index<Handle<XdgSurface>> for XdgSurfaces {
+    type Output = XdgSurface;
+
+    fn index(&self, handle: Handle<XdgSurface>) -> &Self::Output {
+        self.buf
+            .get(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::IndexMut<Handle<XdgSurface>> for XdgSurfaces {
+    fn index_mut(&mut self, handle: Handle<XdgSurface>) -> &mut Self::Output {
+        self.buf
+            .get_mut(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
     }
 }

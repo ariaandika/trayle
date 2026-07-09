@@ -66,6 +66,14 @@ impl<T> Handle<T> {
             _p: std::marker::PhantomData,
         }
     }
+
+    /// Panics because of dangling handle.
+    #[cold]
+    #[inline(never)]
+    pub fn dangling(self) -> ! {
+        // FEAT: add trait that can returns name statically
+        panic!("dangling handle: {}", self.id)
+    }
 }
 
 impl<T> Clone for Handle<T> {
@@ -91,8 +99,8 @@ impl<T> std::fmt::Debug for Handle<T> {
     }
 }
 
-#[inline(never)]
 #[cold]
+#[inline(never)]
 const fn id_overflow() -> ! {
     panic!("id overflow")
 }

@@ -1,5 +1,4 @@
 use todex::collections::slab::Slab;
-use todex::wayland::object::ObjectError;
 
 use crate::handle::Handle;
 use crate::surface::Surface;
@@ -22,15 +21,27 @@ impl Surfaces {
         Handle::from_idx(idx)
     }
 
-    pub fn get_mut(&mut self, handle: Handle<Surface>) -> Result<&mut Surface, ObjectError> {
-        self.buf
-            .get_mut(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
-    }
-
-    pub fn remove(&mut self, handle: Handle<Surface>) -> Result<Surface, ObjectError> {
+    pub fn remove(&mut self, handle: Handle<Surface>) -> Surface {
         self.buf
             .remove(handle.to_idx())
-            .ok_or(ObjectError::UnknownId)
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::Index<Handle<Surface>> for Surfaces {
+    type Output = Surface;
+
+    fn index(&self, handle: Handle<Surface>) -> &Self::Output {
+        self.buf
+            .get(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
+    }
+}
+
+impl std::ops::IndexMut<Handle<Surface>> for Surfaces {
+    fn index_mut(&mut self, handle: Handle<Surface>) -> &mut Self::Output {
+        self.buf
+            .get_mut(handle.to_idx())
+            .unwrap_or_else(|| handle.dangling())
     }
 }

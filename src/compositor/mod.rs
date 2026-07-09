@@ -14,7 +14,6 @@ use todex::wayland::message::{Message, OpCode, WlMessage};
 use todex::wayland::interface::{self, AsInterface, InterfaceId};
 use todex::wayland::interface::wl_display::DisplayId;
 use todex::wayland::wire::{DecodePayload, Payload};
-use todex::wayland::error::WlError;
 
 use crate::handle::{AsHandle, WithHandle};
 use crate::seat::Seat;
@@ -24,20 +23,19 @@ use crate::surface::{Surfaces, XdgSurfaces};
 use crate::error::FatalError;
 
 use traits::MessageHandler;
-use error::HandleResult;
+use error::{HandleResult, MessageError, WlError};
 
 mod prelude {
-    pub(super) use todex::wayland;
     pub(super) use todex::wayland::primitives::AsVersion;
-    pub(super) use todex::wayland::object::Object;
+    pub(super) use todex::wayland::object::{Object, ObjectError};
     pub(super) use todex::wayland::message::WlMessage;
     pub(super) use todex::wayland::interface::*;
-    pub(super) use todex::wayland::error::WlError;
 
     pub(super) use crate::handle::AsHandle;
     pub(super) use crate::client::ClientMut;
 
     pub(super) use super::Compositor;
+    pub(super) use super::error::Todo;
     pub(super) use super::traits::{MessageHandler, Msg, todo_handler};
 }
 
@@ -108,23 +106,21 @@ impl Compositor {
     pub fn message(&mut self, read_buf: &mut Bytes, client: &mut ClientMut) -> ClientStatus {
         use ClientStatus as S;
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
-        let result = (|| {
-            loop {
-                let Some(msg) = Message::get_message(read_buf)? else {
-                    return Ok(S::Ok);
-                };
-                let id = msg.object_id();
-                let obj = client.objects.get_anon(id)?;
-                if self.route(obj, msg, client)?.is_disconnect() {
-                    return Ok(S::Disconnect)
-                }
+        let result = (|| loop {
+            let Some(msg) = Message::get_message(read_buf)? else {
+                return Ok::<_, MessageError>(S::Ok);
+            };
+            let id = msg.object_id();
+            let obj = client.objects.get(id)?;
+            if self.route(obj, msg, client)?.is_disconnect() {
+                return Ok(S::Disconnect);
             }
         })();
         match result {
             Ok(status) => status,
             Err(err) => {
-                log::error!("client#{} failed to decode message: {err}", client.id);
-                client.send_error(DisplayId, err);
+                log::error!("client#{} failed to handle message: {err}", client.id);
+                client.send_error(DisplayId, err.code(), err.message());
                 S::Disconnect
             }
         }
@@ -135,7 +131,7 @@ impl Compositor {
         obj: ObjectEntry,
         msg: Message<Payload<'a>, u16>,
         client: &mut ClientMut,
-    ) -> Result<ClientStatus, WlError>
+    ) -> Result<ClientStatus, MessageError>
     where
         M: WlMessage + DecodePayload<Fd = [i32; N]>,
         M::Output<'a>: WlMessage,
@@ -146,6 +142,9 @@ impl Compositor {
         let payload = msg.decode_payload::<_, M>(client.read_fd)?;
         let msg = Message::from_parts(obj.handle().cast(), payload, obj.version());
         log::debug!("client#{} <- {}", client.id, msg.display(),);
+        if let Some(new_id) = msg.get_new_id() {
+            client.objects.checks_id(new_id)?;
+        }
         let status = self.handle(msg, client).handle_result(id, client);
         if M::IS_DESTRUCTOR {
             client.delete_id(id);
@@ -255,7 +254,7 @@ macro_rules! dispatcher {
                 obj: ObjectEntry,
                 msg: Message<Payload<'_>, u16>,
                 client: &mut ClientMut,
-            ) -> Result<ClientStatus, WlError> {
+            ) -> Result<ClientStatus, MessageError> {
                 match obj.interface() {
                     $(InterfaceId::$iface => {
                         use interface::camel_cased::$iface::*;
@@ -267,7 +266,14 @@ macro_rules! dispatcher {
                             })*
                         }
                     })*
-                    _ => Err(WlError::NotYetImplemented),
+                    iface => {
+                        log::error!(
+                            "client#{} {iface}::{} not yet implemented",
+                            client.id,
+                            msg.opcode(),
+                        );
+                        return Ok(ClientStatus::Disconnect);
+                    }
                 }
             }
         }

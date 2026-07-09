@@ -27,6 +27,9 @@ impl Objects {
             slots: Slots::with_capacity(INITIAL_CAP),
         }
     }
+}
+
+impl Objects {
     /// Returns true whether given id can be used in insertion.
     pub fn checks_id(&self, id: ObjectId) -> Result<(), ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
@@ -39,26 +42,38 @@ impl Objects {
     }
 
     /// Create new object from constructor message.
-    pub fn create<M>(&mut self, msg: M) -> Result<Object<M::Interface>, ObjectError>
+    ///
+    /// # Panics.
+    ///
+    /// Panics if the new id cannot be used. Use [`Objects::checks_id`] to checks whether an id can
+    /// be used in creation.
+    pub fn create<M>(&mut self, msg: M) -> Object<M::Interface>
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
     {
         let new_id = msg.new_id();
         self.insert_inner(
             new_id.object_id(),
-            new_id.interface.interface(),
-            msg.version(),
-            Handle::from_idx(0),
-        )?;
-        Ok(Object::from_new_id(new_id))
+            ObjectEntry::from_parts(
+                new_id.interface.interface(),
+                msg.version(),
+                Handle::from_idx(0),
+            ),
+        );
+        Object::from_new_id(new_id)
     }
 
     /// Create new object from constructor message with a handle.
+    ///
+    /// # Panics.
+    ///
+    /// Panics if the new id cannot be used. Use [`Objects::checks_id`] to checks whether an id can
+    /// be used in creation.
     pub fn create_with<M>(
         &mut self,
         msg: M,
         handle: Handle<<M::Interface as WithHandle>::Handle>,
-    ) -> Result<Object<M::Interface>, ObjectError>
+    ) -> Object<M::Interface>
     where
         M: AsNewId<Interface: AsInterface> + AsVersion,
         M::Interface: WithHandle,
@@ -66,46 +81,43 @@ impl Objects {
         let new_id = msg.new_id();
         self.insert_inner(
             new_id.object_id(),
-            new_id.interface.interface(),
-            msg.version(),
-            handle.cast::<()>(),
-        )?;
-        Ok(Object::from_new_id(new_id))
+            ObjectEntry::from_parts(
+                new_id.interface.interface(),
+                msg.version(),
+                handle.cast::<()>(),
+            ),
+        );
+        Object::from_new_id(new_id)
     }
 
     /// Insert new object from parts.
     ///
     /// This is used by `wl_registry::bind` where the object type is a runtime value.
-    pub fn insert_parts(
-        &mut self,
-        new_id: ObjectId,
-        interface: Interface,
-        version: Version,
-    ) -> Result<(), ObjectError> {
-        self.insert_inner(new_id.object_id(), interface, version, Handle::from_idx(0))
+    ///
+    /// # Panics.
+    ///
+    /// Panics if the new id cannot be used. Use [`Objects::checks_id`] to checks whether an id can
+    /// be used in creation.
+    pub fn insert_parts(&mut self, new_id: ObjectId, interface: Interface, version: Version) {
+        self.insert_inner(
+            new_id.object_id(),
+            ObjectEntry::from_parts(interface, version, Handle::from_idx(0)),
+        )
     }
 
-    // detach the generics
-    fn insert_inner(
-        &mut self,
-        object_id: ObjectId,
-        interface: Interface,
-        version: Version,
-        handle: Handle<()>,
-    ) -> Result<(), ObjectError> {
-        let entry = ObjectEntry::from_parts(interface, version, handle);
-        let Some(idx) = object_id.to_u32().checked_sub(2).map(|e| e as usize) else {
-            return Err(E::InvalidNewId);
-        };
-        match self.slots.insert(idx, entry) {
-            Ok(()) => Ok(()),
-            // NOTE: can be out of bounds error
-            Err(_) => Err(E::OccupiedNewId),
-        }
+    fn insert_inner(&mut self, object_id: ObjectId, object: ObjectEntry) {
+        let idx = object_id
+            .to_u32()
+            .checked_sub(2)
+            .unwrap_or_else(|| unchecked_new_id());
+        self.slots
+            .insert(idx as usize, object)
+            .unwrap_or_else(|_| unchecked_new_id());
     }
+}
 
+impl Objects {
     /// This has the same effect of inserting the id and immediately remove it.
-    #[inline]
     pub fn use_one<I>(&mut self, new_id: NewId<I>) -> Object<I> {
         if let Some(idx) = new_id.object_id().to_u32().checked_sub(2) {
             self.slots.use_one(idx as usize);
@@ -114,23 +126,18 @@ impl Objects {
     }
 
     /// Performs an object lookup.
-    pub fn get_anon(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
+    pub fn get(&self, id: ObjectId) -> Result<ObjectEntry, ObjectError> {
         let Some(idx) = id.to_u32().checked_sub(2) else {
-            return Ok(WL_DISPLAY);
+            return Ok(wl_display());
         };
         self.slots.get(idx as usize).copied().ok_or(E::UnknownId)
     }
 
     /// Performs an object lookup.
-    pub fn get_mut<I: ObjectIndex>(&mut self, idx: I) -> Result<ObjectEntry, ObjectError> {
-        ObjectIndex::get_object_mut(idx, self)
-    }
-
-    /// Performs an object lookup.
-    pub fn get_with<I: AsObjectId + WithHandle>(
-        &mut self,
-        id: I,
-    ) -> Result<ObjectEntry<Interface, I::Handle>, ObjectError> {
+    pub fn get_with<I>(&mut self, id: I) -> Result<ObjectEntry<Interface, I::Handle>, ObjectError>
+    where
+        I: AsObjectId + WithHandle,
+    {
         let Some(idx) = id.object_id().to_u32().checked_sub(2) else {
             return Ok(wl_display());
         };
@@ -142,7 +149,6 @@ impl Objects {
             .ok_or(E::UnknownId)
     }
 
-    #[inline]
     pub fn remove<O: AsObjectId>(&mut self, index: O) -> Result<ObjectEntry, ObjectError> {
         index
             .object_id()
@@ -153,34 +159,16 @@ impl Objects {
     }
 }
 
-const WL_DISPLAY: ObjectEntry =
-    ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::from_idx(0));
-
 fn wl_display<H>() -> Object<Interface, Version, Handle<H>> {
     ObjectEntry::from_parts(Interface::WlDisplay, Version::ONE, Handle::<H>::from_idx(0))
 }
 
-pub trait ObjectIndex {
-    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError>;
-}
-
-impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for &Object<I, M, D> {
-    #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
-        let object = objects.get_anon(self.object_id())?;
-        if object.interface() == self.interface() {
-            Ok(object)
-        } else {
-            Err(E::InvalidId)
-        }
-    }
-}
-
-impl<I: AsInterface, M, D: AsObjectId> ObjectIndex for Object<I, M, D> {
-    #[inline]
-    fn get_object_mut(self, objects: &mut Objects) -> Result<ObjectEntry, ObjectError> {
-        <&Self>::get_object_mut(&self, objects)
-    }
+/// New id checks can be automatically added before the handler, thus can make the insert operation
+/// infallible by panicking, reducing error cases in handler.
+#[cold]
+#[inline(never)]
+fn unchecked_new_id() -> ! {
+    panic!("internal error: unchecked new id")
 }
 
 // ===== IntoIterator =====
@@ -190,7 +178,6 @@ impl IntoIterator for Objects {
 
     type IntoIter = IntoIter<ObjectEntry>;
 
-    #[inline]
     fn into_iter(self) -> Self::IntoIter {
         self.slots.into_iter()
     }
