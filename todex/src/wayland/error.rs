@@ -9,38 +9,25 @@ pub trait WlError {
 }
 
 impl WlError for ObjectError {
+    #[inline]
     fn code(&self) -> u32 {
         DisplayError::InvalidObject as u32
     }
 
+    #[inline]
     fn message(&self) -> &str {
         self.message()
     }
 }
 
 impl WlError for DecodeError {
+    #[inline]
     fn code(&self) -> u32 {
         DisplayError::InvalidMethod as u32
     }
 
+    #[inline]
     fn message(&self) -> &str {
         self.message()
     }
 }
-
-macro_rules! delegate_protocol_error {
-    ($wl_ty:ident) => {
-        impl WlError for crate::wayland::interface::$wl_ty::Error {
-            fn code(&self) -> u32 {
-                *self as u32
-            }
-
-            fn message(&self) -> &str {
-                self.message()
-            }
-        }
-    };
-}
-delegate_protocol_error!(wl_surface);
-delegate_protocol_error!(wl_shm);
-delegate_protocol_error!(wl_seat);

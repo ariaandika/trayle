@@ -140,7 +140,7 @@ impl Enum {
             g!(#disc => Some(Self::#variant),)
         });
 
-        let messages = self.is_error.then_stream(||{
+        let wl_error = self.is_error.then_stream(||{
             let msgs = variants.iter().flat_map(|v| {
                 let Variant { doc, variant, .. } = v;
                 let mut doc = doc.as_ref().expect("error are asserted to have doc").to_string();
@@ -152,9 +152,16 @@ impl Enum {
                 g!(Self::#variant => #message,)
             });
             g! {
-                #[inline]
-                pub const fn message(&self) -> &'static str {
-                    match self { @msgs }
+                impl WlError for #name {
+                    #[inline]
+                    fn code(&self) -> u32 {
+                        *self as u32
+                    }
+
+                    #[inline]
+                    fn message(&self) -> &str {
+                        match self { @msgs }
+                    }
                 }
             }
         });
@@ -171,8 +178,6 @@ impl Enum {
                 pub const fn as_str(&self) -> &'static str {
                     match self { @as_strs }
                 }
-
-                @messages
             }
 
             impl WlEnum for #name {
@@ -186,6 +191,8 @@ impl Enum {
                     self as u32
                 }
             }
+
+            @wl_error
 
             impl std::fmt::Display for #name {
                 #[inline]
