@@ -54,5 +54,10 @@ pub trait BindEffect<Interface> {
 //
 // This is assuming all surface role have single corresponding interface.
 pub trait CommitEffect<Interface> {
-    fn commit(&mut self, obj: Object<Interface>, client: &mut ClientMut) -> Result<(), CommitError>;
+    fn commit(
+        &mut self,
+        is_configured: bool,
+        obj: Object<Interface>,
+        client: &mut ClientMut,
+    ) -> Result<(), CommitError>;
 }

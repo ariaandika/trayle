@@ -77,16 +77,22 @@ impl MessageHandler<AckConfigure> for Compositor {
 impl CommitEffect<XdgToplevel> for Compositor {
     fn commit(
         &mut self,
+        is_configured: bool,
         obj: Object<XdgToplevel>,
         client: &mut ClientMut,
     ) -> Result<(), CommitError> {
-        let toplevel = client.objects.get_with(obj).expect("dangling role object");
-        let xdg_surface = &mut self.xdg_surfaces[toplevel.handle()];
-        let xdg_surface_obj = xdg_surface.object();
+        if is_configured {
+            client.send(obj.close());
+        } else {
+            let toplevel = client.objects.get_with(obj).expect("dangling role object");
+            let xdg_surface = &mut self.xdg_surfaces[toplevel.handle()];
+            let xdg_surface_obj = xdg_surface.object();
 
-        let serial = xdg_surface.next_ack();
-        client.send(obj.configure(0, 0, &[]));
-        client.send(xdg_surface_obj.configure(serial));
+            let serial = xdg_surface.next_ack();
+            client.send(obj.configure(0, 0, &[]));
+            client.send(xdg_surface_obj.configure(serial));
+        }
+
         Ok(())
     }
 }

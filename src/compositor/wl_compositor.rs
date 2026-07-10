@@ -89,10 +89,10 @@ impl MessageHandler<Attach> for Compositor {
 impl MessageHandler<Commit> for Compositor {
     fn handle(&mut self, msg: Msg<Commit>, client: &mut ClientMut) -> Result<(), CommitError> {
         let surface = &mut self.surfaces[msg.handle()];
+        surface.commit();
 
-        if surface.is_configured() {
-            surface.commit();
-
+        let is_configured = surface.is_configured();
+        if is_configured {
             if let Some(handle) = surface.release_current_buffer() {
                 // TODO: temporary implementation, write surface as ppm file
                 let buffer = &mut self.buffers[handle];
@@ -125,13 +125,12 @@ impl MessageHandler<Commit> for Compositor {
                 client.delete_id(callback);
                 client.objects.remove(callback)?;
             }
-            Ok(())
         } else {
             surface.set_configured();
-            surface.commit();
-            match surface.role().expect("not yet handled") {
-                Role::XdgToplevel(obj) => self.commit(obj, client),
-            }
+        }
+
+        match surface.role().expect("not yet handled") {
+            Role::XdgToplevel(obj) => self.commit(is_configured, obj, client),
         }
     }
 }
