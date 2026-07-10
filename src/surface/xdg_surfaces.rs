@@ -1,30 +1,29 @@
 use todex::collections::slab::Slab;
 
 use crate::handle::Handle;
-use crate::surface::{XdgSurface, Surface};
+use crate::surface::XdgSurface;
 
-const INITIAL_CAP: usize = 16;
+const INITIAL_CAP: usize = 8;
 
 pub struct XdgSurfaces {
-    buf: Slab<XdgSurface>,
+    surfaces: Slab<XdgSurface>,
 }
 
 impl XdgSurfaces {
     pub fn new() -> Self {
         Self {
-            buf: Slab::with_capacity(INITIAL_CAP),
+            surfaces: Slab::with_capacity(INITIAL_CAP),
         }
     }
 
-    pub fn create(&mut self, surface_handle: Handle<Surface>) -> Handle<XdgSurface> {
-        let (idx, _) = self.buf.insert(XdgSurface::new(surface_handle));
-        Handle::from_idx(idx)
+    pub fn create(&mut self, xdg_surface: XdgSurface) -> Handle<XdgSurface> {
+        Handle::from_idx(self.surfaces.insert(xdg_surface).0)
     }
 
     pub fn remove(&mut self, handle: Handle<XdgSurface>) -> XdgSurface {
-        self.buf
+        self.surfaces
             .remove(handle.to_idx())
-            .unwrap_or_else(||handle.dangling())
+            .unwrap_or_else(|| handle.dangling())
     }
 }
 
@@ -32,7 +31,7 @@ impl std::ops::Index<Handle<XdgSurface>> for XdgSurfaces {
     type Output = XdgSurface;
 
     fn index(&self, handle: Handle<XdgSurface>) -> &Self::Output {
-        self.buf
+        self.surfaces
             .get(handle.to_idx())
             .unwrap_or_else(|| handle.dangling())
     }
@@ -40,7 +39,7 @@ impl std::ops::Index<Handle<XdgSurface>> for XdgSurfaces {
 
 impl std::ops::IndexMut<Handle<XdgSurface>> for XdgSurfaces {
     fn index_mut(&mut self, handle: Handle<XdgSurface>) -> &mut Self::Output {
-        self.buf
+        self.surfaces
             .get_mut(handle.to_idx())
             .unwrap_or_else(|| handle.dangling())
     }

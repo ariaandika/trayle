@@ -1,8 +1,8 @@
 use xdg_wm_base::{CreatePositioner, Destroy as XdgWmDestroy, GetXdgSurface, Pong};
-use xdg_surface::Destroy as XdgSurfaceDestroy;
-use xdg_surface::{AckConfigure, GetPopup, GetToplevel, SetWindowGeometry};
-use xdg_toplevel::{*, Destroy as ToplevelDestroy};
+use xdg_surface::*;
+use xdg_toplevel::{Destroy as ToplevelDestroy, *};
 
+use crate::surface::XdgSurface;
 use crate::compositor::prelude::*;
 use crate::compositor::traits::{CommitEffect, CommitError};
 
@@ -14,20 +14,27 @@ impl MessageHandler<XdgWmDestroy> for Compositor {
     }
 }
 
-todo_handler!(CreatePositioner);
+impl MessageHandler<CreatePositioner> for Compositor {
+    fn handle(&mut self, _: Msg<CreatePositioner>, _: &mut ClientMut) -> Todo<CreatePositioner> {
+        Todo::new()
+    }
+}
 
 impl MessageHandler<GetXdgSurface> for Compositor {
     fn handle(&mut self, msg: Msg<GetXdgSurface>, client: &mut ClientMut) -> Result<(), UnknownId> {
-        let surface_handle = client.objects.get_with(msg.surface)?.handle();
-        let xdg_handle = self.xdg_surfaces.create(surface_handle);
+        let surface = client.objects.get_with(msg.surface)?;
+
+        let xdg_surface_obj = Object::from_new_id(msg.new_id);
+        let xdg_surface = XdgSurface::new(xdg_surface_obj, surface.handle());
+        let xdg_handle = self.xdg_surfaces.create(xdg_surface);
         client.objects.create_with(msg, xdg_handle);
+
         Ok(())
     }
 }
 
 impl MessageHandler<Pong> for Compositor {
     fn handle(&mut self, _: Msg<Pong>, _: &mut ClientMut) -> Todo<Pong> {
-        // TODO: ping pong mechanism
         Todo::new()
     }
 }
@@ -36,37 +43,50 @@ impl MessageHandler<Pong> for Compositor {
 
 // ===== xdg_surface =====
 
-impl MessageHandler<XdgSurfaceDestroy> for Compositor {
-    fn handle(&mut self, msg: Msg<XdgSurfaceDestroy>, _: &mut ClientMut) {
+type XdgSurfaceResult = Result<(), xdg_surface::Error>;
+
+impl MessageHandler<xdg_surface::Destroy> for Compositor {
+    fn handle(&mut self, msg: Msg<xdg_surface::Destroy>, _: &mut ClientMut) {
         // TODO: role object must have been destroyed
         self.xdg_surfaces.remove(msg.handle());
     }
 }
 
 impl MessageHandler<GetToplevel> for Compositor {
-    fn handle(&mut self, msg: Msg<GetToplevel>, client: &mut ClientMut) {
-        let xdg_surface = &mut self.xdg_surfaces[msg.handle()];
-        let surface = &mut self.surfaces[xdg_surface.surface_handle()];
+    fn handle(&mut self, msg: Msg<GetToplevel>, client: &mut ClientMut) -> XdgSurfaceResult {
+        let xdg_surface_handle = msg.handle();
+        let xdg_surface = &mut self.xdg_surfaces[xdg_surface_handle];
+        let surface = &mut self.surfaces[xdg_surface.surface()];
 
-        let xdg_handle = msg.handle();
-        let xdg_toplevel = client.objects.create_with(msg, xdg_handle);
-        // TODO: blocker: change the any error handling
-        xdg_surface
-            .set_toplevel(xdg_toplevel, surface)
-            .expect("not yet implemented");
+        let xdg_toplevel = client.objects.create_with(msg, xdg_surface_handle);
+        xdg_surface.set_toplevel_role(xdg_toplevel, surface)
     }
 }
 
 todo_handler!(GetPopup);
 todo_handler!(SetWindowGeometry);
-todo_handler!(AckConfigure);
+
+impl MessageHandler<AckConfigure> for Compositor {
+    fn handle(&mut self, msg: Msg<AckConfigure>, _: &mut ClientMut) -> XdgSurfaceResult {
+        self.xdg_surfaces[msg.handle()].ack(msg.serial)
+    }
+}
 
 // ===== xdg_toplevel =====
 
 impl CommitEffect<XdgToplevel> for Compositor {
-    fn commit(&mut self, obj: Object<XdgToplevel>, client: &mut ClientMut) -> Result<(), CommitError> {
+    fn commit(
+        &mut self,
+        obj: Object<XdgToplevel>,
+        client: &mut ClientMut,
+    ) -> Result<(), CommitError> {
+        let toplevel = client.objects.get_with(obj).expect("dangling role object");
+        let xdg_surface = &mut self.xdg_surfaces[toplevel.handle()];
+        let xdg_surface_obj = xdg_surface.object();
+
+        let serial = xdg_surface.next_ack();
         client.send(obj.configure(1280, 720, &[]));
-        // TODO: send `XdgSurface::configure`
+        client.send(xdg_surface_obj.configure(serial));
         Ok(())
     }
 }
@@ -74,7 +94,7 @@ impl CommitEffect<XdgToplevel> for Compositor {
 impl MessageHandler<xdg_toplevel::Destroy> for Compositor {
     fn handle(&mut self, msg: Msg<ToplevelDestroy>, _: &mut ClientMut) {
         let xdg_surface = &mut self.xdg_surfaces[msg.handle()];
-        let surface = &mut self.surfaces[xdg_surface.surface_handle()];
+        let surface = &mut self.surfaces[xdg_surface.surface()];
         xdg_surface.remove_role(surface);
     }
 }

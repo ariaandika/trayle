@@ -48,7 +48,7 @@ impl Surface {
     }
 
     pub fn set_configured(&mut self) {
-        self.flags &= IS_CONFIGURED_FLAG;
+        self.flags |= IS_CONFIGURED_FLAG;
     }
 
     pub fn role(&self) -> Result<Role, RoleError> {
@@ -79,7 +79,7 @@ impl Surface {
     }
 
     pub fn commit(&mut self) {
-        self.flags &= !self.flags & COMMITED_FLAG;
+        self.flags ^= COMMITED_FLAG;
     }
 
     pub fn destroy(self) {
