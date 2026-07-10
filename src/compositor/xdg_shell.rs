@@ -85,7 +85,7 @@ impl CommitEffect<XdgToplevel> for Compositor {
         let xdg_surface_obj = xdg_surface.object();
 
         let serial = xdg_surface.next_ack();
-        client.send(obj.configure(1280, 720, &[]));
+        client.send(obj.configure(0, 0, &[]));
         client.send(xdg_surface_obj.configure(serial));
         Ok(())
     }

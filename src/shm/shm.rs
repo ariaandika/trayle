@@ -91,6 +91,10 @@ impl ShmPool {
         })
     }
 
+    pub fn as_slice(&self) -> &[u8] {
+        self.mem.as_slice()
+    }
+
     pub fn resize(&mut self, size: i32) -> Result<(), Error> {
         if size <= self.size {
             return Err(Error::InvalidStride);

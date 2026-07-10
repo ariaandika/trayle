@@ -92,11 +92,34 @@ impl MessageHandler<Commit> for Compositor {
 
         if surface.is_configured() {
             surface.commit();
-            // TODO: temporary implementation
+
             if let Some(handle) = surface.release_current_buffer() {
-                let wl_buffer = self.buffers[handle].wl_buffer;
+                // TODO: temporary implementation, write surface as ppm file
+                let buffer = &mut self.buffers[handle];
+                let shm_pool = match buffer.factory {
+                    crate::shm::BufferFactory::ShmPool(handle) => &mut self.shm_pools[handle],
+                };
+                let pixels = shm_pool.as_slice();
+                let mut file = std::fs::File::create("/tmp/img.ppm").unwrap();
+                std::io::Write::write_all(&mut file, b"P6\n1280 720\n255\n").unwrap();
+                for y in 0..buffer.height {
+                    let row = &pixels[(y * buffer.stride) as usize..];
+
+                    for x in 0..buffer.width {
+                        let pixel = &row[(x * 4) as usize..(x * 4 + 4) as usize];
+
+                        let b = pixel[0];
+                        let g = pixel[1];
+                        let r = pixel[2];
+
+                        std::io::Write::write_all(&mut file, &[r, g, b]).unwrap();
+                    }
+                }
+
+                let wl_buffer = buffer.wl_buffer;
                 client.send(wl_buffer.release());
             }
+
             for callback in surface.request_frames() {
                 client.send(callback.done(self.start.elapsed().as_millis() as u32));
                 client.delete_id(callback);

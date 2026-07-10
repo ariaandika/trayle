@@ -1,4 +1,4 @@
-pub use buffer::{Buffers, Buffer};
+pub use buffer::{Buffers, Buffer, BufferFactory};
 pub use shm::{ShmPools, ShmPool};
 
 mod buffer;
