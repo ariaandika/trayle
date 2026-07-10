@@ -1,14 +1,12 @@
-use todex::wayland::interface::wl_surface::Damage;
-
 pub struct Region {
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
+    pub x: i32,
+    pub y: i32,
+    pub width: i32,
+    pub height: i32,
 }
 
 impl Region {
-    pub(super) fn new() -> Self {
+    pub fn new() -> Self {
         Self {
             x: 0,
             y: 0,
@@ -17,10 +15,10 @@ impl Region {
         }
     }
 
-    pub(super) fn damage(&mut self, damage: Damage) {
-        self.x = damage.x;
-        self.y = damage.y;
-        self.width = damage.width;
-        self.height = damage.height;
+    pub fn union(&mut self, other: Self) {
+        self.x += other.x;
+        self.y += other.y;
+        self.width += other.width;
+        self.height += other.height;
     }
 }

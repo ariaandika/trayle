@@ -1,11 +1,17 @@
+use todex::wayland::interface::wl_output::Transform;
 use todex::wayland::object::Object;
-use todex::wayland::interface::wl_surface::Damage;
 use todex::wayland::interface::WlCallback;
 
 use crate::handle::Handle;
 use crate::shm::Buffer;
 use crate::surface::{Region, Role, RoleError};
 
+/// Wayland Surface.
+///
+/// Surface can:
+/// - present wl_buffers
+/// - receive user input
+/// - define a local coordinate system
 pub struct Surface {
     states: [State; 2],
     /// [.., configured, current]
@@ -53,10 +59,11 @@ impl Surface {
         }
     }
 
-    pub fn is_role_removed(&self) -> bool {
-        matches!(self.role, RoleInner::Removed)
+    pub fn has_role(&self) -> bool {
+        matches!(self.role, RoleInner::Role(_))
     }
 
+    /// Must only be called by role object.
     pub(super) fn set_role(&mut self, role: Role) -> Result<(), RoleError> {
         if self.role.is_none() {
             self.role = RoleInner::Role(role);
@@ -66,32 +73,80 @@ impl Surface {
         }
     }
 
-    pub fn remove_role(&mut self) {
+    /// Must only be called by role object.
+    pub(super) fn remove_role(&mut self) {
         self.role = RoleInner::Removed;
     }
 
     pub fn commit(&mut self) {
         self.flags &= !self.flags & COMMITED_FLAG;
     }
+
+    pub fn destroy(self) {
+        // maybe called explicitly by client, or at client disconnect,
+        // in latter case the role object may still exists
+
+        // TODO: surface: on destroy
+        // - what happens with the Buffer ?
+        // - what happens with request frame callback ?
+        // - should pending and current state treated differently ?
+    }
 }
 
 /// Pending
 impl Surface {
+    fn pending(&self) -> &State {
+        &self.states[(!self.flags & COMMITED_FLAG) as usize]
+    }
+
     fn pending_mut(&mut self) -> &mut State {
         &mut self.states[(!self.flags & COMMITED_FLAG) as usize]
     }
 
-    pub fn attach(&mut self, buffer: Option<Handle<Buffer>>) {
-        self.pending_mut().buffer = buffer;
+    pub fn has_pending_buffer(&self) -> bool {
+        self.pending().buffer.is_some()
     }
 
-    pub fn damage(&mut self, damage: Damage) {
-        self.pending_mut().damage.damage(damage);
+    /// Set a buffer as the content of this surface.
+    pub fn attach(&mut self, buffer: Handle<Buffer>) {
+        self.pending_mut().buffer = Some(buffer);
+    }
+
+    /// Remove and returns the buffer of this surface.
+    pub fn unattach(&mut self) -> Option<Handle<Buffer>> {
+        self.pending_mut().buffer.take()
+    }
+
+    /// Offset buffer coordinate relatively in surface-local coordinates.
+    pub fn offset(&mut self, x: i32, y: i32) {
+        self.pending_mut().offset.0 += x;
+        self.pending_mut().offset.1 += y;
+    }
+
+    /// Describe the regions where the pending buffer is different from the current surface
+    /// contents.
+    pub fn damage(&mut self, region: Region) {
+        self.pending_mut().damage.union(region);
     }
 
     pub fn request_frame(&mut self, callback: Object<WlCallback>) {
         // TODO: surface: handle stacking frame requests
         self.pending_mut().request_frames = Some(callback);
+    }
+
+    pub fn request_release(&mut self, callback: Object<WlCallback>) {
+        // TODO: surface: handle stacking release requests
+        self.pending_mut().request_release = Some(callback);
+    }
+
+    /// Set buffer transform.
+    pub fn set_transform(&mut self, transform: Transform) {
+        self.pending_mut().transform = transform;
+    }
+
+    /// Set buffer scale.
+    pub fn set_scale(&mut self, scale: i32) {
+        self.pending_mut().scale = scale;
     }
 }
 
@@ -115,23 +170,30 @@ impl Surface {
 // ===== State =====
 
 struct State {
+    // callbacks
     request_frames: Option<Object<WlCallback>>,
+    request_release: Option<Object<WlCallback>>,
+
+    // buffer
     buffer: Option<Handle<Buffer>>,
+    offset: (i32, i32),
     damage: Region,
+    transform: Transform,
+    scale: i32,
     // opaque region,
     // input region,
-    // buffer transform,
-    // buffer scale,
-    // damage buffer,
-    // offset
 }
 
 impl State {
     pub fn new() -> Self {
         Self {
             request_frames: None,
+            request_release: None,
             buffer: None,
+            offset: (0, 0),
             damage: Region::new(),
+            transform: Transform::Normal,
+            scale: 1,
         }
     }
 }
