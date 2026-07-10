@@ -1,6 +1,6 @@
-use todex::wayland::interface::wl_output::Transform;
 use todex::wayland::object::Object;
-use todex::wayland::interface::WlCallback;
+use todex::wayland::interface::wl_output::Transform;
+use todex::wayland::interface::{WlCallback, WlRegion};
 
 use crate::handle::Handle;
 use crate::shm::Buffer;
@@ -148,6 +148,26 @@ impl Surface {
     pub fn set_scale(&mut self, scale: i32) {
         self.pending_mut().scale = scale;
     }
+
+    /// Set buffer opaque region.
+    pub fn set_opaque(&mut self, opaque: Object<WlRegion>) {
+        self.pending_mut().opaque = Some(opaque);
+    }
+
+    /// Remove buffer opaque region.
+    pub fn remove_opaque(&mut self) -> Option<Object<WlRegion>> {
+        self.pending_mut().opaque.take()
+    }
+
+    /// Set buffer input region.
+    pub fn set_input(&mut self, input: Object<WlRegion>) {
+        self.pending_mut().input = Some(input);
+    }
+
+    /// Remove buffer input region.
+    pub fn remove_input(&mut self) -> Option<Object<WlRegion>> {
+        self.pending_mut().input.take()
+    }
 }
 
 /// Current
@@ -180,8 +200,8 @@ struct State {
     damage: Region,
     transform: Transform,
     scale: i32,
-    // opaque region,
-    // input region,
+    opaque: Option<Object<WlRegion>>,
+    input: Option<Object<WlRegion>>,
 }
 
 impl State {
@@ -194,6 +214,8 @@ impl State {
             damage: Region::new(),
             transform: Transform::Normal,
             scale: 1,
+            opaque: None,
+            input: None,
         }
     }
 }

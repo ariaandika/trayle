@@ -1,6 +1,7 @@
 use todex::wayland::primitives::Version;
 use wl_compositor::*;
 use wl_surface::*;
+use wl_region::*;
 
 use crate::compositor::prelude::*;
 use crate::compositor::traits::{CommitEffect, CommitError};
@@ -9,19 +10,51 @@ use crate::surface::{Region, Role, Surface};
 // ===== wl_compositor =====
 
 impl MessageHandler<CreateSurface> for Compositor {
-    fn handle(&mut self, req: Msg<CreateSurface>, client: &mut ClientMut) {
-        client.objects.create_with(req, self.surfaces.create());
+    fn handle(&mut self, msg: Msg<CreateSurface>, client: &mut ClientMut) {
+        client.objects.create_with(msg, self.surfaces.create());
     }
 }
 
 impl MessageHandler<CreateRegion> for Compositor {
-    fn handle(&mut self, _: Msg<CreateRegion>, _: &mut ClientMut) -> Todo<CreateRegion> {
-        Todo::new()
+    fn handle(&mut self, msg: Msg<CreateRegion>, client: &mut ClientMut) {
+        client.objects.create_with(msg, self.regions.create());
     }
 }
 
 impl MessageHandler<Release> for Compositor {
     fn handle(&mut self, _: Msg<Release>, _: &mut ClientMut) {}
+}
+
+// ===== wl_region =====
+
+macro_rules! into_region {
+    ($expr:expr) => {{
+        let b = $expr;
+        Region {
+            x: b.x,
+            y: b.y,
+            width: b.width,
+            height: b.height,
+        }
+    }};
+}
+
+impl MessageHandler<wl_region::Destroy> for Compositor {
+    fn handle(&mut self, msg: Msg<wl_region::Destroy>, _: &mut ClientMut) {
+        self.regions.remove(msg.handle());
+    }
+}
+
+impl MessageHandler<Add> for Compositor {
+    fn handle(&mut self, msg: Msg<Add>, _: &mut ClientMut) {
+        self.regions[msg.handle()].add(into_region!(msg.payload()));
+    }
+}
+
+impl MessageHandler<Subtract> for Compositor {
+    fn handle(&mut self, msg: Msg<Subtract>, _: &mut ClientMut) {
+        self.regions[msg.handle()].subtract(into_region!(msg.payload()));
+    }
 }
 
 // ===== wl_surface =====
@@ -82,8 +115,12 @@ impl MessageHandler<Commit> for Compositor {
 
 // destructor
 
-impl MessageHandler<Destroy> for Compositor {
-    fn handle(&mut self, msg: Msg<Destroy>, _: &mut ClientMut) -> Result<(), wl_surface::Error> {
+impl MessageHandler<wl_surface::Destroy> for Compositor {
+    fn handle(
+        &mut self,
+        msg: Msg<wl_surface::Destroy>,
+        _: &mut ClientMut,
+    ) -> Result<(), wl_surface::Error> {
         self.surfaces.remove(msg.handle()).map(Surface::destroy)
     }
 }
@@ -119,18 +156,6 @@ impl MessageHandler<Offset> for Compositor {
     }
 }
 
-macro_rules! into_region {
-    ($expr:expr) => {{
-        let b = $expr;
-        Region {
-            x: b.x,
-            y: b.y,
-            width: b.width,
-            height: b.height,
-        }
-    }};
-}
-
 // TODO: differentiate surface coordinate and buffer coordinate
 
 impl MessageHandler<Damage> for Compositor {
@@ -147,8 +172,29 @@ impl MessageHandler<DamageBuffer> for Compositor {
     }
 }
 
-todo_handler!(SetOpaqueRegion);
-todo_handler!(SetInputRegion);
+impl MessageHandler<SetOpaqueRegion> for Compositor {
+    fn handle(&mut self, msg: Msg<SetOpaqueRegion>, _: &mut ClientMut) {
+        let surface = &mut self.surfaces[msg.handle()];
+        match msg.region {
+            Some(opaque) => surface.set_opaque(opaque),
+            None => {
+                let _ = surface.remove_opaque();
+            }
+        }
+    }
+}
+
+impl MessageHandler<SetInputRegion> for Compositor {
+    fn handle(&mut self, msg: Msg<SetInputRegion>, _: &mut ClientMut) {
+        let surface = &mut self.surfaces[msg.handle()];
+        match msg.region {
+            Some(input) => surface.set_input(input),
+            None => {
+                let _ = surface.remove_input();
+            }
+        }
+    }
+}
 
 impl MessageHandler<SetBufferTransform> for Compositor {
     fn handle(&mut self, msg: Msg<SetBufferTransform>, _: &mut ClientMut) {

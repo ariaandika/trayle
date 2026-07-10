@@ -2,7 +2,7 @@ use todex::wayland::interface::*;
 
 use crate::handle::WithHandle;
 use crate::shm::{Buffer, ShmPool};
-use crate::surface::{Surface, XdgSurface as XdgSurfaceData};
+use crate::surface::{Region, Surface, XdgSurface as XdgSurfaceData};
 
 macro_rules! handle {
     ($ty:ty, $h:ty) => {
@@ -33,7 +33,7 @@ handle!(WlPointer);
 handle!(WlKeyboard);
 handle!(WlTouch);
 handle!(WlOutput);
-handle!(WlRegion);
+handle!(WlRegion, Region);
 handle!(WlSubcompositor);
 handle!(WlSubsurface);
 handle!(XdgWmBase);

@@ -15,10 +15,24 @@ impl Region {
         }
     }
 
-    pub fn union(&mut self, other: Self) {
+    pub fn add(&mut self, other: Self) {
         self.x += other.x;
         self.y += other.y;
         self.width += other.width;
         self.height += other.height;
+    }
+
+    pub fn subtract(&mut self, other: Self) {
+        self.x -= other.x;
+        self.y -= other.y;
+        self.width -= other.width;
+        self.height -= other.height;
+    }
+
+    pub fn union(&mut self, other: Self) {
+        self.x = other.x.max(self.x);
+        self.y = other.y.max(self.y);
+        self.width = other.width.max(self.width);
+        self.height = other.height.max(self.height);
     }
 }

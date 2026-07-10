@@ -19,7 +19,7 @@ use crate::handle::{AsHandle, WithHandle};
 use crate::seat::Seat;
 use crate::client::{ClientMut, ObjectEntry};
 use crate::shm::{Buffers, ShmPools};
-use crate::surface::{Surfaces, XdgSurfaces};
+use crate::surface::{Regions, Surfaces, XdgSurfaces};
 use crate::error::FatalError;
 
 use traits::MessageHandler;
@@ -86,6 +86,7 @@ pub struct Compositor {
     seat: Seat,
     buffers: Buffers,
     shm_pools: ShmPools,
+    regions: Regions,
     surfaces: Surfaces,
     xdg_surfaces: XdgSurfaces,
 }
@@ -97,6 +98,7 @@ impl Compositor {
             seat: Seat::new()?,
             buffers: Buffers::new(),
             shm_pools: ShmPools::new(),
+            regions: Regions::new(),
             surfaces: Surfaces::new(),
             xdg_surfaces: XdgSurfaces::new(),
         })
@@ -206,6 +208,11 @@ dispatcher! {
         GetKeyboard::handle,
         GetTouch::handle,
         Release::handle,
+    }
+    WlRegion {
+        Destroy::handle,
+        Add::handle,
+        Subtract::handle,
     }
     XdgWmBase {
         Destroy::handle,

@@ -4,6 +4,7 @@
 //!
 //! [`Surface`] can be assined a [`Role`].
 pub use region::Region;
+pub use regions::Regions;
 pub use role::{Role, RoleError};
 pub use surface::{Surface};
 pub use surfaces::Surfaces;
@@ -22,5 +23,6 @@ mod xdg_surface;
 
 // ===== collections =====
 
+mod regions;
 mod surfaces;
 mod xdg_surfaces;
