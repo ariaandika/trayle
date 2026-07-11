@@ -13,7 +13,7 @@ use crate::surface::{Region, Role, RoleError};
 /// - receive user input
 /// - define a local coordinate system
 pub struct Surface {
-    states: [State; 2],
+    states: [SurfaceState; 2],
     /// [.., configured, current]
     flags: u8,
     role: RoleInner,
@@ -25,19 +25,13 @@ enum RoleInner {
     Removed,
 }
 
-impl RoleInner {
-    fn is_none(&self) -> bool {
-        matches!(self, Self::None)
-    }
-}
-
 const COMMITED_FLAG: u8 = 1;
 const IS_CONFIGURED_FLAG: u8 = 1 << 1;
 
 impl Surface {
     pub fn new() -> Self {
         Self {
-            states: [State::new(), State::new()],
+            states: [SurfaceState::new(), SurfaceState::new()],
             flags: 0,
             role: RoleInner::None,
         }
@@ -51,10 +45,20 @@ impl Surface {
         self.flags |= IS_CONFIGURED_FLAG;
     }
 
-    pub fn role(&self) -> Result<Role, RoleError> {
+    /// Returns the surface [`Role`] if any.
+    pub fn role(&self) -> Option<Role> {
         match self.role {
-            RoleInner::Role(role) => Ok(role),
+            RoleInner::Role(role) => Some(role),
+            _ => None,
+        }
+    }
+
+    /// Returns the surface [`Role`] if any.
+    #[expect(dead_code)]
+    pub fn try_role(&self) -> Result<Role, RoleError> {
+        match self.role {
             RoleInner::None => Err(RoleError::Unset),
+            RoleInner::Role(role) => Ok(role),
             RoleInner::Removed => Err(RoleError::Removed),
         }
     }
@@ -65,7 +69,7 @@ impl Surface {
 
     /// Must only be called by role object.
     pub(super) fn set_role(&mut self, role: Role) -> Result<(), RoleError> {
-        if self.role.is_none() {
+        if matches!(self.role, RoleInner::None) {
             self.role = RoleInner::Role(role);
             Ok(())
         } else {
@@ -77,11 +81,30 @@ impl Surface {
     pub(super) fn remove_role(&mut self) {
         self.role = RoleInner::Removed;
     }
+}
 
-    pub fn commit(&mut self) {
+impl Surface {
+    pub fn swap_state(&mut self) {
         self.flags ^= COMMITED_FLAG;
     }
 
+    /// Returns mutable refernce to the pending state.
+    pub fn pending_mut(&mut self) -> &mut SurfaceState {
+        &mut self.states[(!self.flags & COMMITED_FLAG) as usize]
+    }
+
+    /// Returns shared refernce to the current state.
+    pub fn current(&self) -> &SurfaceState {
+        &self.states[(self.flags & COMMITED_FLAG) as usize]
+    }
+
+    /// Returns mutable refernce to the current state.
+    pub fn current_mut(&mut self) -> &mut SurfaceState {
+        &mut self.states[(self.flags & COMMITED_FLAG) as usize]
+    }
+}
+
+impl Surface {
     pub fn destroy(self) {
         // maybe called explicitly by client, or at client disconnect,
         // in latter case the role object may still exists
@@ -93,118 +116,24 @@ impl Surface {
     }
 }
 
-/// Pending
-impl Surface {
-    fn pending(&self) -> &State {
-        &self.states[(!self.flags & COMMITED_FLAG) as usize]
-    }
-
-    fn pending_mut(&mut self) -> &mut State {
-        &mut self.states[(!self.flags & COMMITED_FLAG) as usize]
-    }
-
-    pub fn has_pending_buffer(&self) -> bool {
-        self.pending().buffer.is_some()
-    }
-
-    /// Set a buffer as the content of this surface.
-    pub fn attach(&mut self, buffer: Handle<Buffer>) {
-        self.pending_mut().buffer = Some(buffer);
-    }
-
-    /// Remove and returns the buffer of this surface.
-    pub fn unattach(&mut self) -> Option<Handle<Buffer>> {
-        self.pending_mut().buffer.take()
-    }
-
-    /// Offset buffer coordinate relatively in surface-local coordinates.
-    pub fn offset(&mut self, x: i32, y: i32) {
-        self.pending_mut().offset.0 += x;
-        self.pending_mut().offset.1 += y;
-    }
-
-    /// Describe the regions where the pending buffer is different from the current surface
-    /// contents.
-    pub fn damage(&mut self, region: Region) {
-        self.pending_mut().damage.union(region);
-    }
-
-    pub fn request_frame(&mut self, callback: Object<WlCallback>) {
-        // TODO: surface: handle stacking frame requests
-        self.pending_mut().request_frames = Some(callback);
-    }
-
-    pub fn request_release(&mut self, callback: Object<WlCallback>) {
-        // TODO: surface: handle stacking release requests
-        self.pending_mut().request_release = Some(callback);
-    }
-
-    /// Set buffer transform.
-    pub fn set_transform(&mut self, transform: Transform) {
-        self.pending_mut().transform = transform;
-    }
-
-    /// Set buffer scale.
-    pub fn set_scale(&mut self, scale: i32) {
-        self.pending_mut().scale = scale;
-    }
-
-    /// Set buffer opaque region.
-    pub fn set_opaque(&mut self, opaque: Object<WlRegion>) {
-        self.pending_mut().opaque = Some(opaque);
-    }
-
-    /// Remove buffer opaque region.
-    pub fn remove_opaque(&mut self) -> Option<Object<WlRegion>> {
-        self.pending_mut().opaque.take()
-    }
-
-    /// Set buffer input region.
-    pub fn set_input(&mut self, input: Object<WlRegion>) {
-        self.pending_mut().input = Some(input);
-    }
-
-    /// Remove buffer input region.
-    pub fn remove_input(&mut self) -> Option<Object<WlRegion>> {
-        self.pending_mut().input.take()
-    }
-}
-
-/// Current
-impl Surface {
-    fn current_mut(&mut self) -> &mut State {
-        &mut self.states[(self.flags & COMMITED_FLAG) as usize]
-    }
-
-    /// Get all request frames callback id.
-    pub fn request_frames(&mut self) -> impl Iterator<Item = Object<WlCallback>> {
-        // TODO: surface: handle stacking frame requests
-        self.current_mut().request_frames.take().into_iter()
-    }
-
-    pub fn release_current_buffer(&mut self) -> Option<Handle<Buffer>> {
-        self.current_mut().buffer.take()
-    }
-}
-
 // ===== State =====
 
-struct State {
+pub struct SurfaceState {
     // callbacks
-    request_frames: Option<Object<WlCallback>>,
-    request_release: Option<Object<WlCallback>>,
+    pub request_frames: Option<Object<WlCallback>>,
+    pub request_release: Option<Object<WlCallback>>,
 
     // buffer
-    buffer: Option<Handle<Buffer>>,
-    offset: (i32, i32),
-    damage: Region,
-    transform: Transform,
-    scale: i32,
-    opaque: Option<Object<WlRegion>>,
-    input: Option<Object<WlRegion>>,
+    pub buffer: Option<Handle<Buffer>>,
+    pub offset: (i32, i32),
+    pub damage: Region,
+    pub transform: Transform,
+    pub scale: i32,
+    pub opaque: Option<Object<WlRegion>>,
+    pub input: Option<Object<WlRegion>>,
 }
 
-impl State {
+impl SurfaceState {
     pub fn new() -> Self {
         Self {
             request_frames: None,

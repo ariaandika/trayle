@@ -110,7 +110,7 @@ todo_handler!(SetParent);
 impl MessageHandler<SetTitle<'_>> for Compositor {
     fn handle(&mut self, msg: Msg<SetTitle<'_>>, _: &mut ClientMut) {
         if let Some(toplevel) = self.xdg_surfaces[msg.handle()].as_toplevel() {
-            toplevel.set_title(msg.title)
+            toplevel.title = Some(msg.title.into());
         }
     }
 }
@@ -118,7 +118,7 @@ impl MessageHandler<SetTitle<'_>> for Compositor {
 impl MessageHandler<SetAppId<'_>> for Compositor {
     fn handle(&mut self, msg: Msg<SetAppId<'_>>, _: &mut ClientMut) {
         if let Some(toplevel) = self.xdg_surfaces[msg.handle()].as_toplevel() {
-            toplevel.set_app_id(msg.app_id)
+            toplevel.app_id = Some(msg.app_id.into());
         }
     }
 }

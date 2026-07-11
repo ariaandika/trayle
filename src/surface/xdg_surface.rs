@@ -61,16 +61,16 @@ impl XdgSurface {
             .map_err(|_| Error::AlreadyConstructed)
     }
 
-    pub fn remove_role(&mut self, surface: &mut Surface) {
-        self.role = XdgRole::Removed;
-        surface.remove_role();
-    }
-
     pub fn as_toplevel(&mut self) -> Option<&mut Toplevel> {
         match &mut self.role {
             XdgRole::Toplevel(toplevel) => Some(toplevel),
             _ => None,
         }
+    }
+
+    pub fn remove_role(&mut self, surface: &mut Surface) {
+        self.role = XdgRole::Removed;
+        surface.remove_role();
     }
 }
 
@@ -101,8 +101,8 @@ impl XdgSurface {
 // ===== Toplevel =====
 
 pub struct Toplevel {
-    title: Option<Box<str>>,
-    app_id: Option<Box<str>>,
+    pub title: Option<Box<str>>,
+    pub app_id: Option<Box<str>>,
 }
 
 impl Toplevel {
@@ -111,13 +111,5 @@ impl Toplevel {
             title: None,
             app_id: None,
         }
-    }
-
-    pub fn set_title<S: Into<Box<str>>>(&mut self, title: S) {
-        self.title = Some(title.into());
-    }
-
-    pub fn set_app_id<S: Into<Box<str>>>(&mut self, app_id: S) {
-        self.app_id = Some(app_id.into());
     }
 }

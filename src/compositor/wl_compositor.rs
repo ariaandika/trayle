@@ -63,25 +63,26 @@ const V5: Version = Version::new(5).unwrap();
 
 impl MessageHandler<Attach> for Compositor {
     fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), UnknownId> {
-        let surface = &mut self.surfaces[msg.handle()];
+        let surface = self.surfaces[msg.handle()].pending_mut();
         let version = msg.version();
-        match msg.into_payload() {
-            Attach { buffer: Some(wl_buffer), x, y } => {
-                if !matches!((x, y), (0, 0)) {
-                    if version >= V5 {
-                        // return Err(wl_surface::Error::InvalidOffset);
-                        todo!()
-                    } else {
-                        surface.offset(x, y);
-                    }
-                }
-                let buffer_handle = client.objects.get_with(wl_buffer)?.handle();
-                surface.attach(buffer_handle);
+        let Attach { buffer, x, y } = msg.into_payload();
+
+        surface.buffer = match buffer {
+            Some(obj) => Some(client.objects.get_with(obj)?.handle()),
+            None => None,
+        };
+
+        if !matches!((x, y), (0, 0)) {
+            // version is 5 or higher, passing any non-zero x or y is a protocol violation, and will
+            // result in an 'invalid_offset' error being raised.
+            if version >= V5 {
+                // return Err(wl_surface::Error::InvalidOffset);
+                todo!()
             }
-            _ => {
-                let _buffer_handle = surface.unattach();
-            }
+            surface.offset.0 += x;
+            surface.offset.1 += y;
         }
+
         Ok(())
     }
 }
@@ -89,11 +90,11 @@ impl MessageHandler<Attach> for Compositor {
 impl MessageHandler<Commit> for Compositor {
     fn handle(&mut self, msg: Msg<Commit>, client: &mut ClientMut) -> Result<(), CommitError> {
         let surface = &mut self.surfaces[msg.handle()];
-        surface.commit();
+        surface.swap_state();
 
         let is_configured = surface.is_configured();
         if is_configured {
-            if let Some(handle) = surface.release_current_buffer() {
+            if let Some(handle) = surface.current_mut().buffer.take() {
                 // TODO: temporary implementation, write surface as ppm file
                 let buffer = &mut self.buffers[handle];
                 let shm_pool = match buffer.factory {
@@ -120,8 +121,9 @@ impl MessageHandler<Commit> for Compositor {
                 client.send(wl_buffer.release());
             }
 
-            for callback in surface.request_frames() {
-                client.send(callback.done(self.start.elapsed().as_millis() as u32));
+            let timestamp = self.start.elapsed().as_millis() as u32;
+            if let Some(callback) = surface.current_mut().request_frames.take() {
+                client.send(callback.done(timestamp));
                 client.delete_id(callback);
                 client.objects.remove(callback)?;
             }
@@ -129,9 +131,13 @@ impl MessageHandler<Commit> for Compositor {
             surface.set_configured();
         }
 
-        match surface.role().expect("not yet handled") {
-            Role::XdgToplevel(obj) => self.commit(is_configured, obj, client),
+        if let Some(role) = surface.role() {
+            match role {
+                Role::XdgToplevel(obj) => self.commit(is_configured, obj, client)?,
+            }
         }
+
+        Ok(())
     }
 }
 
@@ -151,7 +157,9 @@ impl MessageHandler<wl_surface::Destroy> for Compositor {
 
 impl MessageHandler<Frame> for Compositor {
     fn handle(&mut self, msg: Msg<Frame>, client: &mut ClientMut) {
-        self.surfaces[msg.handle()].request_frame(client.objects.create(msg));
+        // TODO: wl_surface: handle stacking frame requests
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        surface.request_frames = Some(client.objects.create(msg));
     }
 }
 
@@ -161,11 +169,12 @@ impl MessageHandler<GetRelease> for Compositor {
         msg: Msg<GetRelease>,
         client: &mut ClientMut,
     ) -> Result<(), wl_surface::Error> {
-        let surface = &mut self.surfaces[msg.handle()];
-        if !surface.has_pending_buffer() {
+        // TODO: wl_surface: handle stacking release requests
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        if surface.buffer.is_none() {
             return Err(wl_surface::Error::NoBuffer);
         }
-        surface.request_release(client.objects.create(msg));
+        surface.request_release = Some(client.objects.create(msg));
         Ok(())
     }
 }
@@ -174,58 +183,61 @@ impl MessageHandler<GetRelease> for Compositor {
 
 impl MessageHandler<Offset> for Compositor {
     fn handle(&mut self, msg: Msg<Offset>, _: &mut ClientMut) {
-        self.surfaces[msg.handle()].offset(msg.x, msg.y);
+        let (cr_x, cr_y) = self.surfaces[msg.handle()].current().offset;
+        let pending = self.surfaces[msg.handle()].pending_mut();
+
+        // The x and y arguments specify the location of the new pending buffer's upper left corner,
+        // relative to the current buffer's upper left corner
+        pending.offset.0 = cr_x + msg.x;
+        pending.offset.1 = cr_y + msg.y;
     }
 }
-
-// TODO: differentiate surface coordinate and buffer coordinate
 
 impl MessageHandler<Damage> for Compositor {
     fn handle(&mut self, msg: Msg<Damage>, _: &mut ClientMut) {
         // Note! New clients should not use this request. Instead damage can be posted with
         // `wl_surface::damage_buffer` which uses buffer coordinates instead of surface coordinates.
-        self.surfaces[msg.handle()].damage(into_region!(msg.payload()));
+        self.surfaces[msg.handle()]
+            .pending_mut()
+            .damage
+            .union(into_region!(msg.payload()))
     }
 }
 
 impl MessageHandler<DamageBuffer> for Compositor {
     fn handle(&mut self, msg: Msg<DamageBuffer>, _: &mut ClientMut) {
-        self.surfaces[msg.handle()].damage(into_region!(msg.payload()));
+        // TODO: differentiate surface coordinate and buffer coordinate
+        self.surfaces[msg.handle()]
+            .pending_mut()
+            .damage
+            .union(into_region!(msg.payload()))
     }
 }
 
 impl MessageHandler<SetOpaqueRegion> for Compositor {
     fn handle(&mut self, msg: Msg<SetOpaqueRegion>, _: &mut ClientMut) {
-        let surface = &mut self.surfaces[msg.handle()];
-        match msg.region {
-            Some(opaque) => surface.set_opaque(opaque),
-            None => {
-                let _ = surface.remove_opaque();
-            }
-        }
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        surface.opaque = msg.region;
     }
 }
 
 impl MessageHandler<SetInputRegion> for Compositor {
     fn handle(&mut self, msg: Msg<SetInputRegion>, _: &mut ClientMut) {
-        let surface = &mut self.surfaces[msg.handle()];
-        match msg.region {
-            Some(input) => surface.set_input(input),
-            None => {
-                let _ = surface.remove_input();
-            }
-        }
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        surface.input = msg.region;
     }
 }
 
 impl MessageHandler<SetBufferTransform> for Compositor {
     fn handle(&mut self, msg: Msg<SetBufferTransform>, _: &mut ClientMut) {
-        self.surfaces[msg.handle()].set_transform(msg.transform);
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        surface.transform = msg.transform;
     }
 }
 
 impl MessageHandler<SetBufferScale> for Compositor {
     fn handle(&mut self, msg: Msg<SetBufferScale>, _: &mut ClientMut) {
-        self.surfaces[msg.handle()].set_scale(msg.scale);
+        let surface = self.surfaces[msg.handle()].pending_mut();
+        surface.scale = msg.scale;
     }
 }
