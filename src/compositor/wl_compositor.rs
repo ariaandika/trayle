@@ -4,6 +4,7 @@ use wl_surface::*;
 use wl_region::*;
 
 use crate::compositor::prelude::*;
+use crate::compositor::error::AttachError;
 use crate::compositor::traits::{CommitEffect, CommitError};
 use crate::surface::{Region, Role, Surface};
 
@@ -62,7 +63,7 @@ impl MessageHandler<Subtract> for Compositor {
 const V5: Version = Version::new(5).unwrap();
 
 impl MessageHandler<Attach> for Compositor {
-    fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), UnknownId> {
+    fn handle(&mut self, msg: Msg<Attach>, client: &mut ClientMut) -> Result<(), AttachError> {
         let surface = self.surfaces[msg.handle()].pending_mut();
         let version = msg.version();
         let Attach { buffer, x, y } = msg.into_payload();
@@ -76,8 +77,7 @@ impl MessageHandler<Attach> for Compositor {
             // version is 5 or higher, passing any non-zero x or y is a protocol violation, and will
             // result in an 'invalid_offset' error being raised.
             if version >= V5 {
-                // return Err(wl_surface::Error::InvalidOffset);
-                todo!()
+                return Err(wl_surface::Error::InvalidOffset.into());
             }
             surface.offset.0 += x;
             surface.offset.1 += y;

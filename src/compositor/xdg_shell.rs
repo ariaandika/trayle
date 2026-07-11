@@ -84,7 +84,7 @@ impl CommitEffect<XdgToplevel> for Compositor {
         if is_configured {
             client.send(obj.close());
         } else {
-            let toplevel = client.objects.get_with(obj).expect("dangling role object");
+            let toplevel = client.objects.get_with(obj)?;
             let xdg_surface = &mut self.xdg_surfaces[toplevel.handle()];
             let xdg_surface_obj = xdg_surface.object();
 

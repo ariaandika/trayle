@@ -2,6 +2,7 @@ use todex::log;
 use todex::wayland::primitives::ObjectId;
 use todex::wayland::object::{OccupiedNewId, UnknownId};
 use todex::wayland::interface::wl_display::DisplayError;
+use todex::wayland::interface::wl_surface;
 use todex::wayland::wire::DecodeError;
 
 use crate::client::ClientMut;
@@ -147,6 +148,7 @@ impl WlError for BindError {
 
 impl std::fmt::Display for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("cannot bind global: ")?;
         f.write_str(self.message())
     }
 }
@@ -176,6 +178,52 @@ impl std::fmt::Display for CommitError {
 
 impl From<UnknownId> for CommitError {
     fn from(_: UnknownId) -> Self {
-        panic!("dangling `callback` id")
+        panic!("dangling id on commit")
+    }
+}
+
+// ===== AttachError =====
+
+#[derive(Debug, Clone, Copy)]
+pub enum AttachError {
+    UnknownBuffer(UnknownId),
+    Surface(wl_surface::Error),
+}
+
+impl WlError for AttachError {
+    fn code(&self) -> u32 {
+        match self {
+            Self::UnknownBuffer(err) => err.code(),
+            Self::Surface(err) => err.code(),
+        }
+    }
+
+    fn message(&self) -> &str {
+        match self {
+            Self::UnknownBuffer(err) => err.message(),
+            Self::Surface(err) => err.message(),
+        }
+    }
+}
+
+impl std::fmt::Display for AttachError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("cannot attach buffer: ")?;
+        match self {
+            Self::UnknownBuffer(err) => err.fmt(f),
+            Self::Surface(err) => err.fmt(f),
+        }
+    }
+}
+
+impl From<UnknownId> for AttachError {
+    fn from(v: UnknownId) -> Self {
+        Self::UnknownBuffer(v)
+    }
+}
+
+impl From<wl_surface::Error> for AttachError {
+    fn from(v: wl_surface::Error) -> Self {
+        Self::Surface(v)
     }
 }
