@@ -4,22 +4,25 @@ use todex::sys::errno::Errno;
 use todex::sys::memfd::Memfd;
 use todex::wayland::interface::wl_seat::Capability;
 
-// ===== Seat =====
+use crate::seat::xkb::Xkb;
 
-static STATIC_XKB: &str = include_str!("./static-xkb");
+// ===== Seat =====
 
 pub struct Seat {
     name: Box<str>,
     capability: Capability,
     data_device: Option<u64>,
     keymap_memfd: Memfd,
+    xkb: Xkb,
 }
 
 impl Seat {
     pub fn new() -> Result<Self, SeatError> {
+        let xkb = Xkb::new();
+
         let memfd = Memfd::new().map_err(|_| SeatError::MemfdCreate)?;
         memfd
-            .write_all(STATIC_XKB.as_bytes())
+            .write_all(xkb.keymap_str().to_bytes_with_nul())
             .map_err(|_| SeatError::MemfdWrite)?;
 
         Ok(Self {
@@ -27,6 +30,7 @@ impl Seat {
             capability: Capability::POINTER | Capability::KEYBOARD,
             data_device: None,
             keymap_memfd: memfd,
+            xkb,
         })
     }
 
@@ -43,7 +47,7 @@ impl Seat {
     }
 
     pub const fn keymap_size(&self) -> u32 {
-        STATIC_XKB.len() as u32
+        self.xkb.keymap_str().count_bytes() as u32 + 1
     }
 
     /// Set client id that holds the data device.
