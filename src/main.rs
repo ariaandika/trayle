@@ -7,6 +7,7 @@ use todex::poller::Poller;
 use todex::log;
 
 use buffer::BufferPool;
+use seat::Libseat;
 use client::{Clients, ClientReactor};
 use compositor::Compositor;
 use error::FatalError;
@@ -24,7 +25,8 @@ const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const MSB: u64 = i64::MIN as u64;
 
 const LISTENER_KEY: u64 = MSB;
-const SIGFD_KEY: u64 = MSB | 1;
+const LIBSEAT_KEY: u64 = MSB | 1;
+const SIGFD_KEY: u64 = MSB | 2;
 
 const EVENT_BUF: usize = 128;
 
@@ -35,6 +37,7 @@ fn main() -> ExitCode {
 
 pub fn event_loop() -> Result<(), FatalError> {
     // ===== sys =====
+    let libseat = Libseat::new();
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
@@ -53,6 +56,7 @@ pub fn event_loop() -> Result<(), FatalError> {
     let mut poll = Poller::new(EVENT_BUF, &epoll);
 
     epoll.add(LISTENER_KEY, &listener);
+    epoll.add(LIBSEAT_KEY, &libseat);
     epoll.add(SIGFD_KEY, &sigfd);
 
     loop {
@@ -64,12 +68,13 @@ pub fn event_loop() -> Result<(), FatalError> {
         };
         if event.key & MSB == MSB {
             match event.key {
+                LISTENER_KEY => client_reactor.handle_listener(&mut clients),
+                LIBSEAT_KEY => libseat.dispatch(),
                 SIGFD_KEY => {
                     log::info!("{} signal received", sigfd.read());
                     break Ok(());
                 }
-                LISTENER_KEY => client_reactor.handle_listener(&mut clients),
-                _ => {}
+                key => log::error!("unknown key from epoll: {key}")
             }
         } else {
             client_reactor.handle_socket(event, &mut buffer, &mut clients, &mut compositor);
