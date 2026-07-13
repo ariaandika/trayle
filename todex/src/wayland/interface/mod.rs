@@ -79,13 +79,15 @@ impl AsInterface for Interface {
 
 // ===== protocols =====
 
+pub use wl_display::WlDisplay;
 pub use wl_core::*;
 pub use xdg_shell::*;
-pub use wl_display::WlDisplay;
+pub use linux_dmabuf::*;
 
+pub mod wl_display;
 mod wl_core;
 mod xdg_shell;
-pub mod wl_display;
+mod linux_dmabuf;
 
 // ===== protocols =====
 
@@ -124,7 +126,7 @@ macros::interface_id! {
     XdgSurface,
     XdgToplevel,
     XdgPopup,
-    // ZwpLinuxDmabufV1,
-    // ZwpLinuxBufferParams_v1,
-    // ZwpLinuxDmabufFeedbackV1,
+    ZwpLinuxDmabufV1,
+    ZwpLinuxBufferParamsV1,
+    ZwpLinuxDmabufFeedbackV1,
 }
