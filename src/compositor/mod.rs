@@ -50,6 +50,7 @@ mod wl_seat;
 mod wl_data_source;
 mod wl_data_device_manager;
 mod xdg_shell;
+mod linux_dmabuf;
 
 // ===== ClientStatus =====
 
@@ -68,7 +69,7 @@ impl ClientStatus {
 
 // ===== globals =====
 
-static GLOBALS: [Global; 5] = {
+static GLOBALS: [Global; 6] = {
     use interface::*;
     [
         global_of::<WlCompositor>(),
@@ -76,6 +77,7 @@ static GLOBALS: [Global; 5] = {
         global_of::<WlDataDeviceManager>(),
         global_of::<WlSeat>(),
         global_of::<XdgWmBase>(),
+        global_of::<ZwpLinuxDmabufV1>(),
     ]
 };
 
@@ -242,6 +244,21 @@ dispatcher! {
         SetFullscreen::handle,
         UnsetFullscreen::handle,
         SetMinimized::handle,
+    }
+    ZwpLinuxDmabufV1 {
+        Destroy::handle,
+        CreateParams::handle,
+        GetDefaultFeedback::handle,
+        GetSurfaceFeedback::handle,
+    }
+    ZwpLinuxBufferParamsV1 {
+        Destroy::handle,
+        Add::handle,
+        Create::handle,
+        CreateImmed::handle,
+    }
+    ZwpLinuxDmabufFeedbackV1 {
+        Destroy::handle,
     }
 }
 

@@ -41,3 +41,6 @@ handle!(XdgPositioner);
 handle!(XdgSurface, XdgSurfaceData);
 handle!(XdgToplevel, XdgSurfaceData);
 handle!(XdgPopup);
+handle!(ZwpLinuxDmabufV1);
+handle!(ZwpLinuxBufferParamsV1);
+handle!(ZwpLinuxDmabufFeedbackV1);
