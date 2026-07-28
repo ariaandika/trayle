@@ -1,4 +1,4 @@
-use todex::bitflags::Flags;
+use todex::bitflags::Bitflags;
 
 use wl_keyboard::{KeymapFormat, RepeatInfo};
 use wl_seat::{self, Capability, GetKeyboard, GetPointer, GetTouch, WlSeat};

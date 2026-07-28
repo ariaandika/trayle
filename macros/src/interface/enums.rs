@@ -243,10 +243,17 @@ impl Enum {
                 @consts
             }
 
-            impl crate::bitflags::Flags for #name {
+            impl crate::bitflags::Bitflags for #name {
+                type Bits = u32;
+
                 #[inline]
                 fn bits(self) -> u32 {
                     self.0
+                }
+
+                #[inline]
+                fn from_bits(bits: u32) -> Self {
+                    Self(bits)
                 }
             }
 
