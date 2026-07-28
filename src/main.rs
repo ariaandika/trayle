@@ -8,7 +8,7 @@ use todex::log;
 
 use buffer::BufferPool;
 use seat::Libseat;
-use client::{Clients, ClientReactor};
+use client::{Clients, Gateway};
 use compositor::Compositor;
 use error::FatalError;
 
@@ -50,7 +50,7 @@ pub fn event_loop() -> Result<(), FatalError> {
     let mut compositor = Compositor::new()?;
 
     // ===== reactor =====
-    let mut client_reactor = ClientReactor::new(&epoll, &listener);
+    let mut gateway = Gateway::new(&epoll, &listener);
 
     // ===== poller =====
     let mut poll = Poller::new(EVENT_BUF, &epoll);
@@ -68,7 +68,7 @@ pub fn event_loop() -> Result<(), FatalError> {
         };
         if event.key & MSB == MSB {
             match event.key {
-                LISTENER_KEY => client_reactor.handle_listener(&mut clients),
+                LISTENER_KEY => gateway.dispatch_listener(&mut clients),
                 LIBSEAT_KEY => libseat.dispatch(),
                 SIGFD_KEY => {
                     log::info!("{} signal received", sigfd.read());
@@ -77,7 +77,7 @@ pub fn event_loop() -> Result<(), FatalError> {
                 key => log::error!("unknown key from epoll: {key}")
             }
         } else {
-            client_reactor.handle_socket(event, &mut buffer, &mut clients, &mut compositor);
+            gateway.dispatch_io(event, &mut buffer, &mut clients, &mut compositor);
         }
     }
 }

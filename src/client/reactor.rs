@@ -9,19 +9,28 @@ use crate::client::{ClientId, ClientMut, Clients};
 use crate::compositor::Compositor;
 use crate::log;
 
-pub struct ClientReactor<'a> {
+/// Client events reactor.
+///
+/// This reactor handles:
+/// - client connect from [`Listener`]
+/// - client I/O from [`Epoll`]
+///
+/// This reactor interact with [`Compositor`] to:
+/// - dispatch a client message
+/// - perform cleanup for client disconnect
+pub struct Gateway<'a> {
     epoll: &'a Epoll,
     listener: &'a Listener,
 }
 
-impl<'a> ClientReactor<'a> {
+impl<'a> Gateway<'a> {
     pub fn new(epoll: &'a Epoll, listener: &'a Listener) -> Self {
         Self { epoll, listener }
     }
 }
 
-impl ClientReactor<'_> {
-    pub fn handle_socket(
+impl Gateway<'_> {
+    pub fn dispatch_io(
         &mut self,
         event: Event,
         buffer: &mut BufferPool,
@@ -116,8 +125,8 @@ impl ClientReactor<'_> {
     }
 }
 
-impl ClientReactor<'_> {
-    pub fn handle_listener(&mut self, clients: &mut Clients) {
+impl Gateway<'_> {
+    pub fn dispatch_listener(&mut self, clients: &mut Clients) {
         while let Ready(result) = self.listener.poll_accept() {
             match result {
                 Ok(fd) => {
