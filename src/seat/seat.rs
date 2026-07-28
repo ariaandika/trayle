@@ -1,7 +1,6 @@
 use std::os::fd::AsRawFd;
 
-use todex::sys::errno::Errno;
-use todex::sys::memfd::Memfd;
+use todex::sys::memfd::{CreateError, Memfd, WriteError};
 use todex::wayland::interface::wl_seat::Capability;
 
 use crate::seat::xkb::Xkb;
@@ -20,10 +19,8 @@ impl Seat {
     pub fn new() -> Result<Self, SeatError> {
         let xkb = Xkb::new();
 
-        let memfd = Memfd::new().map_err(|_| SeatError::MemfdCreate)?;
-        memfd
-            .write_all(xkb.keymap_str().to_bytes_with_nul())
-            .map_err(|_| SeatError::MemfdWrite)?;
+        let memfd = Memfd::new()?;
+        memfd.write_all(xkb.keymap_str().to_bytes_with_nul())?;
 
         Ok(Self {
             name: String::from("seat0").into_boxed_str(),
@@ -65,8 +62,8 @@ impl Seat {
 
 #[derive(Debug)]
 pub enum SeatError {
-    MemfdCreate,
-    MemfdWrite,
+    MemfdCreate(CreateError),
+    MemfdWrite(WriteError),
 }
 
 impl std::error::Error for SeatError {}
@@ -74,9 +71,20 @@ impl std::error::Error for SeatError {}
 impl std::fmt::Display for SeatError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::MemfdCreate => write!(f, "failed to create memfd: ")?,
-            Self::MemfdWrite => write!(f, "failed to write to memfd: ")?,
+            Self::MemfdCreate(err) => err.fmt(f),
+            Self::MemfdWrite(err) => err.fmt(f),
         }
-        Errno.fmt(f)
+    }
+}
+
+impl From<CreateError> for SeatError {
+    fn from(v: CreateError) -> Self {
+        Self::MemfdCreate(v)
+    }
+}
+
+impl From<WriteError> for SeatError {
+    fn from(v: WriteError) -> Self {
+        Self::MemfdWrite(v)
     }
 }

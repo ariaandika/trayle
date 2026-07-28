@@ -1,5 +1,6 @@
 //! Low level system calls.
-pub mod errno;
+pub mod error;
+
 pub mod bytes;
 pub mod cmsg;
 pub mod socket;

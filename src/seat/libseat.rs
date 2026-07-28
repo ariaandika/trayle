@@ -4,7 +4,7 @@ use std::os::fd::AsRawFd;
 use std::ptr::NonNull;
 
 use todex::log;
-use todex::sys::errno::Errno;
+use todex::sys::error::ErrCode;
 
 // ===== Libseat =====
 
@@ -28,7 +28,7 @@ impl Libseat {
     pub fn new() -> Self {
         let seat = unsafe { libseat_open_seat((&raw const LISTENER).cast_mut(), 0 as _) };
         let Some(seat) = NonNull::new(seat).map(|seat|Self { seat }) else {
-            panic!("cannot open seat: {}", Errno);
+            panic!("cannot open seat: {}", ErrCode::errno());
         };
         // initial dispatch, based on the example in seatd repo
         seat.dispatch_inner(-1);
@@ -43,7 +43,7 @@ impl Libseat {
     fn dispatch_inner(&self, timeout: i32) {
         let result = unsafe { libseat_dispatch(self.seat.as_ptr(), timeout) };
         if result == -1 {
-            panic!("failed to dispatch libseat: {}", Errno);
+            panic!("failed to dispatch libseat: {}", ErrCode::errno());
         }
     }
 }
@@ -52,7 +52,7 @@ impl AsRawFd for Libseat {
     fn as_raw_fd(&self) -> i32 {
         let fd = unsafe { libseat_get_fd(self.seat.as_ptr()) };
         if fd == -1 {
-            panic!("cannot get libseat fd: {}", Errno);
+            panic!("cannot get libseat fd: {}", ErrCode::errno());
         }
         fd
     }
@@ -68,7 +68,7 @@ extern "C" fn disable_seat(seat: *mut libseat, _userdata: *mut c_void) {
     log::info!(target: "libseat", "seat disabled");
     let result = unsafe { libseat_disable_seat(seat) };
     if result == -1 {
-        log::error!(target: "libseat", "failed to ack seat disable: {Errno}");
+        log::error!(target: "libseat", "failed to ack seat disable: {}", ErrCode::errno());
     };
 }
 

@@ -4,7 +4,7 @@ use std::ptr;
 use std::task::Poll::{self, *};
 
 use crate::sys::bytes::Bytes;
-use crate::sys::errno::{Errno, simple_errno};
+use crate::sys::error::{ErrCode, simple_os_error};
 
 const FDSIZE: usize = size_of::<i32>();
 const CMSGHDRSIZE: usize = size_of::<libc::cmsghdr>();
@@ -185,10 +185,7 @@ fn sendmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Wri
 
     loop {
         let Ok(write) = unsafe { libc::sendmsg(socket, &msghdr, 0) }.try_into() else {
-            return match Errno::get() {
-                libc::EWOULDBLOCK => Pending,
-                _ => Ready(Err(WriteError)),
-            };
+            return ErrCode::would_block_or();
         };
 
         if write == buf.len() {
@@ -230,10 +227,7 @@ fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Rea
     };
 
     let Ok(read) = unsafe { libc::recvmsg(socket, &mut msghdr, 0) }.try_into() else {
-        return match Errno::get() {
-            libc::EWOULDBLOCK => Pending,
-            _ => Ready(Err(E::Errno)),
-        };
+        return ErrCode::would_block_or_else(E::RecvErrno);
     };
     if read == 0 {
         return Ready(Err(E::ConnectionAborted));
@@ -321,12 +315,13 @@ impl<'a> Iterator for CmsgHdrIter<'a> {
 
 // ===== Error =====
 
-simple_errno! {
-    pub WriteError, "failed to write to socket: {}";
-}
+#[derive(Clone, Copy)]
+pub struct WriteError(ErrCode);
+
+simple_os_error!(WriteError, "write to socket");
 
 pub enum ReadError {
-    Errno,
+    RecvErrno(ErrCode),
     FdCapacityOverflow,
     InvalidControlData,
     TruncatedControlData,
@@ -334,6 +329,7 @@ pub enum ReadError {
 }
 
 impl ReadError {
+    #[inline]
     pub fn is_connection_aborted(&self) -> bool {
         matches!(self, Self::ConnectionAborted)
     }
@@ -342,7 +338,7 @@ impl ReadError {
 impl std::fmt::Display for ReadError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            Self::Errno => write!(f, "{Errno}"),
+            Self::RecvErrno(err) => write!(f, "failed to receive message: {err}"),
             Self::FdCapacityOverflow => write!(f, "fd capacity overflow"),
             Self::InvalidControlData => "unexpected ancillary data type".fmt(f),
             Self::TruncatedControlData => "ancillary data truncated".fmt(f),

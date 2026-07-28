@@ -1,7 +1,7 @@
 use std::ffi::{CStr, c_char};
 use std::ptr::NonNull;
 use todex::alloc;
-use todex::sys::errno::Errno;
+use todex::sys::error::ErrCode;
 
 // https://github.com/xkbcommon/libxkbcommon/blob/master/include/xkbcommon/xkbcommon.h
 
@@ -84,7 +84,7 @@ impl Xkb {
     pub fn new() -> Self {
         let cx = unsafe { xkb_context_new(xkb::CONTEXT_NO_FLAGS) };
         let Some(cx) = NonNull::new(cx) else {
-            panic!("cannot create xkb: {}", Errno::get())
+            panic!("cannot create xkb: {}", ErrCode::errno())
         };
 
         let keymap = unsafe {
@@ -96,7 +96,7 @@ impl Xkb {
             )
         };
         let Some(keymap) = NonNull::new(keymap) else {
-            panic!("cannot create keymap: {}", Errno::get())
+            panic!("cannot create keymap: {}", ErrCode::errno())
         };
 
         let keymap_string = unsafe {

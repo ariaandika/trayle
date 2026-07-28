@@ -2,7 +2,7 @@ use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::task::Poll;
 use std::{mem, ptr};
 
-use crate::sys::errno::{Errno, simple_errno};
+use crate::sys::error::{ErrCode, simple_os_error};
 
 // ===== SocketPath =====
 
@@ -13,6 +13,7 @@ pub struct SocketPath {
 }
 
 impl SocketPath {
+    #[inline]
     pub const fn new(path: &'static std::ffi::CStr) -> Self {
         // SAFETY: All zeros is a valid representation for `sockaddr_un`.
         let mut addr: libc::sockaddr_un = unsafe { mem::zeroed() };
@@ -51,25 +52,28 @@ pub struct Listener {
 }
 
 impl Drop for Listener {
+    #[inline]
     fn drop(&mut self) {
         let _: i32 = unsafe { libc::unlink(self.path) };
     }
 }
 
 impl AsRawFd for Listener {
+    #[inline]
     fn as_raw_fd(&self) -> i32 {
         self.fd.as_raw_fd()
     }
 }
 
-pub fn e(int: i32) -> Option<i32> {
+fn e(int: i32) -> Option<i32> {
     if int != -1 { Some(int) } else { None }
 }
 
 impl Listener {
+    #[inline]
     pub fn new(path: SocketPath) -> Result<Self, BindError> {
         let path_ptr = path.path;
-        Self::bind(path).ok_or(BindError { path_ptr })
+        Self::bind(path).ok_or_else(|| BindError::new(path_ptr))
     }
 
     fn bind(path: SocketPath) -> Option<Self> {
@@ -91,18 +95,16 @@ impl Listener {
         Some(Self { fd, path })
     }
 
+    #[inline]
     pub fn poll_accept(&self) -> Poll<Result<OwnedFd, AcceptError>> {
         unsafe {
             let result = libc::accept(self.fd.as_raw_fd(), ptr::null_mut(), ptr::null_mut());
             let Some(fd) = e(result) else {
-                return match Errno::get() {
-                    libc::EWOULDBLOCK => Poll::Pending,
-                    _ => Poll::Ready(Err(AcceptError)),
-                };
+                return ErrCode::would_block_or();
             };
             let result = libc::ioctl(AsRawFd::as_raw_fd(&fd), libc::FIONBIO, &mut true);
             if result == -1 {
-                return Poll::Ready(Err(AcceptError));
+                return Poll::Ready(Err(ErrCode::errno().into()));
             }
             Poll::Ready(Ok(<_>::from_raw_fd(fd)))
         }
@@ -112,28 +114,41 @@ impl Listener {
 // ===== Error =====
 
 pub struct BindError {
+    code: ErrCode,
     path_ptr: *const std::ffi::c_char,
+}
+
+impl BindError {
+    fn new(path_ptr: *const std::ffi::c_char) -> Self {
+        Self {
+            code: ErrCode::errno(),
+            path_ptr,
+        }
+    }
+
+    fn path(&self) -> std::borrow::Cow<'_, str> {
+        unsafe { std::ffi::CStr::from_ptr(self.path_ptr).to_string_lossy() }
+    }
 }
 
 impl std::error::Error for BindError {}
 
 impl std::fmt::Debug for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{self}")
+        f.debug_struct("BindError")
+            .field("code", &self.code)
+            .field("path", &self.path())
+            .finish()
     }
 }
 
 impl std::fmt::Display for BindError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let path = unsafe {
-            std::ffi::CStr::from_ptr(self.path_ptr)
-                .to_str()
-                .unwrap_or("<non-utf8>")
-        };
-        write!(f, "failed to bind `{path}`: {Errno}")
+        write!(f, "failed to bind `{}`: {}", self.path(), self.code)
     }
 }
 
-simple_errno! {
-    pub AcceptError, "failed to accept socket: {}";
-}
+#[derive(Clone, Copy)]
+pub struct AcceptError(ErrCode);
+
+simple_os_error!(AcceptError, "accept connection");

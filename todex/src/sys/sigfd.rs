@@ -1,7 +1,7 @@
 use std::mem::MaybeUninit;
 use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 
-use crate::sys::errno::simple_errno;
+use crate::sys::error::{ErrCode, simple_os_error};
 
 // ===== Sig =====
 
@@ -44,11 +44,16 @@ impl AsRawFd for Sigfd {
     }
 }
 
-pub fn e(int: i32) -> Result<i32, CreateError> {
-    if int != -1 { Ok(int) } else { Err(CreateError) }
+fn e(int: i32) -> Result<i32, CreateError> {
+    if int != -1 {
+        Ok(int)
+    } else {
+        Err(CreateError(ErrCode::errno()))
+    }
 }
 
 impl Sigfd {
+    #[inline]
     pub fn new() -> Result<Self, CreateError> {
         unsafe {
             let mut mask = MaybeUninit::uninit();
@@ -66,6 +71,7 @@ impl Sigfd {
         }
     }
 
+    #[inline]
     pub fn read(&self) -> Sig {
         const DATA_SIZE: usize = size_of::<libc::signalfd_siginfo>();
 
@@ -87,6 +93,7 @@ impl Sigfd {
 
 // ===== Error =====
 
-simple_errno! {
-    pub CreateError, "failed to create signalfd: {}";
-}
+#[derive(Clone, Copy)]
+pub struct CreateError(ErrCode);
+
+simple_os_error!(CreateError, "create signalfd");

@@ -2,7 +2,7 @@ use std::mem::MaybeUninit;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
 use std::ptr;
 
-use crate::sys::errno::{Errno, simple_errno};
+use crate::sys::error::{ErrCode, simple_os_error};
 
 #[derive(Debug, Clone, Copy)]
 pub struct Interest(i32);
@@ -50,7 +50,7 @@ impl Epoll {
         unsafe {
             let fd = libc::epoll_create1(libc::EPOLL_CLOEXEC);
             if fd == -1 {
-                return Err(CreateError);
+                return Err(ErrCode::errno().into());
             }
             Ok(Self(<_>::from_raw_fd(fd)))
         }
@@ -109,6 +109,7 @@ impl Epoll {
     ///
     /// This method will block until either a file descriptor deliver an event, the call is
     /// interupted by a signal handler, or `timeout` expires.
+    #[inline]
     pub fn wait(&self, events: &mut [MaybeUninit<EpollEvent>], timeout: Option<u32>) -> usize {
         unsafe {
             libc::epoll_wait(
@@ -138,16 +139,17 @@ fn epoll_ctl_panic() -> ! {
     //
     // looking further, all epoll_ctl failure is a server fault, except ENOMEM and ENOSPC, in which
     // no recovery seems possible, thus the panic
-    panic!("`epoll_ctl` fail: {Errno}");
+    panic!("`epoll_ctl` fail: {}", ErrCode::errno());
 }
 
 #[cold]
 #[inline(never)]
 fn epoll_wait_panic() -> ! {
     // all epoll_wait errors, except EINTR, are server error
-    panic!("`epoll_wait` fail: {Errno}");
+    panic!("`epoll_wait` fail: {}", ErrCode::errno());
 }
 
-simple_errno! {
-    pub CreateError, "failed to create epoll: {}";
-}
+#[derive(Clone, Copy)]
+pub struct CreateError(ErrCode);
+
+simple_os_error!(CreateError, "create epoll");

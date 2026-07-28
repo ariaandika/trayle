@@ -3,47 +3,42 @@ use std::mem;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 use std::ptr::NonNull;
 
-use crate::sys::errno::Errno;
+use crate::sys::error::ErrCode;
 
-pub struct Socket {
-    fd: OwnedFd,
-}
+pub struct Socket(OwnedFd);
 
 impl AsRawFd for Socket {
+    #[inline]
     fn as_raw_fd(&self) -> i32 {
-        self.fd.as_raw_fd()
+        self.0.as_raw_fd()
     }
 }
 
 impl FromRawFd for Socket {
+    #[inline]
     unsafe fn from_raw_fd(fd: i32) -> Self {
-        Self {
-            fd: unsafe { <_>::from_raw_fd(fd) },
-        }
+        Self(unsafe { <_>::from_raw_fd(fd) })
     }
 }
 
 impl Socket {
     /// Connect from `WAYLAND_DISPLAY`.
+    #[inline]
     pub fn connect_env() -> Result<Self, ConnectError> {
-        use ConnectError as E;
-
         let addr = sockaddr_un()?;
         let sockaddr = (&raw const addr).cast();
 
         let socket = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0) };
         if socket == -1 {
-            return Err(E::Socket);
+            return Err(ErrCode::errno().into());
         }
 
-        let result = unsafe { libc::connect(socket, sockaddr, size_of_val(&addr) as libc::socklen_t) };
+        let result = unsafe { libc::connect(socket, sockaddr, size_of_val(&addr) as _) };
         if result == -1 {
-            return Err(E::Connect);
+            return Err(ErrCode::errno().into());
         }
 
-        let fd = unsafe { OwnedFd::from_raw_fd(socket) };
-
-        Ok(Self { fd })
+        Ok(Self(unsafe { OwnedFd::from_raw_fd(socket) }))
     }
 }
 
@@ -106,8 +101,7 @@ impl std::fmt::Debug for Socket {
 #[derive(Debug)]
 pub enum ConnectError {
     AddrTooLong,
-    Socket,
-    Connect,
+    Socket(ErrCode),
 }
 
 impl std::error::Error for ConnectError {}
@@ -116,8 +110,13 @@ impl std::fmt::Display for ConnectError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::AddrTooLong => write!(f, "address too long"),
-            Self::Socket => write!(f, "failed to create socket: {Errno}"),
-            Self::Connect => write!(f, "failed to connect socket: {Errno}"),
+            Self::Socket(err) => write!(f, "failed to create socket: {err}"),
         }
+    }
+}
+
+impl From<ErrCode> for ConnectError {
+    fn from(v: ErrCode) -> Self {
+        Self::Socket(v)
     }
 }

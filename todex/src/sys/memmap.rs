@@ -2,7 +2,7 @@ use std::os::fd::RawFd;
 use std::ptr::{self, NonNull};
 use std::slice;
 
-use crate::sys::errno::simple_errno;
+use crate::sys::error::{ErrCode, simple_os_error};
 
 /// Memory map.
 pub struct Memmap {
@@ -36,7 +36,7 @@ impl Memmap {
         };
         let ptr = NonNull::new(ptr.cast::<u8>())
             .filter(|e| e.as_ptr().cast() != libc::MAP_FAILED)
-            .ok_or(MapError)?;
+            .ok_or_else(ErrCode::errno)?;
         Ok(Self { ptr, size })
     }
 
@@ -52,7 +52,6 @@ impl Memmap {
 }
 
 impl std::fmt::Debug for Memmap {
-    #[inline]
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         f.debug_tuple("Memmap").field(&self.as_slice()).finish()
     }
@@ -60,6 +59,7 @@ impl std::fmt::Debug for Memmap {
 
 // ===== Error =====
 
-simple_errno! {
-    pub MapError, "failed to map memory: {}";
-}
+#[derive(Clone, Copy)]
+pub struct MapError(ErrCode);
+
+simple_os_error!(MapError, "map memory");
