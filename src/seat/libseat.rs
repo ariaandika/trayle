@@ -1,6 +1,6 @@
 #![expect(non_camel_case_types)]
 use std::ffi::c_void;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, BorrowedFd};
 use std::ptr::NonNull;
 
 use todex::log;
@@ -48,13 +48,9 @@ impl Libseat {
     }
 }
 
-impl AsRawFd for Libseat {
-    fn as_raw_fd(&self) -> i32 {
-        let fd = unsafe { libseat_get_fd(self.seat.as_ptr()) };
-        if fd == -1 {
-            panic!("cannot get libseat fd: {}", ErrCode::errno());
-        }
-        fd
+impl AsFd for Libseat {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        unsafe { BorrowedFd::borrow_raw(libseat_get_fd(self.seat.as_ptr())) }
     }
 }
 

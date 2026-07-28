@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use std::os::unix::io::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::*;
 
 use crate::sys::error::{ErrCode, simple_os_error};
 
@@ -38,9 +38,10 @@ impl std::fmt::Display for Sig {
 
 pub struct Sigfd(OwnedFd);
 
-impl AsRawFd for Sigfd {
-    fn as_raw_fd(&self) -> RawFd {
-        self.0.as_raw_fd()
+impl AsFd for Sigfd {
+    #[inline]
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
     }
 }
 

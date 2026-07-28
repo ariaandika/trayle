@@ -1,4 +1,4 @@
-use std::os::fd::{AsRawFd, OwnedFd};
+use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::task::Poll;
 
 use todex::sys::bytes::Bytes;
@@ -79,15 +79,15 @@ impl<'a> ClientMut<'a> {
 
 // ===== std traits =====
 
-impl AsRawFd for ClientState {
-    fn as_raw_fd(&self) -> i32 {
-        self.socket.as_raw_fd()
+impl AsFd for ClientState {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.socket.as_fd()
     }
 }
 
-impl AsRawFd for ClientMut<'_> {
-    fn as_raw_fd(&self) -> i32 {
-        self.state.as_raw_fd()
+impl AsFd for ClientMut<'_> {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.state.as_fd()
     }
 }
 

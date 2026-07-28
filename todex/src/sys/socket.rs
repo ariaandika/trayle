@@ -1,18 +1,12 @@
 use std::ffi::CStr;
 use std::mem;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::os::fd::*;
 use std::ptr::NonNull;
 
 use crate::sys::error::ErrCode;
 
+#[derive(Debug)]
 pub struct Socket(OwnedFd);
-
-impl AsRawFd for Socket {
-    #[inline]
-    fn as_raw_fd(&self) -> i32 {
-        self.0.as_raw_fd()
-    }
-}
 
 impl FromRawFd for Socket {
     #[inline]
@@ -21,24 +15,35 @@ impl FromRawFd for Socket {
     }
 }
 
+impl AsFd for Socket {
+    #[inline]
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
+    }
+}
+
+impl AsRawFd for Socket {
+    #[inline]
+    fn as_raw_fd(&self) -> RawFd {
+        self.0.as_raw_fd()
+    }
+}
+
 impl Socket {
     /// Connect from `WAYLAND_DISPLAY`.
     #[inline]
     pub fn connect_env() -> Result<Self, ConnectError> {
+        const ADDRSIZE: u32 = size_of::<libc::sockaddr_un>() as _;
         let addr = sockaddr_un()?;
         let sockaddr = (&raw const addr).cast();
-
         let socket = unsafe { libc::socket(libc::AF_UNIX, libc::SOCK_STREAM, 0) };
-        if socket == -1 {
-            return Err(ErrCode::errno().into());
+        let socket = ErrCode::from_raw_fd::<ConnectError, _>(socket)?;
+        let result = unsafe { libc::connect(Self::as_raw_fd(&socket), sockaddr, ADDRSIZE) };
+        if result == 0 {
+            Ok(socket)
+        } else {
+            Err(ErrCode::errno().into())
         }
-
-        let result = unsafe { libc::connect(socket, sockaddr, size_of_val(&addr) as _) };
-        if result == -1 {
-            return Err(ErrCode::errno().into());
-        }
-
-        Ok(Self(unsafe { OwnedFd::from_raw_fd(socket) }))
     }
 }
 
@@ -88,12 +93,6 @@ fn sockaddr_un() -> Result<libc::sockaddr_un, ConnectError> {
     };
     dst.copy_from_slice(display);
     Ok(addr)
-}
-
-impl std::fmt::Debug for Socket {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Socket")
-    }
 }
 
 // ===== Error =====

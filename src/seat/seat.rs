@@ -1,5 +1,4 @@
-use std::os::fd::AsRawFd;
-
+use std::os::fd::{AsFd, AsRawFd};
 use todex::sys::memfd::{CreateError, Memfd, WriteError};
 use todex::wayland::interface::wl_seat::Capability;
 
@@ -40,7 +39,7 @@ impl Seat {
     }
 
     pub fn keymap_memfd(&self) -> i32 {
-        self.keymap_memfd.as_raw_fd()
+        self.keymap_memfd.as_fd().as_raw_fd()
     }
 
     pub const fn keymap_size(&self) -> u32 {

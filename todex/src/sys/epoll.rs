@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd, RawFd};
+use std::os::fd::*;
 use std::ptr;
 
 use crate::sys::error::{ErrCode, simple_os_error};
@@ -45,15 +45,24 @@ impl EpollEvent {
 
 pub struct Epoll(OwnedFd);
 
+impl FromRawFd for Epoll {
+    #[inline]
+    unsafe fn from_raw_fd(fd: RawFd) -> Self {
+        Self(unsafe { <_>::from_raw_fd(fd) })
+    }
+}
+
+impl AsFd for Epoll {
+    #[inline]
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.0.as_fd()
+    }
+}
+
 impl Epoll {
+    #[inline]
     pub fn new() -> Result<Self, CreateError> {
-        unsafe {
-            let fd = libc::epoll_create1(libc::EPOLL_CLOEXEC);
-            if fd == -1 {
-                return Err(ErrCode::errno().into());
-            }
-            Ok(Self(<_>::from_raw_fd(fd)))
-        }
+        ErrCode::from_raw_fd(unsafe { libc::epoll_create1(libc::EPOLL_CLOEXEC) })
     }
 }
 
@@ -63,36 +72,36 @@ impl Epoll {
 const DEFAULT_EVENT: i32 = libc::EPOLLIN | libc::EPOLLRDHUP | libc::EPOLLET;
 
 impl Epoll {
-    pub fn add<F: AsRawFd>(&self, key: u64, fd: &F) {
-        self.epoll_ctl(libc::EPOLL_CTL_ADD, 0, key, fd.as_raw_fd())
+    pub fn add<F: AsFd>(&self, key: u64, fd: &F) {
+        self.epoll_ctl(libc::EPOLL_CTL_ADD, 0, key, fd.as_fd())
     }
 
-    pub fn modify<F: AsRawFd>(&self, is_write: bool, key: u64, fd: &F) {
+    pub fn modify<F: AsFd>(&self, is_write: bool, key: u64, fd: &F) {
         self.epoll_ctl(
             libc::EPOLL_CTL_MOD,
             libc::EPOLLOUT * is_write as i32,
             key,
-            fd.as_raw_fd(),
+            fd.as_fd(),
         )
     }
 
-    fn epoll_ctl(&self, op: i32, events: i32, key: u64, fd: RawFd) {
+    fn epoll_ctl(&self, op: i32, events: i32, key: u64, fd: BorrowedFd) {
         let mut event = libc::epoll_event {
             events: (events | DEFAULT_EVENT) as u32,
             u64: key,
         };
-        let result = unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd, &mut event) };
+        let result = unsafe { libc::epoll_ctl(self.0.as_raw_fd(), op, fd.as_raw_fd(), &mut event) };
         if result == -1 {
             epoll_ctl_panic();
         }
     }
 
-    pub fn delete<F: AsRawFd>(&self, fd: &F) {
+    pub fn delete<F: AsFd>(&self, fd: &F) {
         let result = unsafe {
             libc::epoll_ctl(
                 self.0.as_raw_fd(),
                 libc::EPOLL_CTL_DEL,
-                fd.as_raw_fd(),
+                fd.as_fd().as_raw_fd(),
                 ptr::null_mut(),
             )
         };

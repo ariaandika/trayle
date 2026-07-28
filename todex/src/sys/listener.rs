@@ -1,4 +1,5 @@
-use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
+use std::ffi::{CStr, c_char};
+use std::os::fd::*;
 use std::task::Poll;
 use std::{mem, ptr};
 
@@ -7,14 +8,14 @@ use crate::sys::error::{ErrCode, simple_os_error};
 // ===== SocketPath =====
 
 pub struct SocketPath {
-    path: *const std::os::raw::c_char,
+    path: *const c_char,
     addr: libc::sockaddr_un,
     len: libc::socklen_t,
 }
 
 impl SocketPath {
     #[inline]
-    pub const fn new(path: &'static std::ffi::CStr) -> Self {
+    pub const fn new(path: &'static CStr) -> Self {
         // SAFETY: All zeros is a valid representation for `sockaddr_un`.
         let mut addr: libc::sockaddr_un = unsafe { mem::zeroed() };
 
@@ -48,20 +49,20 @@ impl SocketPath {
 
 pub struct Listener {
     fd: OwnedFd,
-    path: *const std::os::raw::c_char,
+    path: *const c_char,
 }
 
 impl Drop for Listener {
     #[inline]
     fn drop(&mut self) {
-        let _: i32 = unsafe { libc::unlink(self.path) };
+        unsafe { libc::unlink(self.path) };
     }
 }
 
-impl AsRawFd for Listener {
+impl AsFd for Listener {
     #[inline]
-    fn as_raw_fd(&self) -> i32 {
-        self.fd.as_raw_fd()
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.fd.as_fd()
     }
 }
 
@@ -102,7 +103,7 @@ impl Listener {
             let Some(fd) = e(result) else {
                 return ErrCode::would_block_or();
             };
-            let result = libc::ioctl(AsRawFd::as_raw_fd(&fd), libc::FIONBIO, &mut true);
+            let result = libc::ioctl(fd, libc::FIONBIO, &mut true);
             if result == -1 {
                 return Poll::Ready(Err(ErrCode::errno().into()));
             }
@@ -115,11 +116,11 @@ impl Listener {
 
 pub struct BindError {
     code: ErrCode,
-    path_ptr: *const std::ffi::c_char,
+    path_ptr: *const c_char,
 }
 
 impl BindError {
-    fn new(path_ptr: *const std::ffi::c_char) -> Self {
+    fn new(path_ptr: *const c_char) -> Self {
         Self {
             code: ErrCode::errno(),
             path_ptr,
@@ -127,7 +128,7 @@ impl BindError {
     }
 
     fn path(&self) -> std::borrow::Cow<'_, str> {
-        unsafe { std::ffi::CStr::from_ptr(self.path_ptr).to_string_lossy() }
+        unsafe { CStr::from_ptr(self.path_ptr).to_string_lossy() }
     }
 }
 

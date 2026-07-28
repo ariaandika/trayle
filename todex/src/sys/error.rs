@@ -123,12 +123,12 @@ impl ErrCode {
     /// [`Pending`]: Poll::Pending
     /// [`Ready(Err(E))`]: Poll::Ready
     #[inline]
-    pub fn would_block_or<T, E: OsError>() -> Poll<Result<T, E>> {
+    pub fn would_block_or<T, E: From<ErrCode>>() -> Poll<Result<T, E>> {
         let code = Self::errno();
         if code.would_block() {
             Poll::Pending
         } else {
-            Poll::Ready(Err(E::from_code(code)))
+            Poll::Ready(Err(E::from(code)))
         }
     }
 
@@ -150,6 +150,18 @@ impl ErrCode {
             Poll::Pending
         } else {
             Poll::Ready(Err(f(code)))
+        }
+    }
+
+    /// Returns `Ok` if the fd is not `-1`.
+    ///
+    /// Otherwise, returns `Err` with error code from `errno`.
+    #[inline]
+    pub fn from_raw_fd<E: From<ErrCode>, F: std::os::fd::FromRawFd>(fd: i32) -> Result<F, E> {
+        if fd != -1 {
+            Ok(unsafe { F::from_raw_fd(fd) })
+        } else {
+            Err(E::from(Self::errno()))
         }
     }
 }

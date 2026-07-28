@@ -1,5 +1,5 @@
 use std::mem::MaybeUninit;
-use std::os::fd::AsRawFd;
+use std::os::fd::{AsFd, AsRawFd};
 use std::ptr;
 use std::task::Poll::{self, *};
 
@@ -101,22 +101,18 @@ impl Cmsg {
 
     /// Perform `sendmsg` syscall.
     #[inline]
-    pub fn sendmsg<S: AsRawFd>(
+    pub fn sendmsg<S: AsFd>(
         &mut self,
         buf: &mut Bytes,
         socket: &S,
     ) -> Poll<Result<(), WriteError>> {
-        sendmsg(buf, self, socket.as_raw_fd())
+        sendmsg(buf, self, socket.as_fd().as_raw_fd())
     }
 
     /// Perform `recvmsg` syscall.
     #[inline]
-    pub fn recvmsg<S: AsRawFd>(
-        &mut self,
-        buf: &mut Bytes,
-        socket: &S,
-    ) -> Poll<Result<(), ReadError>> {
-        recvmsg(buf, self, socket.as_raw_fd())
+    pub fn recvmsg<S: AsFd>(&mut self, buf: &mut Bytes, socket: &S) -> Poll<Result<(), ReadError>> {
+        recvmsg(buf, self, socket.as_fd().as_raw_fd())
     }
 }
 
