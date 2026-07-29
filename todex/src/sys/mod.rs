@@ -15,3 +15,4 @@ pub mod epoll;
 
 // ===== ffi =====
 pub mod xkb;
+pub mod libseat;

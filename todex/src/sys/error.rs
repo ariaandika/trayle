@@ -181,3 +181,36 @@ impl fmt::Display for ErrCode {
         write!(f, "{msg} (os error {})", code)
     }
 }
+
+// ===== ResCode =====
+
+/// Result code.
+///
+/// This is wrapper of `i32` that gives additional method based on common pattern used in syscall or
+/// ffi, where zero or positive value represent successful operation, while negative value represent
+/// failure operation.
+///
+/// This uses `#[repr(transparent)]` and has representation of [`i32`] so it can be used in FFI as a
+/// return type.
+#[repr(transparent)]
+pub struct ResCode(i32);
+
+impl ResCode {
+    /// Returns `Ok(())` if the result code is `0`.
+    ///
+    /// Otherwise, returns `Err` with value from `errno` location.
+    pub fn ok<E: From<ErrCode>>(self) -> Result<(), E> {
+        if self.0 == 0 {
+            Ok(())
+        } else {
+            Err(ErrCode::errno().into())
+        }
+    }
+
+    /// Returns `Ok(result)` if the result code is zero or positive.
+    ///
+    /// Otherwise, returns `Err` with value from `errno` location.
+    pub fn uint<T: From<u32>, E: From<ErrCode>>(self) -> Result<T, E> {
+        u32::try_from(self.0).map_or_else(|_| Err(ErrCode::errno().into()), |ok| Ok(ok.into()))
+    }
+}
