@@ -30,3 +30,25 @@ pub trait Bits:
 
 impl Bits for u32 {}
 impl Bits for i32 {}
+
+macro_rules! simple_bitflags {
+    ($me:ty, $bits:ty) => {
+        impl crate::bitflags::Bitflags for $me {
+            type Bits = $bits;
+
+            #[inline]
+            fn bits(self) -> Self::Bits {
+                self.0
+            }
+
+            #[inline]
+            fn from_bits(bits: Self::Bits) -> Self {
+                Self(bits)
+            }
+        }
+    };
+    ($me:ty) => {
+        crate::bitflags::simple_bitflags!($me, u32);
+    }
+}
+pub(crate) use simple_bitflags;

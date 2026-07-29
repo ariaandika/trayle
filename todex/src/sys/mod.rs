@@ -1,11 +1,17 @@
-//! Low level system calls.
+//! OS APIs and ffi.
 pub mod error;
+
+// ===== syscall =====
 
 pub mod bytes;
 pub mod cmsg;
+pub mod memmap;
+
 pub mod socket;
 pub mod listener;
 pub mod sigfd;
 pub mod memfd;
-pub mod memmap;
 pub mod epoll;
+
+// ===== ffi =====
+pub mod xkb;
