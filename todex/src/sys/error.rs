@@ -84,16 +84,22 @@ pub(crate) use simple_os_error;
 pub struct ErrCode(NonZeroU8);
 
 impl ErrCode {
-    /// Create [`ErrCode`] with value from `errno`.
+    /// Create [`ErrCode`] with given error code value.
     #[inline]
-    pub fn errno() -> Self {
-        Self(NonZeroU8::new(Self::raw_errno() as _).unwrap_or(NonZeroU8::MAX))
+    pub fn new(code: i32) -> Self {
+        Self(NonZeroU8::new(code as _).unwrap_or(NonZeroU8::MAX))
     }
 
     /// Returns raw error code from `__errno_location`.
     #[inline]
     pub fn raw_errno() -> i32 {
         unsafe { *libc::__errno_location() }
+    }
+
+    /// Create [`ErrCode`] with value from `errno`.
+    #[inline]
+    pub fn errno() -> Self {
+        Self::new(Self::raw_errno() as _)
     }
 
     /// Returns the contained raw error code.
@@ -212,5 +218,17 @@ impl ResCode {
     /// Otherwise, returns `Err` with value from `errno` location.
     pub fn uint<T: From<u32>, E: From<ErrCode>>(self) -> Result<T, E> {
         u32::try_from(self.0).map_or_else(|_| Err(ErrCode::errno().into()), |ok| Ok(ok.into()))
+    }
+
+    /// Returns `Ok(())` if the result code is zero or positive.
+    ///
+    /// Otherwise, returns `Err` with value of `-result`.
+    pub fn result<E: From<ErrCode>>(self) -> Result<(), E> {
+        let code = self.0;
+        if code >= 0 {
+            Ok(())
+        } else {
+            Err(ErrCode::new(-code).into())
+        }
     }
 }

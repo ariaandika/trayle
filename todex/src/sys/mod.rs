@@ -14,5 +14,7 @@ pub mod memfd;
 pub mod epoll;
 
 // ===== ffi =====
+mod macros;
 pub mod xkb;
+pub mod udev;
 pub mod libseat;
