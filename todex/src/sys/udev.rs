@@ -22,6 +22,10 @@ impl Udev {
         unsafe { udev_new() }.ok_or_else(<_>::errno)
     }
 
+    pub(crate) fn as_ptr(&self) -> NonNull<c_void> {
+        self.0
+    }
+
     /// Create new udev enumerator.
     #[inline]
     pub fn enumerate(&self) -> Result<Enumerate, EnumerateError> {

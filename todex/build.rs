@@ -1,4 +1,4 @@
-const LIBS: &[&str] = &["xkbcommon", "libseat", "libudev"];
+const LIBS: &[&str] = &["xkbcommon", "libseat", "libudev", "libinput"];
 
 fn main() {
     for lib in LIBS {
