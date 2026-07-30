@@ -5,6 +5,7 @@ use std::{marker, slice};
 use crate::alloc;
 use crate::bitflags::simple_bitflags;
 use crate::sys::error::{ErrCode, OsError, simple_os_error};
+use crate::sys::macros::simple_ffi;
 
 // ===== Xkb =====
 
@@ -12,19 +13,9 @@ use crate::sys::error::{ErrCode, OsError, simple_os_error};
 #[repr(transparent)]
 pub struct Xkb(ContextPtr);
 
-impl Drop for Xkb {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe { xkb_context_unref(self.0) };
-    }
-}
-
-impl Clone for Xkb {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(unsafe { xkb_context_ref(self.0) })
-    }
-}
+simple_ffi!(impl Drop for Xkb::xkb_context_unref);
+simple_ffi!(impl Clone for Xkb::xkb_context_ref);
+simple_ffi!(impl Debug for Xkb);
 
 impl Xkb {
     /// Create new [`Xkb`] context.
@@ -42,19 +33,9 @@ impl Xkb {
 #[repr(transparent)]
 pub struct Keymap(KeymapPtr);
 
-impl Drop for Keymap {
-    #[inline]
-    fn drop(&mut self) {
-        unsafe { xkb_keymap_unref(self.0) };
-    }
-}
-
-impl Clone for Keymap {
-    #[inline]
-    fn clone(&self) -> Self {
-        Self(unsafe { xkb_keymap_ref(self.0) })
-    }
-}
+simple_ffi!(impl Drop for Keymap::xkb_keymap_unref);
+simple_ffi!(impl Clone for Keymap::xkb_keymap_ref);
+simple_ffi!(impl Debug for Keymap);
 
 impl Keymap {
     /// Create a keymap from RMLVO names.
@@ -206,20 +187,6 @@ impl std::ops::Deref for KeymapString {
     #[inline]
     fn deref(&self) -> &Self::Target {
         self.as_cstr()
-    }
-}
-
-// ===== std traits =====
-
-impl std::fmt::Debug for Xkb {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Xkb").finish_non_exhaustive()
-    }
-}
-
-impl std::fmt::Debug for Keymap {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_tuple("Keymap").finish_non_exhaustive()
     }
 }
 
