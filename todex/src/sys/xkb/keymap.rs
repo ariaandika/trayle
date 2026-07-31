@@ -6,24 +6,7 @@ use crate::alloc;
 use crate::bitflags::simple_bitflags;
 use crate::sys::error::{ErrCode, OsError, simple_os_error};
 use crate::sys::macros::simple_ffi;
-
-// ===== Xkb =====
-
-/// Xkb context.
-#[repr(transparent)]
-pub struct Xkb(ContextPtr);
-
-simple_ffi!(impl Drop for Xkb::xkb_context_unref);
-simple_ffi!(impl Clone for Xkb::xkb_context_ref);
-simple_ffi!(impl Debug for Xkb);
-
-impl Xkb {
-    /// Create new [`Xkb`] context.
-    #[inline]
-    pub fn new(flags: ContextFlags) -> Result<Xkb, ContextError> {
-        unsafe { xkb_context_new(flags) }.ok_or_else(<_>::errno)
-    }
-}
+use crate::sys::xkb::Xkb;
 
 // ===== Keymap =====
 
@@ -39,6 +22,8 @@ simple_ffi!(impl Debug for Keymap);
 
 impl Keymap {
     /// Create a keymap from RMLVO names.
+    ///
+    /// Caller should prefer passing `None` instead of choosing its own defaults.
     #[inline]
     pub fn new_from_names(
         context: &Xkb,
@@ -46,7 +31,7 @@ impl Keymap {
         format: KeymapFormat,
         flags: CompileFlags,
     ) -> Result<Keymap, KeymapError> {
-        unsafe { xkb_keymap_new_from_names2(context.0, names, format, flags) }
+        unsafe { xkb_keymap_new_from_names2(context.as_ptr(), names, format, flags) }
             .ok_or_else(<_>::errno)
     }
 
@@ -58,7 +43,7 @@ impl Keymap {
         format: KeymapFormat,
         flags: CompileFlags,
     ) -> Result<Keymap, KeymapError> {
-        unsafe { xkb_keymap_new_from_string(context.0, string.as_ptr(), format, flags) }
+        unsafe { xkb_keymap_new_from_string(context.as_ptr(), string.as_ptr(), format, flags) }
             .ok_or_else(<_>::errno)
     }
 
@@ -73,7 +58,13 @@ impl Keymap {
         flags: CompileFlags,
     ) -> Result<Keymap, KeymapError> {
         unsafe {
-            xkb_keymap_new_from_buffer(context.0, buf.as_ptr().cast(), buf.len(), format, flags)
+            xkb_keymap_new_from_buffer(
+                context.as_ptr(),
+                buf.as_ptr().cast(),
+                buf.len(),
+                format,
+                flags,
+            )
         }
         .ok_or_else(<_>::errno)
     }
@@ -88,24 +79,23 @@ impl Keymap {
         flags: SerializeFlags,
     ) -> Result<KeymapString, SerializeError> {
         // The returned string is dynamically allocated and should be freed by the caller.
-        unsafe {
-            let ptr = xkb_keymap_get_as_string2(self.0, format, flags)
-                .ok_or_else(SerializeError::errno)?;
-            let cstr = CStr::from_ptr(ptr.as_ptr());
-            Ok(KeymapString {
-                ptr: ptr.cast(),
-                len: cstr.count_bytes() + 1,
-            })
-        }
+        unsafe { xkb_keymap_get_as_string2(self.0, format, flags) }.map_or_else(
+            || Err(<_>::errno()),
+            |ptr| unsafe {
+                Ok(KeymapString {
+                    ptr: ptr.cast(),
+                    len: CStr::from_ptr(ptr.as_ptr()).count_bytes() + 1,
+                })
+            },
+        )
     }
 }
+
+// ===== RuleNames =====
 
 /// Names to compile a keymap with, also known as [RMLVO].
 ///
 /// The names are the common configuration values by which a user picks a keymap.
-///
-/// If the entire struct is NULL, then each field is taken to be NULL. You should prefer passing
-/// NULL instead of choosing your own defaults.
 ///
 /// [RMLVO]: https://xkbcommon.org/doc/current/xkb-intro.html#RMLVO-intro
 #[repr(C)]
@@ -196,27 +186,6 @@ impl std::fmt::Debug for KeymapString {
     }
 }
 
-// ===== ContextFlags =====
-
-/// Flags for context creation.
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-#[repr(transparent)]
-pub struct ContextFlags(u32);
-
-simple_bitflags!(ContextFlags);
-
-impl ContextFlags {
-    /// Do not apply any context flags.
-    pub const NO_FLAGS: Self = Self(0);
-    /// Create this context with an empty include path.
-    pub const NO_DEFAULT_INCLUDES: Self = Self(1 << 0);
-    /// Don’t take RMLVO names from the environment.
-    pub const NO_ENVIRONMENT_NAMES: Self = Self(1 << 1);
-    /// Disable the use of secure_getenv for this context, so that privileged processes can use
-    /// environment variables.
-    pub const NO_SECURE_GETENV: Self = Self(1 << 2);
-}
-
 // ===== KeymapFormat =====
 
 /// The possible keymap formats.
@@ -269,12 +238,6 @@ impl SerializeFlags {
 
 // ===== error =====
 
-/// An error that can occur during xkb context creation.
-#[derive(Clone, Copy)]
-pub struct ContextError(ErrCode);
-
-simple_os_error!(ContextError, "create xkb context");
-
 /// An error that can occur during keymap creation.
 #[derive(Clone, Copy)]
 pub struct KeymapError(ErrCode);
@@ -293,10 +256,6 @@ type ContextPtr = NonNull<c_void>;
 type KeymapPtr = NonNull<c_void>;
 
 unsafe extern "C" {
-    fn xkb_context_new(flags: ContextFlags) -> Option<Xkb>;
-    fn xkb_context_ref(context: ContextPtr) -> ContextPtr;
-    fn xkb_context_unref(context: ContextPtr);
-
     fn xkb_keymap_new_from_names2(
         context: ContextPtr,
         names: Option<&RuleNames>,
@@ -316,10 +275,8 @@ unsafe extern "C" {
         format: KeymapFormat,
         flags: CompileFlags,
     ) -> Option<Keymap>;
-
     fn xkb_keymap_ref(keymap: KeymapPtr) -> KeymapPtr;
     fn xkb_keymap_unref(keymap: KeymapPtr);
-
     fn xkb_keymap_get_as_string2(
         keymap: KeymapPtr,
         format: KeymapFormat,
