@@ -68,6 +68,10 @@ impl Keymap {
         }
         .ok_or_else(<_>::errno)
     }
+
+    pub(crate) fn as_ptr(&self) -> KeymapPtr {
+        self.0
+    }
 }
 
 impl Keymap {
