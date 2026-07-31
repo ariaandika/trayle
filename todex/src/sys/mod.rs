@@ -14,8 +14,14 @@ pub mod memfd;
 pub mod epoll;
 
 // ===== ffi =====
+
 mod macros;
-pub mod xkb;
+
 pub mod udev;
 pub mod libseat;
+
+// ===== input =====
+
+pub mod keycode;
+pub mod xkb;
 pub mod libinput;
