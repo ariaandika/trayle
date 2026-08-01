@@ -1,11 +1,36 @@
 use crate::drm::ioctl::*;
-use crate::drm::property::{Properties, Property, PropertyIter, WithProperties};
-use crate::drm::plane::{Plane, PlaneType};
+use crate::drm::property::{self, Property, PropertyIter, WithProperties};
+use crate::drm::plane::Plane;
 use crate::drm::{Crtc, Framebuffer, Handle};
 
-impl WithProperties for Plane {
-    type Properties = PlaneProperties;
+// ===== PlaneType =====
+
+/// Plane type.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum PlaneType {
+    Overlay = 0,
+    Primary = 1,
+    Cursor = 2,
 }
+
+impl PlaneType {
+    /// Create [`PlaneType`] from raw integer.
+    #[inline]
+    pub fn from_int<I: TryInto<u8>>(int: I) -> Option<PlaneType> {
+        int.try_into().ok().and_then(|i| match i {
+            0 => Some(Self::Overlay),
+            1 => Some(Self::Primary),
+            2 => Some(Self::Cursor),
+            _ => None,
+        })
+    }
+}
+
+impl WithProperties for Plane {
+    type Properties = Properties;
+}
+
+// ===== PlaneProperties =====
 
 /// Plane Properties.
 ///
@@ -15,11 +40,11 @@ impl WithProperties for Plane {
 /// - "IN_FORMATS"
 /// - "zpos"
 ///
-/// Primary/Overlay sepecific:
+/// `Primary`/`Overlay` sepecific:
 /// - "COLOR_ENCODING"
 /// - "COLOR_RANGE"
 /// - "rotation"
-pub struct PlaneProperties {
+pub struct Properties {
     // "type"
     pub ty: PlaneType,
     // "FD_ID"
@@ -59,40 +84,33 @@ const SRC_H: u32 = 1 << 10;
 const ALL: u32 =
     TY | FB_ID | CRTC_ID | CRTC_X | CRTC_Y | CRTC_W | CRTC_H | SRC_X | SRC_Y | SRC_W | SRC_H;
 
-impl Properties<Plane> for PlaneProperties {
+impl property::Properties<Plane> for Properties {
     fn from_raw_properties(mut props: PropertyIter<'_>) -> Result<Self, ErrCode> {
         let mut uninit = std::mem::MaybeUninit::<Self>::uninit();
         let mut init = 0u32;
         let ptr = uninit.as_mut_ptr();
 
         while let Some(prop) = props.next()? {
-            macro_rules! id{($f:ident, $id:ident) => {
-                unsafe {
-                    (&raw mut (*ptr).$f).write(Property {
-                        id: prop.id,
-                        value: Handle::from_raw(prop.value as _),
-                    });
-                    $id
-                }
-            }}
-            macro_rules! coord{($f:ident, $id:ident) => {
-                unsafe {
-                    (&raw mut (*ptr).$f).write(Property {
-                        id: prop.id,
-                        value: prop.value as _,
-                    });
-                    $id
-                }
-            }}
-
+            macro_rules! id{($f:ident, $id:ident) => { unsafe {
+                (&raw mut (*ptr).$f).write(Property {
+                    id: prop.id,
+                    value: Handle::from_raw(prop.value as _),
+                });
+                $id
+            }}}
+            macro_rules! coord{($f:ident, $id:ident) => { unsafe {
+                (&raw mut (*ptr).$f).write(Property {
+                    id: prop.id,
+                    value: prop.value as _,
+                });
+                $id
+            }}}
             init |= match prop.name.to_bytes() {
                 b"type" => unsafe {
-                    (&raw mut (*ptr).ty).write(match prop.value {
-                        0 => PlaneType::Overlay,
-                        1 => PlaneType::Primary,
-                        2 => PlaneType::Cursor,
-                        _ => continue,
-                    });
+                    let Some(val) = PlaneType::from_int(prop.value) else {
+                        continue;
+                    };
+                    (&raw mut (*ptr).ty).write(val);
                     TY
                 },
                 b"FB_ID" => id!(fb_id, FB_ID),
@@ -109,13 +127,11 @@ impl Properties<Plane> for PlaneProperties {
             };
         }
 
-        if init != ALL {
-            // return Err(Error::custom("missing plane properties"));
+        if init == ALL {
+            Ok(unsafe { uninit.assume_init() })
+        } else {
             todo!("errno")
+            // return Err(Error::custom("missing plane properties"));
         }
-
-        Ok(unsafe { uninit.assume_init() })
     }
 }
-
-

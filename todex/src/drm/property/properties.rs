@@ -48,6 +48,7 @@ impl RawProperties {
 }
 
 impl RawProperties {
+    /// Transform raw properties into a collection.
     pub fn collect<D, O>(self, device: &D) -> Result<O, ErrCode>
     where
         D: AsFd,

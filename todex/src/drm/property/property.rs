@@ -1,3 +1,4 @@
+/// A pair of property id and value.
 #[derive(Debug, Clone, Copy)]
 pub struct Property<T> {
     pub id: u32,

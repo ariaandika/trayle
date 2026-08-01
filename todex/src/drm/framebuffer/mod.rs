@@ -3,6 +3,13 @@ use crate::drm::Handle;
 use crate::drm::resource::{Resource, ObjectType};
 use crate::fourcc::Format;
 
+/// DRM Framebuffer.
+///
+/// Framebuffers are abstract memory objects that provide a source of pixel data to scanout to a
+/// CRTC. Applications explicitly request the creation of framebuffers and can control their be‐
+/// havior. Framebuffers rely on the underneath memory manager for low-level memory operations. When
+/// creating a framebuffer, applications pass a memory handle through the API which is used as
+/// backing storage. The framebuffer itself is only an abstract object with no data.
 #[derive(Debug)]
 pub struct Framebuffer {
     pub width: u32,
@@ -67,7 +74,7 @@ impl Resource for Framebuffer {
     const OBJECT_TYPE: ObjectType = ObjectType::FB;
 
     #[inline]
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
         Self::get_resource(handle, device.as_fd())
     }
 }

@@ -1,18 +1,20 @@
 use std::error;
 use std::os::fd::AsFd;
 
+use crate::sys::error::ErrCode;
 use crate::drm::Handle;
 use crate::drm::resource::ObjectType;
-use crate::sys::error::ErrCode;
 
-/// A type that represent a drm resource.
+/// A type that represent a DRM resource.
 ///
-/// Resource include connector, crtc, encoder, framebuffer, and plane.
+/// Resource include connector, CRTC, encoder, framebuffer, and plane.
 pub trait Resource: Sized {
+    /// The error that can occur during resource request.
     type Error: error::Error;
 
+    /// Resource [`ObjectType`].
     const OBJECT_TYPE: ObjectType;
 
-    /// Fetch the resource by handle.
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, ErrCode>;
+    /// Request the resource for given handle.
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, ErrCode>;
 }

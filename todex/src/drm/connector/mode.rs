@@ -1,58 +1,82 @@
-use crate::bitflags::{Bitflags, simple_bitflags};
+use std::{fmt, ops};
+
+use crate::bitflags::{Bitflags, simple_bitflags, simple_bitflags_debug};
 use crate::drm::ioctl::*;
 
 // ===== ModeInfo =====
 
 const DRM_DISPLAY_MODE_LEN: usize = 32;
 
-#[derive(Default, Clone)]
+/// Display mode information.
+#[derive(Debug, Default, Clone)]
 #[repr(C)]
 pub struct ModeInfo {
+    /// Pixel clock in kHz.
     pub clock: __u32,
+    /// Horizontal display size.
     pub hdisplay: __u16,
+    /// Horizontal sync start.
     pub hsync_start: __u16,
+    /// Horizontal sync end.
     pub hsync_end: __u16,
+    /// Horizontal total size.
     pub htotal: __u16,
+    /// Horizontal skew.
     pub hskew: __u16,
+    /// Vertical display size.
     pub vdisplay: __u16,
+    /// Vertical sync start.
     pub vsync_start: __u16,
+    /// Vertical sync end.
     pub vsync_end: __u16,
+    /// Vertical total size.
     pub vtotal: __u16,
+    /// Vertical scan.
     pub vscan: __u16,
-
+    /// Approximate vertical refresh rate in Hz.
     pub vrefresh: __u32,
-
+    /// Bitmask of misc. flags, see DRM_MODE_FLAG_* defines.
     pub flags: __u32,
+    /// Bitmask of type flags, see DRM_MODE_TYPE_* defines.
     pub type_: ModeType,
-    pub name: [u8; DRM_DISPLAY_MODE_LEN],
+    /// String describing the mode resolution.
+    pub name: ModeName,
 }
 
-impl ModeInfo {
+// ===== ModeName =====
+
+/// String describing the [`ModeInfo`] resolution.
+#[derive(Default, Clone)]
+#[repr(C)]
+pub struct ModeName {
+    /// Guarantee to ends with null termination.
+    bytes: [u8; DRM_DISPLAY_MODE_LEN],
+}
+
+impl ModeName {
+    /// Returns the name as [`CStr`].
+    ///
+    /// This method calls [`CStr::from_bytes_until_nul`], which performs null search, so its better
+    /// to cache this method result.
     #[inline]
-    pub fn name(&self) -> &CStr {
-        CStr::from_bytes_until_nul(&self.name).unwrap()
+    pub fn as_cstr(&self) -> &CStr {
+        // SAFETY: guarantee to ends with null termination.
+        unsafe { CStr::from_bytes_until_nul(&self.bytes).unwrap_unchecked() }
     }
 }
 
-impl std::fmt::Debug for ModeInfo {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.debug_struct("drm_mode_modeinfo")
-            .field("clock", &self.clock)
-            .field("hdisplay", &self.hdisplay)
-            .field("hsync_start", &self.hsync_start)
-            .field("hsync_end", &self.hsync_end)
-            .field("htotal", &self.htotal)
-            .field("hskew", &self.hskew)
-            .field("vdisplay", &self.vdisplay)
-            .field("vsync_start", &self.vsync_start)
-            .field("vsync_end", &self.vsync_end)
-            .field("vtotal", &self.vtotal)
-            .field("vscan", &self.vscan)
-            .field("vrefresh", &self.vrefresh)
-            .field("flags", &self.flags)
-            .field("type", &self.type_)
-            .field("name", &CStr::from_bytes_until_nul(&self.name))
-            .finish()
+impl ops::Deref for ModeName {
+    type Target = CStr;
+
+    #[inline]
+    fn deref(&self) -> &Self::Target {
+        self.as_cstr()
+    }
+}
+
+impl fmt::Debug for ModeName {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.as_cstr().fmt(f)
     }
 }
 
@@ -64,65 +88,29 @@ impl std::fmt::Debug for ModeInfo {
 pub struct ModeType(u32);
 
 simple_bitflags!(ModeType, u32);
+simple_bitflags_debug!(
+    ModeType, BUILTIN, CLOCK_C, CRTC_C, PREFERRED, DEFAULT, USERDEF, DRIVER, ALL
+);
+
+// source: libdrm/include/drm/drm_mode.h
 
 impl ModeType {
-    pub const BUILTIN: Self = Self(1 << 0); /* deprecated */
-    pub const CLOCK_C: Self = Self(1 << 1 | Self::BUILTIN.0); /* deprecated */
-    pub const CRTC_C: Self = Self(1 << 2 | Self::BUILTIN.0); /* deprecated */
+    /// Deprecated.
+    pub const BUILTIN: Self = Self(1 << 0);
+    /// Deprecated.
+    pub const CLOCK_C: Self = Self(1 << 1 | Self::BUILTIN.0);
+    /// Deprecated.
+    pub const CRTC_C: Self = Self(1 << 2 | Self::BUILTIN.0);
     pub const PREFERRED: Self = Self(1 << 3);
-    pub const DEFAULT: Self = Self(1 << 4); /* deprecated */
+    /// Deprecated.
+    pub const DEFAULT: Self = Self(1 << 4);
     pub const USERDEF: Self = Self(1 << 5);
     pub const DRIVER: Self = Self(1 << 6);
     pub const ALL: Self = Self(Self::PREFERRED.0 | Self::USERDEF.0 | Self::DRIVER.0);
 
+    /// Returns `true` if the type is [`ModeType::PREFERRED`].
     #[inline]
     pub fn is_preferred(self) -> bool {
         self.contains(Self::PREFERRED)
     }
 }
-// macro_rules! impl_ops {
-//     ($(impl $tr:ident::$fn:ident;)*) => {$(
-//         impl std::ops::$tr for ModeType {
-//             type Output = Self;
-//
-//             #[inline]
-//             fn $fn(self, rhs: Self) -> Self::Output {
-//                 Self(self.0.$fn(rhs.0))
-//             }
-//         }
-//     )*};
-// }
-// impl_ops! {
-//     impl BitOr::bitor;
-//     impl BitAnd::bitand;
-//     impl BitXor::bitxor;
-// }
-
-impl std::fmt::Debug for ModeType {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        macro_rules! entries {
-            ($($entry:ident,)*) => { const { [
-                $((Self::$entry,stringify!($entry)),)*
-            ] } };
-        }
-        let entries = entries![
-            BUILTIN, CLOCK_C, CRTC_C, PREFERRED, DEFAULT, USERDEF, DRIVER,
-        ];
-        let mut has_flag = false;
-        f.write_str("ModeType(")?;
-        for (mode, name) in entries {
-            if !self.contains(mode) {
-                continue;
-            }
-            if has_flag {
-                f.write_str(" | ")?;
-            }
-            f.write_str(name)?;
-            has_flag = true;
-        }
-        f.write_str(")")
-    }
-}
-
-// ===== syscall =====
-

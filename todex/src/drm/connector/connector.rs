@@ -3,31 +3,40 @@ use crate::drm::{Handle, Encoder};
 use crate::drm::resource::{ObjectType, Resource};
 use crate::drm::connector::ModeInfo;
 
+/// DRM Connector.
+///
+/// A connector is the final destination of pixel-data on a device, and usually connects directly to
+/// an external display device like a monitor or laptop panel. A connector can only be at‐ tached to
+/// one encoder at a time. The connector is also the structure where information about the attached
+/// display is kept, so it contains fields for display data, EDID data, DPMS and connection status,
+/// and information about modes supported on the attached displays.
 #[derive(Debug)]
 pub struct Connector {
     pub handle: Handle<Connector>,
-    pub connector_type: ConnectorType,
-    pub connection: Status,
+    pub ty: ConnectorType,
+    pub status: Status,
     pub modes: Box<[ModeInfo]>,
     pub encoders: Box<[Handle<Encoder>]>,
 }
 
 impl Connector {
     fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ErrCode> {
+        // FEAT: connector: provide way to get resource without force probe
+        //
         // if:
         // - count_modes = 0
         // - device is DRM master
         //
-        // the kernel will perform a forced probe on the connector to refresh the connector status,
-        // modes and EDID. A forced-probe can be slow, might cause flickering and the ioctl will
-        // block.
+        // then the kernel will perform a forced probe on the connector to refresh the connector
+        // status, modes and EDID. A forced-probe can be slow, might cause flickering and the ioctl
+        // will block.
         //
         // User-space needs to force-probe connectors to ensure their metadata is up-to-date at
         // startup and after receiving a hot-plug event. User-space may perform a forced-probe when
         // the user explicitly requests it. User-space shouldn't perform a forced-probe in other
         // situations.
         let mut io = drm_mode_get_connector {
-            connector_id: handle.into(),
+            connector_id: Some(handle),
             ..<_>::default()
         };
         io.ioctl(fd)?;
@@ -40,8 +49,8 @@ impl Connector {
         unsafe {
             Ok(Self {
                 handle,
-                connector_type: io.connector_type.value,
-                connection: io.connection.value,
+                ty: io.connector_type.value,
+                status: io.connection.value,
                 modes: modes.assume_init(),
                 encoders: encoders.assume_init(),
             })
@@ -55,7 +64,7 @@ impl Resource for Connector {
     const OBJECT_TYPE: ObjectType = ObjectType::CONNECTOR;
 
     #[inline]
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
         Self::get_resource(handle, device.as_fd())
     }
 }
@@ -73,6 +82,7 @@ pub enum Status {
 }
 
 impl Status {
+    /// Returns `true` if status is [`Status::Connected`].
     #[inline]
     pub fn is_connected(&self) -> bool {
         matches!(self, Self::Connected)
@@ -81,8 +91,9 @@ impl Status {
 
 // ===== ConnectorType =====
 
-// libdrm/drm/drm_mode.h
+// source: libdrm/include/drm/drm_mode.h
 // `DRM_MODE_CONNECTOR_*`
+
 #[derive(Clone, Copy)]
 pub enum ConnectorType {
     Unknown = 0,
@@ -163,7 +174,7 @@ struct drm_mode_get_connector {
     count_props: __u32,
     count_encoders: __u32,
     encoder_id: __u32,
-    connector_id: __u32,
+    connector_id: Option<Handle<Connector>>,
     connector_type: PadU32<ConnectorType>,
     connector_type_id: __u32,
     connection: PadU32<Status>,

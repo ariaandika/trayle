@@ -1,8 +1,9 @@
-#[derive(Debug, Default)]
+/// A DRM Resource object type id.
+#[derive(Debug, Default, Clone, Copy)]
 #[repr(transparent)]
 pub struct ObjectType(u32);
 
-/// Source: `libdrm/drm/drm_mode.h`
+// Source: `libdrm/drm/drm_mode.h`
 #[expect(dead_code)]
 impl ObjectType {
     pub(crate) const CRTC: Self = Self(0xcccccccc);

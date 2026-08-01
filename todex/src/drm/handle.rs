@@ -30,12 +30,12 @@ impl<R> Handle<R> {
 }
 
 impl<R: Resource> Handle<R> {
-    /// Request the actual resource.
+    /// Request the resource value.
     ///
-    /// Forward call to [`Resource::get_resource`].
+    /// Forward call to [`Resource::request`].
     #[inline]
-    pub fn get_resource<D: AsFd>(self, device: &D) -> Result<R, ErrCode> {
-        R::get_resource(self, device)
+    pub fn resource<D: AsFd>(self, device: &D) -> Result<R, ErrCode> {
+        R::request(self, device)
     }
 
     /// Request the typed resource properties.
@@ -46,10 +46,12 @@ impl<R: Resource> Handle<R> {
     where
         R: WithProperties,
     {
-        R::Properties::get_properties(self, device)
+        R::Properties::request(self, device)
     }
 
-    /// Request the raw resource properties.
+    /// Request raw untyped resource properties.
+    ///
+    /// Forward call to [`RawProperties::get_properties`].
     #[inline]
     pub fn get_raw_properties<D: AsFd>(self, device: &D) -> Result<RawProperties, ErrCode> {
         RawProperties::get_properties(self, device)

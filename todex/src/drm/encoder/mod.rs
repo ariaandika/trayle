@@ -2,6 +2,12 @@ use crate::drm::ioctl::*;
 use crate::drm::Handle;
 use crate::drm::resource::{ObjectType, Resource};
 
+/// DRM Encoder.
+///
+/// An encoder takes pixel data from a CRTC and converts it to a format suitable for any attached
+/// connectors. On some devices, it may be possible to have a CRTC send data to more than one en‐
+/// coder. In that case, both encoders would receive data from the same scanout buffer, resulting in
+/// a cloned display configuration across the connectors attached to each encoder.
 #[derive(Debug)]
 pub struct Encoder {
     pub handle: Handle<Self>,
@@ -13,13 +19,13 @@ impl Resource for Encoder {
     const OBJECT_TYPE: ObjectType = ObjectType::ENCODER;
 
     #[inline]
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
         drm_mode_get_encoder {
             encoder_id: handle.into(),
             ..<_>::default()
         }
-        .ioctl(device.as_fd())?;
-        Ok(Self { handle })
+        .ioctl(device.as_fd())
+        .map(|_| Self { handle })
     }
 }
 
@@ -45,7 +51,6 @@ pub enum EncoderType {
 struct drm_mode_get_encoder {
     encoder_id: __u32,
     encoder_type: PadU32<EncoderType>,
-    /**< Id of crtc */
     crtc_id: __u32,
     possible_crtcs: __u32,
     possible_clones: __u32,

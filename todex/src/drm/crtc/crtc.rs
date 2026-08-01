@@ -3,6 +3,15 @@ use crate::drm::Handle;
 use crate::drm::resource::{ObjectType, Resource};
 use crate::drm::connector::ModeInfo;
 
+/// DRM CRTC.
+///
+/// A CRTC short for CRT Controller is an abstraction representing a part of the chip that con‐
+/// tains a pointer to a scanout buffer. Therefore, the number of CRTCs available determines how
+/// many independent scanout buffers can be active at any given time. The CRTC structure contains
+/// several fields to support this: a pointer to some video memory (abstracted as a frame-buffer
+/// object), a list of driven connectors, a display mode and an (x, y) offset into the video mem‐
+/// ory to support panning or configurations where one piece of video memory spans multiple CRTCs. A
+/// CRTC is the central point where configuration of displays happens.
 #[derive(Debug)]
 pub struct Crtc {
     /// This CRTC handle.
@@ -44,7 +53,7 @@ impl Resource for Crtc {
     const OBJECT_TYPE: ObjectType = ObjectType::CRTC;
 
     #[inline]
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
         Self::get_resource(handle, device.as_fd())
     }
 }

@@ -4,19 +4,24 @@ use crate::drm::property::Blob;
 use crate::drm::capability::ClientCapability;
 use crate::drm::{Framebuffer, Handle, master, Plane};
 
+/// The DRM Device.
+///
+/// This trait provide resource queries, framebuffer management, capability query and setting, DRM
+/// authentication, and blob property management as default methods.
 pub trait Device: AsFd {
-    /// Get available connector, CRTC, encoder and framebuffer handles.
+    /// Request available connectors, CRTCs, encoders and framebuffers.
     #[inline]
-    fn get_resources(&self) -> Result<Resources, ErrCode> {
+    fn resources(&self) -> Result<Resources, ErrCode> {
         Resources::get_resources(self.as_fd())
     }
 
-    /// Get plane handles.
+    /// Request available planes as handles.
     #[inline]
-    fn get_plane_handles(&self) -> Result<Box<[Handle<Plane>]>, ErrCode> {
-        Plane::get_handles(self.as_fd())
+    fn planes(&self) -> Result<Box<[Handle<Plane>]>, ErrCode> {
+        Plane::get_resource(self.as_fd())
     }
 
+    /// Create blob property, returns the handle to it.
     #[inline]
     fn create_property_blob<T>(&self, data: &T) -> Result<Handle<Blob>, ErrCode> {
         Blob::create(data, self.as_fd())

@@ -60,11 +60,11 @@ impl Properties<Crtc> for CrtcProperties {
             };
         }
 
-        if init != ALL {
-            todo!("errno")
+        if init == ALL {
+            Ok(unsafe { uninit.assume_init() })
+        } else {
             // return Err(Error::custom("missing crtc properties"));
+            todo!("errno")
         }
-
-        Ok(unsafe { uninit.assume_init() })
     }
 }

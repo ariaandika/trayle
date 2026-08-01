@@ -52,3 +52,27 @@ macro_rules! simple_bitflags {
     }
 }
 pub(crate) use simple_bitflags;
+macro_rules! simple_bitflags_debug {
+    ($me:ident, $($entries:ident),*) => {
+        impl fmt::Debug for $me {
+            fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+                let entries = [$((Self::$entries,stringify!($entries)),)*];
+                let mut has_flag = false;
+                write!(f, concat!(stringify!($me), "("))?;
+                for (mode, name) in entries {
+                    use crate::bitflags::Bitflags;
+                    if !self.contains(mode) {
+                        continue;
+                    }
+                    if has_flag {
+                        f.write_str(" | ")?;
+                    }
+                    f.write_str(name)?;
+                    has_flag = true;
+                }
+                f.write_str(")")
+            }
+        }
+    };
+}
+pub(crate) use simple_bitflags_debug;

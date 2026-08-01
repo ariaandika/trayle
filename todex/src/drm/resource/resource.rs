@@ -1,9 +1,9 @@
 use crate::drm::ioctl::*;
 use crate::drm::{Connector, Crtc, Encoder, Framebuffer, Handle};
 
-/// Resource handles, returned from [`Device::get_resources`].
+/// Resource handles, returned from [`Device::resources`].
 ///
-/// [`Device::get_resources`]: crate::drm::Device::get_resources
+/// [`Device::resources`]: crate::drm::Device::resources
 #[derive(Debug)]
 pub struct Resources {
     pub fbs: Box<[Handle<Framebuffer>]>,

@@ -11,11 +11,16 @@ pub trait WithProperties: Sized + Resource {
     type Properties: Properties<Self>;
 }
 
+/// A resource properties.
 pub trait Properties<R: Resource>: Sized {
+    /// Create this properties from [`PropertyIter`].
+    ///
+    /// This is for implementor, caller should use [`Properties::request`].
     fn from_raw_properties(props: PropertyIter<'_>) -> Result<Self, ErrCode>;
 
+    /// Request properties with given handle.
     #[inline]
-    fn get_properties<D: AsFd>(handle: Handle<R>, device: &D) -> Result<Self, ErrCode> {
+    fn request<D: AsFd>(handle: Handle<R>, device: &D) -> Result<Self, ErrCode> {
         RawProperties::get_properties(handle, device)
             .and_then(|p| Self::from_raw_properties(PropertyIter::new(p, device.as_fd())))
     }
@@ -23,6 +28,9 @@ pub trait Properties<R: Resource>: Sized {
 
 // ===== PropertyIter =====
 
+/// An query that returns a [`NamedRawProperty`].
+///
+/// This is used by [`Properties`] implementor.
 pub struct PropertyIter<'a> {
     iter: IntoIter,
     fd: BorrowedFd<'a>,
@@ -34,6 +42,7 @@ impl<'a> PropertyIter<'a> {
         Self { iter, fd }
     }
 
+    /// Request the next property.
     #[inline]
     #[expect(clippy::should_implement_trait)]
     pub fn next(&mut self) -> Result<Option<NamedRawProperty>, ErrCode> {

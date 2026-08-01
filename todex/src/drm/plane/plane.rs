@@ -3,6 +3,14 @@ use crate::drm::{Crtc, Framebuffer, Handle};
 use crate::drm::resource::{ObjectType, Resource};
 use crate::fourcc::Format;
 
+/// DRM Plane.
+///
+/// A plane respresents an image source that can be blended with or overlayed on top of a CRTC
+/// during the scanout process. Planes are associated with a frame-buffer to crop a portion of the
+/// image memory (source) and optionally scale it to a destination size. The result is then blended
+/// with or overlayed on top of a CRTC. Planes are not provided by all hardware and the number of
+/// available planes is limited. If planes are not available or if not enough planes are available,
+/// the user should fall back to normal software blending (via GPU or CPU).
 #[derive(Debug)]
 pub struct Plane {
     /// This plane handle.
@@ -18,7 +26,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub(crate) fn get_handles(fd: BorrowedFd) -> Result<Box<[Handle<Plane>]>, ErrCode> {
+    pub(crate) fn get_resource(fd: BorrowedFd) -> Result<Box<[Handle<Plane>]>, ErrCode> {
         let mut io = drm_mode_get_plane_res::default();
         io.ioctl(fd)?;
         let mut plane_ids = Box::new_uninit_slice(io.count_planes as _);
@@ -27,7 +35,7 @@ impl Plane {
         Ok(unsafe { plane_ids.assume_init() })
     }
 
-    fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ErrCode> {
+    fn get_plane(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ErrCode> {
         let mut io = drm_mode_get_plane {
             plane_id: Some(handle),
             ..<_>::default()
@@ -52,25 +60,8 @@ impl Resource for Plane {
     const OBJECT_TYPE: ObjectType = ObjectType::PLANE;
 
     #[inline]
-    fn get_resource<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
-        Self::get_resource(handle, device.as_fd())
-    }
-}
-
-// ===== PlaneType =====
-
-/// Plane type.
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum PlaneType {
-    Overlay,
-    Primary,
-    Cursor,
-}
-
-impl From<PlaneType> for u64 {
-    #[inline]
-    fn from(value: PlaneType) -> Self {
-        value as u64
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error> {
+        Self::get_plane(handle, device.as_fd())
     }
 }
 
