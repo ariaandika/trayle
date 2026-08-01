@@ -1,6 +1,6 @@
 use crate::drm::ioctl::*;
 use crate::drm::{Handle, Encoder};
-use crate::drm::resource::{ObjectType, Resource};
+use crate::drm::resource::{ObjectType, Resource, ResourceError};
 use crate::drm::connector::ModeInfo;
 
 /// DRM Connector.
@@ -20,7 +20,7 @@ pub struct Connector {
 }
 
 impl Connector {
-    fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ErrCode> {
+    fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ResourceError> {
         // FEAT: connector: provide way to get resource without force probe
         //
         // if:
@@ -59,7 +59,7 @@ impl Connector {
 }
 
 impl Resource for Connector {
-    type Error = ErrCode;
+    type Error = ResourceError;
 
     const OBJECT_TYPE: ObjectType = ObjectType::CONNECTOR;
 

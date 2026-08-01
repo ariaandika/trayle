@@ -1,6 +1,6 @@
 use crate::drm::ioctl::*;
 use crate::drm::{Crtc, Framebuffer, Handle};
-use crate::drm::resource::{ObjectType, Resource};
+use crate::drm::resource::{ObjectType, Resource, ResourceError};
 use crate::fourcc::Format;
 
 /// DRM Plane.
@@ -26,7 +26,7 @@ pub struct Plane {
 }
 
 impl Plane {
-    pub(crate) fn get_resource(fd: BorrowedFd) -> Result<Box<[Handle<Plane>]>, ErrCode> {
+    pub(crate) fn get_resource(fd: BorrowedFd) -> Result<Box<[Handle<Plane>]>, ResourceError> {
         let mut io = drm_mode_get_plane_res::default();
         io.ioctl(fd)?;
         let mut plane_ids = Box::new_uninit_slice(io.count_planes as _);

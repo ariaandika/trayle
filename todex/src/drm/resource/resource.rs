@@ -1,4 +1,5 @@
 use crate::drm::ioctl::*;
+use crate::drm::resource::ResourceError;
 use crate::drm::{Connector, Crtc, Encoder, Framebuffer, Handle};
 
 /// Resource handles, returned from [`Device::resources`].
@@ -17,7 +18,7 @@ pub struct Resources {
 }
 
 impl Resources {
-    pub(crate) fn get_resources(fd: BorrowedFd) -> Result<Self, ErrCode> {
+    pub(crate) fn get_resources(fd: BorrowedFd) -> Result<Self, ResourceError> {
         let mut io = drm_mode_card_res::default();
         io.ioctl(fd)?;
         let mut fbs = Box::new_uninit_slice(io.count_fbs as _);
@@ -46,7 +47,7 @@ impl Resources {
 
 // ===== syscall =====
 
-#[derive(Debug, Default)]
+#[derive(Default)]
 #[repr(C)]
 struct drm_mode_card_res {
     fb_id_ptr: __u64,

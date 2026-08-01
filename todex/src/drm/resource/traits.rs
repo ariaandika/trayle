@@ -1,7 +1,6 @@
 use std::error;
 use std::os::fd::AsFd;
 
-use crate::sys::error::ErrCode;
 use crate::drm::Handle;
 use crate::drm::resource::ObjectType;
 
@@ -16,5 +15,5 @@ pub trait Resource: Sized {
     const OBJECT_TYPE: ObjectType;
 
     /// Request the resource for given handle.
-    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, ErrCode>;
+    fn request<D: AsFd>(handle: Handle<Self>, device: &D) -> Result<Self, Self::Error>;
 }

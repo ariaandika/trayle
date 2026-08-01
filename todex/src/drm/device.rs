@@ -1,5 +1,5 @@
 use crate::drm::ioctl::*;
-use crate::drm::resource::Resources;
+use crate::drm::resource::{ResourceError, Resources};
 use crate::drm::property::Blob;
 use crate::drm::capability::ClientCapability;
 use crate::drm::{Framebuffer, Handle, master, Plane};
@@ -11,13 +11,13 @@ use crate::drm::{Framebuffer, Handle, master, Plane};
 pub trait Device: AsFd {
     /// Request available connectors, CRTCs, encoders and framebuffers.
     #[inline]
-    fn resources(&self) -> Result<Resources, ErrCode> {
+    fn resources(&self) -> Result<Resources, ResourceError> {
         Resources::get_resources(self.as_fd())
     }
 
     /// Request available planes as handles.
     #[inline]
-    fn planes(&self) -> Result<Box<[Handle<Plane>]>, ErrCode> {
+    fn planes(&self) -> Result<Box<[Handle<Plane>]>, ResourceError> {
         Plane::get_resource(self.as_fd())
     }
 

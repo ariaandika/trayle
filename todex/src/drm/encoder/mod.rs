@@ -1,5 +1,6 @@
 use crate::drm::ioctl::*;
 use crate::drm::Handle;
+use crate::drm::resource::ResourceError;
 use crate::drm::resource::{ObjectType, Resource};
 
 /// DRM Encoder.
@@ -14,7 +15,7 @@ pub struct Encoder {
 }
 
 impl Resource for Encoder {
-    type Error = ErrCode;
+    type Error = ResourceError;
 
     const OBJECT_TYPE: ObjectType = ObjectType::ENCODER;
 
@@ -25,7 +26,7 @@ impl Resource for Encoder {
             ..<_>::default()
         }
         .ioctl(device.as_fd())
-        .map(|_| Self { handle })
+        .map_or_else(|e| Err(e.into()), |()| Ok(Self { handle }))
     }
 }
 

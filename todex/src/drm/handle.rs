@@ -34,7 +34,7 @@ impl<R: Resource> Handle<R> {
     ///
     /// Forward call to [`Resource::request`].
     #[inline]
-    pub fn resource<D: AsFd>(self, device: &D) -> Result<R, ErrCode> {
+    pub fn resource<D: AsFd>(self, device: &D) -> Result<R, R::Error> {
         R::request(self, device)
     }
 

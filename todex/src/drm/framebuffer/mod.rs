@@ -1,5 +1,6 @@
 use crate::drm::ioctl::*;
 use crate::drm::Handle;
+use crate::drm::resource::ResourceError;
 use crate::drm::resource::{Resource, ObjectType};
 use crate::fourcc::Format;
 
@@ -42,7 +43,7 @@ impl Framebuffer {
             .ok_or_else(|| todo!("errno"))
     }
 
-    fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ErrCode> {
+    fn get_resource(handle: Handle<Self>, fd: BorrowedFd) -> Result<Self, ResourceError> {
         let mut io = drm_mode_fb_cmd2 {
             fb_id: Some(handle),
             width: 0,
@@ -69,7 +70,7 @@ impl Framebuffer {
 }
 
 impl Resource for Framebuffer {
-    type Error = ErrCode;
+    type Error = ResourceError;
 
     const OBJECT_TYPE: ObjectType = ObjectType::FB;
 

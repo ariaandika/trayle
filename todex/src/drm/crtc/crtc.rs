@@ -1,5 +1,6 @@
 use crate::drm::ioctl::*;
 use crate::drm::Handle;
+use crate::drm::resource::ResourceError;
 use crate::drm::resource::{ObjectType, Resource};
 use crate::drm::connector::ModeInfo;
 
@@ -27,7 +28,7 @@ pub struct Crtc {
 }
 
 impl Crtc {
-    fn get_resource(handle: Handle<Self>, device: BorrowedFd) -> Result<Self, ErrCode> {
+    fn get_resource(handle: Handle<Self>, device: BorrowedFd) -> Result<Self, ResourceError> {
         let mut io = drm_mode_crtc {
             crtc_id: handle.into(),
             ..<_>::default()
@@ -48,7 +49,7 @@ impl Crtc {
 }
 
 impl Resource for Crtc {
-    type Error = ErrCode;
+    type Error = ResourceError;
 
     const OBJECT_TYPE: ObjectType = ObjectType::CRTC;
 
