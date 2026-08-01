@@ -33,11 +33,15 @@
     clippy::let_underscore_untyped,
 )]
 
-pub mod bitflags;
+pub mod log;
 
-pub mod sys;
+pub mod bitflags;
 pub mod alloc;
 pub mod collections;
+
+pub mod sys;
+pub mod fourcc;
+pub mod drm;
+
 pub mod wayland;
 pub mod poller;
-pub mod log;

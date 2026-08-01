@@ -1,6 +1,7 @@
 //! Error code handling and representation.
 use std::ffi::CStr;
 use std::fmt;
+use std::error;
 use std::num::NonZeroU8;
 use std::task::Poll;
 
@@ -99,7 +100,7 @@ impl ErrCode {
     /// Create [`ErrCode`] with value from `errno`.
     #[inline]
     pub fn errno() -> Self {
-        Self::new(Self::raw_errno() as _)
+        Self::new(Self::raw_errno())
     }
 
     /// Returns the contained raw error code.
@@ -187,6 +188,8 @@ impl fmt::Display for ErrCode {
         write!(f, "{msg} (os error {})", code)
     }
 }
+
+impl error::Error for ErrCode { }
 
 // ===== ResCode =====
 
