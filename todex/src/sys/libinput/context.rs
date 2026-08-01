@@ -19,8 +19,11 @@ pub struct Libinput(InputPtr);
 impl Drop for Libinput {
     fn drop(&mut self) {
         unsafe {
-            Adapter::drop(libinput_get_user_data(self.0));
-            libinput_unref(self.0);
+            let data = libinput_get_user_data(self.0);
+            let refs = libinput_unref(self.0);
+            if refs.is_none() {
+                Adapter::drop(data);
+            }
         }
     }
 }
@@ -184,7 +187,7 @@ unsafe extern "C" {
         udev: NonNull<c_void>,
     ) -> Option<Libinput>;
     fn libinput_ref(libinput: InputPtr) -> InputPtr;
-    fn libinput_unref(libinput: InputPtr) -> InputPtr;
+    fn libinput_unref(libinput: InputPtr) -> Option<InputPtr>;
 
     fn libinput_udev_assign_seat(libinput: InputPtr, seat_id: *const c_char) -> ResCode;
     fn libinput_dispatch(libinput: InputPtr) -> ResCode;

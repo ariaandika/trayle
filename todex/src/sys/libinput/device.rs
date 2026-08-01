@@ -214,6 +214,19 @@ pub enum Capability {
     Switch = 6,
 }
 
+impl Capability {
+    /// An array of one for each capabilities.
+    pub const ENTRIES: [Capability; 7] = [
+        Self::Keyboard,
+        Self::Pointer,
+        Self::Touch,
+        Self::TabletTool,
+        Self::TabletPad,
+        Self::Gesture,
+        Self::Switch,
+    ];
+}
+
 // ===== ffi =====
 
 unsafe extern "C" {

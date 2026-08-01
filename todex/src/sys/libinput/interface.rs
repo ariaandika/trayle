@@ -19,7 +19,7 @@
 //! - #3 with [`Adapter`].
 use std::ffi::{CStr, c_char, c_void};
 use std::os::fd::RawFd;
-use std::ptr::{self, NonNull};
+use std::ptr::NonNull;
 
 // ===== Interface =====
 
@@ -32,12 +32,19 @@ pub trait Interface {
 
 // ===== Adapter =====
 
+/// Internal representation of the libinput interface implementation.
+///
+/// Caller can use [`Adapter::new_boxed`] for user defined implementation or [`Adapter::new_libc`]
+/// to forward implementation to [`libc::open`] and [`libc::close`].
+///
+/// This struct may requires cleanup but does not implement [`Drop`], caller requires to call
+/// [`Adapter::drop`] on cleanup.
 pub struct Adapter(NonNull<Inner>);
 
 #[repr(C)]
 struct Inner<T = ()> {
     iface: libinput_interface,
-    drop_in_place: unsafe fn(*mut T),
+    drop: unsafe fn(*mut Inner<()>),
     data: T,
 }
 
@@ -51,11 +58,11 @@ impl Adapter {
     }
 
     pub(crate) fn drop(data: *mut c_void) {
+        assert!(!data.is_null());
         unsafe {
-            let Some(me) = data.cast::<Inner>().as_mut() else {
-                return;
-            };
-            (me.drop_in_place)(&mut me.data);
+            let data = data.cast::<Inner>();
+            let drop = data.as_ref_unchecked().drop;
+            drop(data);
         }
     }
 
@@ -73,13 +80,13 @@ impl Adapter {
 mod impl_libc {
     use super::*;
 
-    pub fn new() -> NonNull<Inner> {
+    pub const fn new() -> NonNull<Inner> {
         static IMPL: Inner = Inner {
             iface: libinput_interface {
                 open_restricted,
                 close_restricted,
             },
-            drop_in_place: ptr::drop_in_place::<()>,
+            drop,
             data: (),
         };
         NonNull::from_ref(&IMPL)
@@ -105,7 +112,7 @@ mod impl_boxed {
                 open_restricted: open_restricted::<T>,
                 close_restricted: close_restricted::<T>,
             },
-            drop_in_place: ptr::drop_in_place::<T>,
+            drop: |data| unsafe { drop(Box::from_raw(data.cast::<Inner<T>>())) },
             data,
         })))
         .expect("box is non-null")
