@@ -1,7 +1,7 @@
-use crate::sys::epoll::{Epoll, EpollEvent};
-use crate::collections::buffer::Buffer;
+use todex::sys::epoll::{Epoll, EpollEvent};
+use todex::collections::buffer::Buffer;
 
-pub use crate::sys::epoll::{Interest, CreateError};
+pub use todex::sys::epoll::Interest;
 
 // ===== Event =====
 

@@ -3,12 +3,12 @@ use std::process::ExitCode;
 use todex::sys::epoll::Epoll;
 use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
-use todex::poller::Poller;
 use todex::log;
 
 use buffer::BufferPool;
 use client::{Clients, Gateway};
 use compositor::Compositor;
+use poller::Poller;
 use error::FatalError;
 
 mod handle;
@@ -18,6 +18,7 @@ mod buffer;
 mod seat;
 mod client;
 mod compositor;
+mod poller;
 mod error;
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");

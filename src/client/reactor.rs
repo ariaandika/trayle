@@ -1,12 +1,12 @@
 use std::task::Poll::Ready;
 use todex::sys::epoll::Epoll;
 use todex::sys::cmsg;
-use todex::poller::Event;
 use todex::sys::listener::Listener;
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, Clients};
 use crate::compositor::Compositor;
+use crate::poller::Event;
 use crate::log;
 
 /// Client events reactor.

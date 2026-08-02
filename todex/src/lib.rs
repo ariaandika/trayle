@@ -3,14 +3,6 @@
 //! This crate provide low level system calls, generic collections, wayland protocol coding, shared
 //! abstraction and high level state management.
 //!
-//! # Event Loop
-//!
-//! This crate does not provide an event loop.
-//!
-//! [`Poller`][poller::Poller] monitor resources for readiness. Application can register sources,
-//! like listener or socket, then `Poller` will callback with an events ready to proceed. See its
-//! documentation for more details.
-//!
 //! # Wayland
 //!
 //! [`wayland`] module provide protocol definition, message wire format, and wayland primitive
@@ -44,4 +36,3 @@ pub mod fourcc;
 pub mod drm;
 
 pub mod wayland;
-pub mod poller;
