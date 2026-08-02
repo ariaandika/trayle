@@ -8,6 +8,7 @@ use todex::log;
 use buffer::BufferPool;
 use client::{Clients, Gateway};
 use compositor::Compositor;
+use backend::Backend;
 use poller::Poller;
 use error::FatalError;
 
@@ -18,6 +19,7 @@ mod buffer;
 mod seat;
 mod client;
 mod compositor;
+mod backend;
 mod poller;
 mod error;
 
@@ -35,6 +37,8 @@ fn main() -> ExitCode {
 }
 
 pub fn event_loop() -> Result<(), FatalError> {
+    Backend::setup()?;
+
     // ===== sys =====
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
