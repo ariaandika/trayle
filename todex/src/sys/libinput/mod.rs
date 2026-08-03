@@ -1,5 +1,5 @@
 pub use interface::Interface;
-pub use context::Libinput;
+pub use context::{Libinput, DispatchError};
 pub use device::{Device, DeviceRef, DevicePtr, Led, Capability};
 pub use event::{Event, EventKind, EventType};
 pub use keyboard::Keyboard;

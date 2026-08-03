@@ -5,46 +5,55 @@ use todex::sys::listener::{Listener, SocketPath};
 use todex::sys::sigfd::Sigfd;
 use todex::log;
 
+use error::FatalError;
 use buffer::BufferPool;
 use client::{Clients, Gateway};
 use compositor::Compositor;
-use backend::Backend;
+use input::Input;
 use poller::Poller;
-use error::FatalError;
+
+// ===== mods =====
 
 mod handle;
+mod error;
+
 mod shm;
 mod surface;
 mod buffer;
+
 mod seat;
 mod client;
 mod compositor;
-mod backend;
+mod input;
+
 mod poller;
-mod error;
+
+// ===== consts =====
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
 const MSB: u64 = i64::MIN as u64;
 
 const LISTENER_KEY: u64 = MSB;
 const SIGFD_KEY: u64 = MSB | 2;
+const INPUT_KEY: u64 = MSB | 3;
 
 const EVENT_BUF: usize = 128;
+
+// ===== impls =====
 
 fn main() -> ExitCode {
     let _guard = log::init();
     <_>::from(event_loop().is_err() as u8)
 }
 
-pub fn event_loop() -> Result<(), FatalError> {
-    Backend::setup()?;
-
+fn event_loop() -> Result<(), FatalError> {
     // ===== sys =====
     let listener = Listener::new(SOCKET_PATH)?;
     let sigfd = Sigfd::new()?;
     let epoll = Epoll::new()?;
 
     // ===== components =====
+    let mut input = Input::new()?;
     let mut clients = Clients::new();
     let mut buffer = BufferPool::new();
 
@@ -59,6 +68,7 @@ pub fn event_loop() -> Result<(), FatalError> {
 
     epoll.add(LISTENER_KEY, &listener);
     epoll.add(SIGFD_KEY, &sigfd);
+    epoll.add(INPUT_KEY, &input);
 
     loop {
         let Some(event) = poll.next_event() else {
@@ -74,7 +84,8 @@ pub fn event_loop() -> Result<(), FatalError> {
                     log::info!("{} signal received", sigfd.read());
                     break Ok(());
                 }
-                key => log::error!("unknown key from epoll: {key}")
+                INPUT_KEY => for _event in input.dispatch() {},
+                key => log::error!("unknown key from epoll: {key}"),
             }
         } else {
             gateway.dispatch_io(event, &mut buffer, &mut clients, &mut compositor);
