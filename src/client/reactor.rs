@@ -1,78 +1,92 @@
-use std::task::Poll::Ready;
-use todex::sys::epoll::Epoll;
+use std::os::fd::{AsFd, BorrowedFd};
+use std::task::Poll::*;
 use todex::sys::cmsg;
-use todex::sys::listener::Listener;
+use todex::sys::listener::{Listener, SocketPath};
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, Clients};
 use crate::compositor::Compositor;
-use crate::poller::Event;
+use crate::error::FatalError;
+use crate::poller::{Event, Poller};
 use crate::log;
 
 /// Client events reactor.
 ///
 /// This reactor handles:
 /// - client connect from [`Listener`]
-/// - client I/O from [`Epoll`]
+/// - client I/O from [`ClientMut`]
 ///
 /// This reactor interact with [`Compositor`] to:
 /// - dispatch a client message
 /// - perform cleanup for client disconnect
-pub struct Gateway<'a> {
-    epoll: &'a Epoll,
-    listener: &'a Listener,
+pub(crate) struct Gateway {
+    listener: Listener,
+    clients: Clients,
+    pool: BufferPool,
 }
 
-impl<'a> Gateway<'a> {
-    pub fn new(epoll: &'a Epoll, listener: &'a Listener) -> Self {
-        Self { epoll, listener }
+impl AsFd for Gateway {
+    fn as_fd(&self) -> BorrowedFd<'_> {
+        self.listener.as_fd()
     }
 }
 
-impl Gateway<'_> {
+const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
+
+impl Gateway {
+    pub fn new() -> Result<Self, FatalError> {
+        Ok(Self {
+            listener: Listener::new(SOCKET_PATH)?,
+            clients: Clients::new(),
+            pool: BufferPool::new(),
+        })
+    }
+}
+
+impl Gateway {
     pub fn dispatch_io(
         &mut self,
         event: Event,
-        buffer: &mut BufferPool,
-        clients: &mut Clients,
+        poll: &Poller,
         compositor: &mut Compositor,
     ) {
         let mut id = ClientId::from_raw(event.key);
+        let event = event.interest;
 
-        let Some(state) = clients.get_mut(id) else {
+        let Some(state) = self.clients.get_mut(id) else {
             log::warn!(target: "poll", "unknown client id from event key: {id}");
             return;
         };
 
         if id.is_pending() {
             log::debug!(target: format_args!("client#{id}"), "pending bytes restored");
-            buffer.restore_pending(id.to_raw());
+            self.pool.restore_pending(id.to_raw());
         }
 
         let mut client = ClientMut {
             id,
             state,
-            read_fd: &mut buffer.read_fd,
-            write_buf: &mut buffer.write_buf,
-            write_fd: &mut buffer.write_fd,
+            read_fd: &mut self.pool.read_fd,
+            write_buf: &mut self.pool.write_buf,
+            write_fd: &mut self.pool.write_fd,
         };
 
         // cope and seeth: https://github.com/rust-lang/rust/issues/31436
         let result = (|| {
-            if event.interest.is_close() {
+            if event.is_close() {
                 return Err(HandleError);
             }
 
-            if event.interest.is_read() {
+            if event.is_read() {
                 loop {
-                    if !buffer.read_buf.is_empty()
+                    if !self.pool.read_buf.is_empty()
                         && compositor
-                            .message(&mut buffer.read_buf, &mut client)
+                            .message(&mut self.pool.read_buf, &mut client)
                             .is_disconnect()
                     {
                         return Err(HandleError);
                     }
-                    if client.recvmsg(&mut buffer.read_buf)?.is_pending() {
+                    if client.recvmsg(&mut self.pool.read_buf)?.is_pending() {
                         break;
                     }
                 }
@@ -80,17 +94,17 @@ impl Gateway<'_> {
 
             if !client.write_buf.is_empty() {
                 let is_pending = client.sendmsg()?.is_pending();
-                let was_pending = event.interest.is_write();
+                let was_pending = event.is_write();
                 match (is_pending, was_pending) {
                     (true, false) => {
                         id = id.set_pending();
                         // first time write pending, add write interest
-                        self.epoll.modify(true, id.to_raw(), &client);
+                        poll.modify(true, id.to_raw(), &client);
                     }
                     (false, true) => {
                         id = id.unset_pending();
                         // previous write pending complete, remove write interest
-                        self.epoll.modify(false, id.to_raw(), &client);
+                        poll.modify(false, id.to_raw(), &client);
                     }
                     _ => {} // otherwise, double pending or no pending
                 }
@@ -102,10 +116,10 @@ impl Gateway<'_> {
         if result.is_ok() {
             // the sad pending bytes cannot stay in shared buffer because it will be used for other
             // socket, it will be stored in dedicated storage
-            if let Some((read, write)) = buffer.store_pending(id.to_raw()) {
+            if let Some((read, write)) = self.pool.store_pending(id.to_raw()) {
                 id = id.set_pending();
-                self.epoll
-                    .modify(event.interest.is_write(), id.to_raw(), state);
+                poll
+                    .modify(event.is_write(), id.to_raw(), state);
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message, read: {read}, write: {write}",
@@ -116,22 +130,22 @@ impl Gateway<'_> {
             if !client.write_buf.is_empty() {
                 let _ = client.sendmsg();
             }
-            self.epoll.delete(&client);
-            clients.remove(id);
+            poll.delete(&client);
+            self.clients.remove(id);
             log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
 
-        buffer.clear();
+        self.pool.clear();
     }
 }
 
-impl Gateway<'_> {
-    pub fn dispatch_listener(&mut self, clients: &mut Clients) {
+impl Gateway {
+    pub fn dispatch(&mut self, poll: &Poller) {
         while let Ready(result) = self.listener.poll_accept() {
             match result {
                 Ok(fd) => {
-                    let (id, sock) = clients.insert(fd);
-                    self.epoll.add(id.to_raw(), sock);
+                    let (id, sock) = self.clients.insert(fd);
+                    poll.add(id.to_raw(), sock);
                     log::debug!(target: format_args!("client#{id}"), "connected");
                 }
                 Err(err) => {
@@ -167,4 +181,3 @@ impl From<()> for HandleError {
         Self
     }
 }
-

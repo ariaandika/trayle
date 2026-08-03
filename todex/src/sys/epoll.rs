@@ -5,14 +5,15 @@ use std::ptr;
 use crate::sys::error::{ErrCode, simple_os_error};
 
 #[derive(Debug, Clone, Copy)]
+#[repr(transparent)]
 pub struct Interest(i32);
 
 impl Interest {
-    pub fn is_write(&self) -> bool {
+    pub fn is_write(self) -> bool {
         self.0 & libc::EPOLLOUT == libc::EPOLLOUT
     }
 
-    pub fn is_read(&self) -> bool {
+    pub fn is_read(self) -> bool {
         self.0 & libc::EPOLLIN == libc::EPOLLIN
     }
 
@@ -24,21 +25,20 @@ impl Interest {
     //     self.0 & libc::EPOLLHUP == libc::EPOLLHUP
     // }
 
-    pub fn is_close(&self) -> bool {
+    pub fn is_close(self) -> bool {
         self.0 & (libc::EPOLLHUP | libc::EPOLLRDHUP) != 0
     }
 }
 
 // ===== EpollEvent =====
 
-#[repr(transparent)]
-pub struct EpollEvent(libc::epoll_event);
-
-impl EpollEvent {
-    /// Returns `(key, Interest)`.
-    pub fn to_parts(&self) -> (u64, Interest) {
-        (self.0.u64, Interest(self.0.events as i32))
-    }
+// same `repr` as libc::epoll_event
+#[derive(Debug, Clone, Copy)]
+#[repr(C)]
+#[repr(packed)]
+pub struct EpollEvent {
+    pub interest: Interest,
+    pub key: u64,
 }
 
 // ===== Epoll =====
@@ -129,7 +129,7 @@ impl Epoll {
             )
             .try_into()
             .inspect_err(|_| {
-                if *libc::__errno_location() != libc::EINTR {
+                if ErrCode::raw_errno() != libc::EINTR {
                     epoll_wait_panic();
                 }
             })
