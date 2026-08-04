@@ -1,10 +1,11 @@
 use std::os::fd::{AsFd, BorrowedFd};
 use std::task::Poll::*;
+use todex::collections::slab::Slab;
 use todex::sys::cmsg;
 use todex::sys::listener::{Listener, SocketPath};
 
 use crate::buffer::BufferPool;
-use crate::client::{ClientId, ClientMut, Clients};
+use crate::client::{ClientId, ClientMut, ClientState};
 use crate::compositor::Compositor;
 use crate::error::FatalError;
 use crate::poller::{Event, Poller};
@@ -20,8 +21,8 @@ use crate::log;
 /// - dispatch a client message
 /// - perform cleanup for client disconnect
 pub(crate) struct Gateway {
+    clients: Slab<ClientState>,
     listener: Listener,
-    clients: Clients,
     pool: BufferPool,
 }
 
@@ -32,12 +33,13 @@ impl AsFd for Gateway {
 }
 
 const SOCKET_PATH: SocketPath = SocketPath::new(c"/tmp/wayland-2");
+const INIT_CLIENT_CAP: usize = 8;
 
 impl Gateway {
     pub fn new() -> Result<Self, FatalError> {
         Ok(Self {
+            clients: Slab::with_capacity(INIT_CLIENT_CAP),
             listener: Listener::new(SOCKET_PATH)?,
-            clients: Clients::new(),
             pool: BufferPool::new(),
         })
     }
@@ -53,7 +55,7 @@ impl Gateway {
         let mut id = ClientId::from_raw(event.key);
         let event = event.interest;
 
-        let Some(state) = self.clients.get_mut(id) else {
+        let Some(state) = self.clients.get_mut(id.idx()) else {
             log::warn!(target: "poll", "unknown client id from event key: {id}");
             return;
         };
@@ -131,7 +133,7 @@ impl Gateway {
                 let _ = client.sendmsg();
             }
             poll.delete(&client);
-            self.clients.remove(id);
+            self.clients.remove(id.idx());
             log::debug!(target: format_args!("client#{id}"), "disconnected");
         }
 
@@ -144,8 +146,9 @@ impl Gateway {
         while let Ready(result) = self.listener.poll_accept() {
             match result {
                 Ok(fd) => {
-                    let (id, sock) = self.clients.insert(fd);
-                    poll.add(id.to_raw(), sock);
+                    let (id, sock) = self.clients.insert(ClientState::new(fd));
+                    ClientId::assert_raw_id(id);
+                    poll.add(id as u64, sock);
                     log::debug!(target: format_args!("client#{id}"), "connected");
                 }
                 Err(err) => {

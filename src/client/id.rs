@@ -16,9 +16,8 @@ const MSB: u64 = i64::MIN as u64;
 const PENDING_FLAG: u64 = MSB >> 1;
 
 impl ClientId {
-    pub(super) fn from_idx(id: usize) -> Self {
+    pub(super) fn assert_raw_id(id: usize) {
         assert!(id as u64 & MSB == 0, "client id exhausted");
-        Self(id as u64)
     }
 
     pub(super) fn idx(self) -> usize {
