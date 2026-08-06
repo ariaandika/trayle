@@ -3,7 +3,7 @@ use core::mem::ManuallyDrop;
 use core::ptr::{self, NonNull};
 use core::slice;
 
-use crate::alloc;
+use crate::collections::alloc;
 
 /// A growable array slots.
 ///

@@ -4,7 +4,7 @@ use core::ops;
 use core::ptr::{self, NonNull};
 use core::slice;
 
-use crate::alloc;
+use crate::collections::alloc;
 
 /// A contiguous growable array type.
 ///

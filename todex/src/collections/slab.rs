@@ -4,7 +4,7 @@ use core::ptr::{self, NonNull};
 use core::slice;
 use std::fmt;
 
-use crate::alloc;
+use crate::collections::alloc;
 
 enum Entry<T> {
     Some(T),
