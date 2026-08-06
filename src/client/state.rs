@@ -1,3 +1,4 @@
+use std::ops;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::task::Poll;
 
@@ -29,12 +30,44 @@ impl ClientState {
     }
 }
 
+impl ops::Deref for ClientState {
+    type Target = Objects;
+
+    fn deref(&self) -> &Self::Target {
+        &self.objects
+    }
+}
+
+impl ops::DerefMut for ClientState {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.objects
+    }
+}
+
+// ===== ClientStatus =====
+
+#[derive(Clone, Copy, Default)]
+pub(crate) enum ClientStatus {
+    #[default]
+    /// Client ok.
+    Ok,
+    /// Client wants to disconnect.
+    Disconnect,
+}
+
+impl ClientStatus {
+    pub fn is_disconnect(&self) -> bool {
+        matches!(self, Self::Disconnect)
+    }
+}
+
 // ===== ClientMut =====
 
 /// Client API.
 pub struct ClientMut<'a> {
     pub id: ClientId,
     pub state: &'a mut ClientState,
+    pub status: ClientStatus,
     pub read_fd: &'a mut Cmsg,
     pub write_buf: &'a mut Bytes,
     pub write_fd: &'a mut Cmsg,
@@ -66,6 +99,11 @@ impl<'a> ClientMut<'a> {
         msg.encode_with(self.write_buf, self.write_fd);
     }
 
+    /// Queue for disconnection.
+    pub fn disconnect(&mut self) {
+        self.status = ClientStatus::Disconnect;
+    }
+
     /// Call write buffer [`Cmsg::sendmsg`].
     pub fn sendmsg(&mut self) -> Poll<Result<(), WriteError>> {
         self.write_fd.sendmsg(self.write_buf, self.state)
@@ -91,7 +129,7 @@ impl AsFd for ClientMut<'_> {
     }
 }
 
-impl<'a> std::ops::Deref for ClientMut<'a> {
+impl<'a> ops::Deref for ClientMut<'a> {
     type Target = &'a mut ClientState;
 
     fn deref(&self) -> &Self::Target {
@@ -99,7 +137,7 @@ impl<'a> std::ops::Deref for ClientMut<'a> {
     }
 }
 
-impl<'a> std::ops::DerefMut for ClientMut<'a> {
+impl<'a> ops::DerefMut for ClientMut<'a> {
     fn deref_mut(&mut self) -> &mut Self::Target {
         &mut self.state
     }

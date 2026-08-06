@@ -4,8 +4,9 @@ use todex::sys::sigfd::Sigfd;
 use todex::log;
 
 use error::FatalError;
+use seat::Seat;
 use client::Gateway;
-use compositor::Compositor;
+use compositor::Resources;
 use input::Input;
 use poller::{EventKind, Poller};
 
@@ -35,9 +36,10 @@ fn main() -> ExitCode {
 fn event_loop() -> Result<(), FatalError> {
     let sigfd = Sigfd::new()?;
 
+    let mut seat = Seat::new()?;
     let mut input = Input::new()?;
-    let mut compositor = Compositor::new()?;
     let mut gateway = Gateway::new()?;
+    let mut resources = Resources::new();
 
     let mut poll = Poller::new()?;
     poll.add_source(&input);
@@ -52,7 +54,9 @@ fn event_loop() -> Result<(), FatalError> {
             continue;
         };
         match kind {
-            EventKind::Client => gateway.dispatch_io(event, &poll, &mut compositor),
+            EventKind::Client => gateway.dispatch_io(event, &poll, |read_buf, client| {
+                compositor::route(read_buf, client, &mut seat, &mut resources)
+            }),
             EventKind::Input => input.dispatch().for_each(drop),
             EventKind::Gateway => gateway.dispatch(&poll),
             EventKind::Sigfd => {

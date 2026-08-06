@@ -1,49 +1,51 @@
+use std::fmt;
+
 use todex::log;
 use todex::wayland::primitives::ObjectId;
 use todex::wayland::object::{OccupiedNewId, UnknownId};
+use todex::wayland::message::WlMessage;
 use todex::wayland::interface::wl_display::DisplayError;
-use todex::wayland::interface::wl_surface;
 use todex::wayland::wire::DecodeError;
 
 use crate::client::ClientMut;
-use crate::compositor::{ClientStatus, ClientStatus as S};
+
+macro_rules! impl_from {
+    (impl $me:ty; $($vr:ident, $ty:ty;)*) => {$(
+        impl From<$ty> for $me {
+            fn from(v: $ty) -> Self {
+                Self::$vr(v)
+            }
+        }
+    )*};
+}
 
 pub use todex::wayland::error::WlError;
+
+pub(super) use impl_from;
 
 // ===== HandleResult =====
 
 /// Handler result.
 pub trait HandleResult: Sized {
-    fn handle_result(self, id: ObjectId, client: &mut ClientMut) -> ClientStatus;
+    fn handle_result(self, id: ObjectId, client: &mut ClientMut);
 }
 
 impl HandleResult for () {
-    fn handle_result(self, _: ObjectId, _: &mut ClientMut) -> ClientStatus {
-        S::Ok
-    }
+    fn handle_result(self, _: ObjectId, _: &mut ClientMut) { }
 }
 
-impl HandleResult for ClientStatus {
-    fn handle_result(self, _: ObjectId, _: &mut ClientMut) -> ClientStatus {
-        self
-    }
-}
-
-impl<E: WlError + std::fmt::Display> HandleResult for Result<(), E> {
-    fn handle_result(self, id: ObjectId, client: &mut ClientMut) -> ClientStatus {
-        match self {
-            Ok(()) => S::Ok,
-            Err(err) => {
-                log::error!("client#{} failed to handle request: {err}", client.id);
-                client.send_error(id, err);
-                S::Disconnect
-            }
+impl<E: WlError + fmt::Display> HandleResult for Result<(), E> {
+    fn handle_result(self, id: ObjectId, client: &mut ClientMut) {
+        if let Err(err) = self {
+            log::error!("client#{} failed to handle request: {err}", client.id);
+            client.send_error(id, err);
+            client.disconnect();
         }
     }
 }
 
-impl<M: todex::wayland::message::WlMessage> HandleResult for Todo<M> {
-    fn handle_result(self, id: ObjectId, client: &mut ClientMut) -> ClientStatus {
+impl<M: WlMessage> HandleResult for Todo<M> {
+    fn handle_result(self, id: ObjectId, client: &mut ClientMut) {
         use todex::wayland::interface::WlInterface;
         log::error!(
             "client#{} {}::{} is not yet implemented",
@@ -52,7 +54,7 @@ impl<M: todex::wayland::message::WlMessage> HandleResult for Todo<M> {
             M::OPNAME,
         );
         client.send_error(id, DisplayError::Implementation);
-        S::Disconnect
+        client.disconnect();
     }
 }
 
@@ -60,8 +62,8 @@ impl<M: todex::wayland::message::WlMessage> HandleResult for Todo<M> {
 
 pub struct Todo<M>(std::marker::PhantomData<fn() -> M>);
 
-impl<M> Todo<M> {
-    pub fn new() -> Self {
+impl<M, A, B> From<todex::wayland::message::Message<M, A, B>> for Todo<M> {
+    fn from(_: todex::wayland::message::Message<M, A, B>) -> Self {
         Self(std::marker::PhantomData)
     }
 }
@@ -72,6 +74,8 @@ pub enum MessageError {
     UnknownId(UnknownId),
     OccupiedNewId(OccupiedNewId),
     Decode(DecodeError),
+    #[expect(dead_code)]
+    Disconnect,
 }
 
 impl WlError for MessageError {
@@ -80,6 +84,7 @@ impl WlError for MessageError {
             Self::UnknownId(err) => err.code(),
             Self::OccupiedNewId(err) => err.code(),
             Self::Decode(err) => err.code(),
+            Self::Disconnect => 0,
         }
     }
 
@@ -88,36 +93,27 @@ impl WlError for MessageError {
             Self::UnknownId(err) => err.message(),
             Self::OccupiedNewId(err) => err.message(),
             Self::Decode(err) => err.message(),
+            Self::Disconnect => "client disconnect",
         }
     }
 }
 
-impl From<DecodeError> for MessageError {
-    fn from(v: DecodeError) -> Self {
-        Self::Decode(v)
-    }
-}
-
-impl From<UnknownId> for MessageError {
-    fn from(v: UnknownId) -> Self {
-        Self::UnknownId(v)
-    }
-}
-
-impl From<OccupiedNewId> for MessageError {
-    fn from(v: OccupiedNewId) -> Self {
-        Self::OccupiedNewId(v)
-    }
-}
-
-impl std::fmt::Display for MessageError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for MessageError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::UnknownId(err) => err.fmt(f),
             Self::OccupiedNewId(err) => err.fmt(f),
             Self::Decode(err) => err.fmt(f),
+            Self::Disconnect => Ok(()),
         }
     }
+}
+
+impl_from! {
+    impl MessageError;
+    Decode, DecodeError;
+    UnknownId, UnknownId;
+    OccupiedNewId, OccupiedNewId;
 }
 
 // ===== BindError =====
@@ -127,7 +123,7 @@ pub enum BindError {
     /// Unknown bind name.
     UnknownName,
     /// Missmatch bind name.
-    MissmatchName,
+    MissmatchIdName,
     /// Unsupported bind version.
     UnsupportedVersion,
 }
@@ -140,16 +136,15 @@ impl WlError for BindError {
     fn message(&self) -> &'static str {
         match self {
             Self::UnknownName => "unknown bind name",
-            Self::MissmatchName => "missmatch bind name",
+            Self::MissmatchIdName => "missmatch bind id name",
             Self::UnsupportedVersion => "unsupported bind version"
         }
     }
 }
 
-impl std::fmt::Display for BindError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("cannot bind global: ")?;
-        f.write_str(self.message())
+impl fmt::Display for BindError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "failed to bind global: {}", self.message())
     }
 }
 
@@ -170,8 +165,8 @@ impl WlError for CommitError {
     }
 }
 
-impl std::fmt::Display for CommitError {
-    fn fmt(&self, _: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for CommitError {
+    fn fmt(&self, _: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self { }
     }
 }
@@ -184,46 +179,3 @@ impl From<UnknownId> for CommitError {
 
 // ===== AttachError =====
 
-#[derive(Debug, Clone, Copy)]
-pub enum AttachError {
-    UnknownBuffer(UnknownId),
-    Surface(wl_surface::Error),
-}
-
-impl WlError for AttachError {
-    fn code(&self) -> u32 {
-        match self {
-            Self::UnknownBuffer(err) => err.code(),
-            Self::Surface(err) => err.code(),
-        }
-    }
-
-    fn message(&self) -> &str {
-        match self {
-            Self::UnknownBuffer(err) => err.message(),
-            Self::Surface(err) => err.message(),
-        }
-    }
-}
-
-impl std::fmt::Display for AttachError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        f.write_str("cannot attach buffer: ")?;
-        match self {
-            Self::UnknownBuffer(err) => err.fmt(f),
-            Self::Surface(err) => err.fmt(f),
-        }
-    }
-}
-
-impl From<UnknownId> for AttachError {
-    fn from(v: UnknownId) -> Self {
-        Self::UnknownBuffer(v)
-    }
-}
-
-impl From<wl_surface::Error> for AttachError {
-    fn from(v: wl_surface::Error) -> Self {
-        Self::Surface(v)
-    }
-}

@@ -1,12 +1,12 @@
 use std::os::fd::{AsFd, BorrowedFd};
 use std::task::Poll::*;
 use todex::collections::slab::Slab;
+use todex::sys::bytes::Bytes;
 use todex::sys::cmsg;
 use todex::sys::listener::{Listener, SocketPath};
 
 use crate::buffer::BufferPool;
 use crate::client::{ClientId, ClientMut, ClientState};
-use crate::compositor::Compositor;
 use crate::error::FatalError;
 use crate::poller::{Event, Poller};
 use crate::log;
@@ -46,12 +46,11 @@ impl Gateway {
 }
 
 impl Gateway {
-    pub fn dispatch_io(
-        &mut self,
-        event: Event,
-        poll: &Poller,
-        compositor: &mut Compositor,
-    ) {
+    /// Handle a socket I/O event, callback when data is available.
+    pub fn dispatch_io<F>(&mut self, event: Event, poll: &Poller, mut callback: F)
+    where
+        F: FnMut(&mut Bytes, &mut ClientMut),
+    {
         let mut id = ClientId::from_raw(event.key);
         let event = event.interest;
 
@@ -68,6 +67,7 @@ impl Gateway {
         let mut client = ClientMut {
             id,
             state,
+            status: <_>::default(),
             read_fd: &mut self.pool.read_fd,
             write_buf: &mut self.pool.write_buf,
             write_fd: &mut self.pool.write_fd,
@@ -81,11 +81,10 @@ impl Gateway {
 
             if event.is_read() {
                 loop {
-                    if !self.pool.read_buf.is_empty()
-                        && compositor
-                            .message(&mut self.pool.read_buf, &mut client)
-                            .is_disconnect()
-                    {
+                    if !self.pool.read_buf.is_empty() {
+                        callback(&mut self.pool.read_buf, &mut client);
+                    }
+                    if client.status.is_disconnect() {
                         return Err(HandleError);
                     }
                     if client.recvmsg(&mut self.pool.read_buf)?.is_pending() {
@@ -120,8 +119,7 @@ impl Gateway {
             // socket, it will be stored in dedicated storage
             if let Some((read, write)) = self.pool.store_pending(id.to_raw()) {
                 id = id.set_pending();
-                poll
-                    .modify(event.is_write(), id.to_raw(), state);
+                poll.modify(event.is_write(), id.to_raw(), state);
                 log::warn!(
                     target: format_args!("client#{id}"),
                     "partial message, read: {read}, write: {write}",
@@ -175,12 +173,6 @@ impl From<cmsg::ReadError> for HandleError {
 impl From<cmsg::WriteError> for HandleError {
     fn from(err: cmsg::WriteError) -> Self {
         log::error!("failed to write socket: {err}");
-        Self
-    }
-}
-
-impl From<()> for HandleError {
-    fn from(_: ()) -> Self {
         Self
     }
 }

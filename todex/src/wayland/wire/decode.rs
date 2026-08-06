@@ -38,7 +38,9 @@ impl<'a> Message<Payload<'a>, u16> {
         };
         Ok(Some(Message::from_parts(id, Payload(payload), hdr2 as u16)))
     }
+}
 
+impl<'a, OP> Message<Payload<'a>, OP> {
     #[inline]
     pub fn decode_payload<const N: usize, P: DecodePayload<'a, N>>(
         self,
@@ -51,9 +53,9 @@ impl<'a> Message<Payload<'a>, u16> {
     }
 }
 
-impl<T, D> Message<T, u16, D> {
+impl<T, M: Copy, D> Message<T, M, D> {
     #[inline]
-    pub fn opcode(&self) -> u16 {
+    pub fn opcode(&self) -> M {
         self.meta()
     }
 }
