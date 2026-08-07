@@ -3,10 +3,6 @@ pub mod error;
 
 // ===== syscall =====
 
-pub mod bytes;
-pub mod cmsg;
-pub mod memmap;
-
 pub mod socket;
 pub mod listener;
 pub mod sigfd;

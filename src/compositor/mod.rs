@@ -4,7 +4,7 @@
 //!
 //! The entry point is [`Compositor::message`].
 use todex::log;
-use todex::sys::bytes::Bytes;
+use todex::bytes::Bytes;
 use todex::wayland::primitives::{AsObjectId, AsVersion};
 use todex::wayland::object::{Global, global_of};
 use todex::wayland::display::AsDisplay;

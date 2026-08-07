@@ -26,10 +26,10 @@
 )]
 
 pub mod log;
-
 pub mod bitflags;
-pub mod alloc;
 pub mod collections;
+
+pub mod bytes;
 
 pub mod sys;
 pub mod fourcc;

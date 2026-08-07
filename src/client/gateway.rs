@@ -1,8 +1,7 @@
 use std::os::fd::{AsFd, BorrowedFd};
 use std::task::Poll::*;
 use todex::collections::slab::Slab;
-use todex::sys::bytes::Bytes;
-use todex::sys::cmsg;
+use todex::bytes::{Bytes, ReadError, WriteError};
 use todex::sys::listener::{Listener, SocketPath};
 
 use crate::buffer::BufferPool;
@@ -161,8 +160,8 @@ impl Gateway {
 
 struct HandleError;
 
-impl From<cmsg::ReadError> for HandleError {
-    fn from(err: cmsg::ReadError) -> Self {
+impl From<ReadError> for HandleError {
+    fn from(err: ReadError) -> Self {
         if !err.is_connection_aborted() {
             log::error!("failed to read socket: {err}");
         }
@@ -170,8 +169,8 @@ impl From<cmsg::ReadError> for HandleError {
     }
 }
 
-impl From<cmsg::WriteError> for HandleError {
-    fn from(err: cmsg::WriteError) -> Self {
+impl From<WriteError> for HandleError {
+    fn from(err: WriteError) -> Self {
         log::error!("failed to write socket: {err}");
         Self
     }

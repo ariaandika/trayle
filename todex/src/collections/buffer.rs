@@ -23,9 +23,6 @@ pub struct Buffer<T> {
 
 impl<T> Drop for Buffer<T> {
     fn drop(&mut self) {
-        if self.cap == 0 {
-            return;
-        }
         unsafe {
             ptr::drop_in_place(self.as_mut_slice());
             alloc::deallocate(self.ptr.sub(self.off));
@@ -50,6 +47,7 @@ impl<T> Buffer<T> {
     /// Create new empty buffer with given capacity.
     #[inline]
     pub fn with_capacity(cap: usize) -> Self {
+        // note that `alloc::allocate(0)` still returns aligned pointer
         Self {
             ptr: alloc::allocate(cap),
             len: 0,
@@ -140,6 +138,29 @@ impl<T> Buffer<T> {
         assert!(cnt <= self.len, "advance out of bounds");
         // SAFETY: asserted above
         unsafe { self.advance_unchecked(cnt) };
+    }
+
+    /// Splits the buffer into two at the given index.
+    ///
+    /// Returns a new [`Buffer`] with the same allocation, containing the elements in the range
+    /// `[at, len)`. The original buffer will be left containing the elements `[0, at)`.
+    ///
+    /// Note that currently, the element must not implement `Drop`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the element implements `Drop`.
+    #[inline]
+    pub fn split_to(&mut self, at: usize) -> Option<&[T]> {
+        const { assert!(!mem::needs_drop::<T>()) };
+        if at > self.len {
+            return None;
+        }
+        // SAFETY: len <= self.len
+        unsafe {
+            self.advance_unchecked(at);
+            Some(slice::from_raw_parts(self.ptr.as_ptr().sub(at), at))
+        }
     }
 
     /// Returns slice of remaining capacity.

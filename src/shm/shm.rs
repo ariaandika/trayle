@@ -1,7 +1,7 @@
 use std::debug_assert_matches;
 use std::os::fd::{AsRawFd, FromRawFd, OwnedFd};
 
-use todex::sys::memmap::Memmap;
+use todex::bytes::Memmap;
 use todex::collections::slab::Slab;
 use todex::wayland::interface::wl_shm::Error;
 use todex::wayland::interface::wl_shm_pool::CreateBuffer;

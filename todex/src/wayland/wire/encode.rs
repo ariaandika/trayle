@@ -1,5 +1,4 @@
-use crate::sys::bytes::Bytes;
-use crate::sys::cmsg::Cmsg;
+use crate::bytes::{Bytes, Cmsg};
 use crate::wayland::primitives::AsObjectId;
 use crate::wayland::message::{AsOpCode, Message, OpCode};
 use crate::wayland::wire::Writer;
@@ -28,8 +27,9 @@ pub trait Encode: Sized + EncodePayload + AsObjectId + AsOpCode {
         self.encode(Writer::new(
             write_buf.spare_capacity_mut().as_mut_ptr().cast::<u8>(),
         ));
+        let new_len = write_buf.len() + size;
         // SAFETY: `Write` implementation guarantee `size` data is initialized
-        unsafe { write_buf.advance_mut(size) };
+        unsafe { write_buf.set_len(new_len) };
     }
 }
 

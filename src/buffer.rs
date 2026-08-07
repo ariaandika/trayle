@@ -1,12 +1,13 @@
 use std::mem;
-use todex::sys::bytes::Bytes;
-use todex::sys::cmsg::Cmsg;
+use todex::bytes::{Bytes, Cmsg};
 
 struct Entry {
     id: u64,
     read: Bytes,
     write: Bytes,
 }
+
+const INIT_BUF_CAP: usize = 512;
 
 pub struct BufferPool {
     pub read_buf: Bytes,
@@ -19,9 +20,9 @@ pub struct BufferPool {
 impl BufferPool {
     pub fn new() -> Self {
         Self {
-            read_buf: Bytes::new(),
+            read_buf: Bytes::with_capacity(INIT_BUF_CAP),
             read_fd: Cmsg::new(),
-            write_buf: Bytes::new(),
+            write_buf: Bytes::with_capacity(INIT_BUF_CAP),
             write_fd: Cmsg::new(),
             pendings: Vec::new(),
         }
@@ -69,9 +70,9 @@ impl BufferPool {
 
 fn take_if_not_empty(buffer: &mut Bytes) -> Bytes {
     if buffer.is_empty() {
-        Bytes::new()
+        Bytes::with_capacity(INIT_BUF_CAP)
     } else {
-        mem::replace(buffer, Bytes::new())
+        mem::replace(buffer, Bytes::with_capacity(INIT_BUF_CAP))
     }
 }
 

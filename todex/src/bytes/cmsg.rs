@@ -3,7 +3,7 @@ use std::os::fd::{AsFd, AsRawFd};
 use std::ptr;
 use std::task::Poll::{self, *};
 
-use crate::sys::bytes::Bytes;
+use crate::bytes::Bytes;
 use crate::sys::error::{ErrCode, simple_os_error};
 
 const FDSIZE: usize = size_of::<i32>();
@@ -172,7 +172,10 @@ fn sendmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Wri
     let mut msghdr = libc::msghdr {
         msg_name: ptr::null_mut(),
         msg_namelen: 0,
-        msg_iov: &mut buf.iovec(),
+        msg_iov: &mut libc::iovec {
+            iov_base: buf.as_mut_ptr().cast(),
+            iov_len: buf.len(),
+        },
         msg_iovlen: 1,
         msg_control,
         msg_controllen,
@@ -193,7 +196,11 @@ fn sendmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Wri
         buf.advance(write);
 
         // update the advanced message buffer
-        msghdr.msg_iov = &mut buf.iovec();
+        unsafe {
+            let iovec = msghdr.msg_iov.as_mut_unchecked();
+            iovec.iov_base = buf.as_mut_ptr().cast();
+            iovec.iov_len = buf.len();
+        }
 
         // Ancillary data is received as if it were queued along with the first normal data octet in
         // the segment (if any).
@@ -212,10 +219,14 @@ fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Rea
     use ReadError as E;
 
     let mut cmsg_buf = NEW_CMSGBUF;
+    let spare = buf.spare_capacity_mut();
     let mut msghdr = libc::msghdr {
         msg_name: ptr::null_mut(),
         msg_namelen: 0,
-        msg_iov: &mut buf.spare_iovec(),
+        msg_iov: &mut libc::iovec {
+            iov_base: spare.as_mut_ptr().cast(),
+            iov_len: spare.len(),
+        },
         msg_iovlen: 1,
         msg_control: cmsg_buf.as_mut_ptr().cast(),
         msg_controllen: CMSG_SPACE,
@@ -226,6 +237,7 @@ fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Rea
         return ErrCode::would_block_or_else(E::RecvErrno);
     };
     if read == 0 {
+        debug_assert_ne!(buf.capacity(), 0);
         return Ready(Err(E::ConnectionAborted));
     }
     if msghdr.msg_flags & libc::MSG_CTRUNC == libc::MSG_CTRUNC {
@@ -257,7 +269,10 @@ fn recvmsg(buf: &mut Bytes, cmsg: &mut Cmsg, socket: i32) -> Poll<Result<(), Rea
         debug_assert!(cmsg.len <= MAXFD);
     }
 
-    unsafe { buf.advance_mut(read) };
+    unsafe {
+        let new_len = buf.len().unchecked_add(read);
+        buf.set_len(new_len);
+    }
 
     Ready(Ok(()))
 }

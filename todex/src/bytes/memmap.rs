@@ -2,9 +2,9 @@ use std::os::fd::RawFd;
 use std::ptr::{self, NonNull};
 use std::slice;
 
-use crate::sys::error::{ErrCode, simple_os_error};
+use crate::sys::error::{ErrCode, OsError, simple_os_error};
 
-/// Memory map.
+/// Map files or devices into memory.
 pub struct Memmap {
     ptr: NonNull<u8>,
     size: usize,
@@ -19,9 +19,10 @@ impl Drop for Memmap {
 }
 
 impl Memmap {
-    /// Map memory.
+    /// Creates a new mapping in the virtual address space of the calling process.
     ///
-    /// Note that the fd ownership is not transfered.
+    /// After the this call has returned, `fd` can be closed immediately without invalidating the
+    /// mapping.
     #[inline]
     pub fn new(fd: RawFd, size: usize) -> Result<Self, MapError> {
         let ptr = unsafe {
@@ -34,10 +35,10 @@ impl Memmap {
                 0,
             )
         };
-        let ptr = NonNull::new(ptr.cast::<u8>())
+        NonNull::new(ptr.cast::<u8>())
             .filter(|e| e.as_ptr().cast() != libc::MAP_FAILED)
-            .ok_or_else(ErrCode::errno)?;
-        Ok(Self { ptr, size })
+            .ok_or_else(<_>::errno)
+            .map(|ptr| Self { ptr, size })
     }
 
     #[inline]

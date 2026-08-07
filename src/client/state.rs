@@ -2,8 +2,7 @@ use std::ops;
 use std::os::fd::{AsFd, BorrowedFd, OwnedFd};
 use std::task::Poll;
 
-use todex::sys::bytes::Bytes;
-use todex::sys::cmsg::{Cmsg, WriteError, ReadError};
+use todex::bytes::{Bytes, Cmsg, ReadError, WriteError};
 use todex::wayland::primitives::AsObjectId;
 use todex::wayland::message::WlMessage;
 use todex::wayland::interface::wl_display::{DeleteId, Error};

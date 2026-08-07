@@ -2,7 +2,6 @@ use std::ffi::{CStr, c_char, c_void};
 use std::ptr::NonNull;
 use std::{marker, slice};
 
-use crate::alloc;
 use crate::bitflags::simple_bitflags;
 use crate::sys::error::{ErrCode, OsError, simple_os_error};
 use crate::sys::macros::simple_ffi;
@@ -159,7 +158,10 @@ pub struct KeymapString {
 impl Drop for KeymapString {
     #[inline]
     fn drop(&mut self) {
-        alloc::deallocate(self.ptr);
+        // > `xkbcommon::xkb_keymap_get_as_string2`
+        // > The returned string is *dynamically allocated* and should be freed by the caller.
+        // can only assume `libc::free`
+        unsafe { libc::free(self.ptr.as_ptr().cast()) };
     }
 }
 
